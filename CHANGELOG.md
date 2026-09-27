@@ -1,3 +1,14 @@
+## 0.71.0 - 2026-09-27
+
+- Added the Environment Definition Language (EDL v1): a declarative JSON/YAML description of an entire location, with a JSON Schema for editor completion (`edl/locationstudio-edl-1.schema.json`) and a complete example (`edl/examples/ripperdoc_clinic.edl.yaml`).
+  - **Contents:** floors, rooms, walls, doors, windows, room-kit materials, props with appearances and scale, lights, collision, devices with loot and facts, device-logic graphs, NPCs with conditions, routes and workspots, audio emitters and reverb, VFX, quest triggers, cameras, occluders, splines, navigation and streaming.
+  - **Language features:** parameters with arithmetic, templates (`use:`), `repeat:`, room and floor frames, and precise error locations.
+- Added the compiler (`mcp_server/lsbuild/edl.py`). It emits authoring plan **version 2** (up to 2000 steps) with new operations: resource import, resource placement with appearance/scale/stream range, lights, collision, VFX, audio emitters, reverb zones, occluders, interactables, NPCs, workspots, NPC routes and waypoints, device graphs, nodes and links, fact links, navigation import, splines, room kit, and `edl_begin`.
+- Applying a document is one undo step or a full rollback, and replaces the previous build of the same document id. Builds are recorded in the new `edl_builds` collection (schema 21), which maps element ids to project items.
+- Added MCP tools `edl_schema`, `edl_validate`, `edl_compile`, `edl_apply`, `edl_build` (apply → preflight → Build Mod with the document's streaming category, level and cell size), `edl_list`, `edl_get` and `edl_remove`. `build_mod_from_project` accepts `category`, `level` and `streaming_x/y/z`.
+- `PyYAML` is now listed in `mcp_server/requirements.txt` (JSON documents work without it).
+- Added `ENVIRONMENT-DEFINITION-LANGUAGE.md`, a golden compiled-plan fixture, and Lua/Python tests. Bumped to v0.71.0.
+
 ## 0.70.0 - 2026-09-27
 
 - Added a full shipping preflight. `preflight_run` (MCP) merges the in-game checks (`modules/preflight.lua`, bridge op `preflight_run`, Spatial → Preflight) with the offline checks (`lsbuild/preflight.py`) into one report and verdict, saved to `exports/preflight-report.json`.

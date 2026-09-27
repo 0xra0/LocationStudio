@@ -339,3 +339,14 @@ the `blocking` checks and their issues, fix what you are allowed to, and rerun.
 Never describe an offline run (in-game checks `skipped`) as passing, and never
 treat warnings about unverifiable vanilla NodeRefs or unverified records as
 proof of a problem or of correctness.
+
+## Environment Definition Language
+
+To build a whole location from a description, write an EDL document (`edl_schema`
+has the schema and a full example) rather than long sequences of tool calls.
+Look up every resource path with `asset_catalog_search` first; never invent
+paths. Run `edl_validate`, fix every error, then `edl_apply` (one undo, full
+rollback). Keep the document id stable so re-applying updates the same location.
+Tell the user that re-applying replaces hand edits to built items. Use
+`edl_build` to go on to the preflight and Build Mod, and report a preflight stop
+instead of forcing the build.

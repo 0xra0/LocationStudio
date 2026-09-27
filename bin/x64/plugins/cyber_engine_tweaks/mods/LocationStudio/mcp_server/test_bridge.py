@@ -10,8 +10,8 @@ def test_project_shape() -> None:
     # of requiring mutable runtime data in the source tree.
     mod = Path(__file__).resolve().parents[1]
     model = (mod / 'modules' / 'model.lua').read_text(encoding='utf-8')
-    assert 'schema_version=20' in model
-    for collection in ('locations', 'routes', 'premises', 'rooms', 'objects', 'object_groups', 'object_prefabs', 'volumes', 'cameras', 'assets', 'room_frames', 'environments', 'splines', 'timelines', 'reference_areas'):
+    assert 'schema_version=21' in model
+    for collection in ('locations', 'routes', 'premises', 'rooms', 'objects', 'object_groups', 'object_prefabs', 'volumes', 'cameras', 'assets', 'room_frames', 'environments', 'splines', 'timelines', 'reference_areas', 'edl_builds'):
         assert re.search(rf'\b{collection}\s*=\s*\{{\}}', model), collection
     for layer in ('shell', 'gameplay', 'decoration', 'lighting', 'quest', 'npc', 'audio', 'debug'):
         assert layer in model
@@ -28,7 +28,7 @@ def test_mcp_operations_are_handled() -> None:
     handled.update(re.findall(r"or op == '([a-z_]+)'", bridge))
     handled.update(re.findall(r"'((?:wb_)?(?:clipcheck|fixturecheck|fitcheck))'", bridge))
     assert sent <= handled, f'MCP operations missing in CET bridge: {sorted(sent - handled)}'
-    assert len(re.findall(r'@mcp\.tool\(\)', server)) == 461
+    assert len(re.findall(r'@mcp\.tool\(\)', server)) == 469
     for operation in ('register_asset', 'update_asset', 'delete_asset', 'place_asset', 'clear_debug_log', 'run_diagnostics',
                       'capture_camera', 'copy_transform', 'paste_transform', 'move_item_to_aim',
                       'drop_item_to_ground', 'aim_item_at_target', 'scatter_at_aim',
@@ -89,7 +89,7 @@ def test_mcp_operations_are_handled() -> None:
         assert operation in sent
     for operation in ('sector_report_load', 'sector_report_flags', 'sector_report_select',
                       'dependency_report_load', 'dependency_report_objects', 'dependency_report_select',
-                      'preflight_run', 'preflight_load', 'preflight_select'):
+                      'preflight_run', 'preflight_load', 'preflight_select', 'edl_list', 'edl_get', 'edl_remove'):
         assert operation in handled, operation
     for tool in ('performance_export', 'sector_inspect', 'sector_node', 'wb_favorite_add', 'wb_favorites_list', 'wb_device_connect', 'wb_elevator_wire',
                  'wb_polygon_scatter', 'wb_volume_scatter', 'wb_live_surface_scatter', 'wb_rng_create'):
@@ -151,6 +151,12 @@ def test_v6_modules_are_packaged() -> None:
     assert (mod / 'modules' / 'reference_areas.lua').is_file()
     assert (mod / 'modules' / 'dependencies.lua').is_file()
     assert (mod / 'modules' / 'preflight.lua').is_file()
+    assert (mod / 'mcp_server' / 'lsbuild' / 'edl.py').is_file()
+    assert (mod / 'edl' / 'locationstudio-edl-1.schema.json').is_file()
+    assert (mod / 'edl' / 'examples' / 'ripperdoc_clinic.edl.yaml').is_file()
+    assert (mod / 'mcp_server' / 'test_edl.py').is_file()
+    assert (mod.parents[5] / 'ENVIRONMENT-DEFINITION-LANGUAGE.md').is_file()
+    assert (mod.parents[5] / 'tests' / 'edl_runtime_test.lua').is_file()
     assert (mod / 'mcp_server' / 'lsbuild' / 'preflight.py').is_file()
     assert (mod / 'mcp_server' / 'test_preflight.py').is_file()
     assert (mod.parents[5] / 'PREFLIGHT.md').is_file()

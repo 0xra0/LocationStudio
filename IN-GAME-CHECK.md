@@ -10,6 +10,14 @@
 The upgrade archive does not contain project/config JSON, logs, exports,
 thumbnails, or bridge state.
 
+## v0.71 Environment Definition Language smoke check
+
+1. Replace the example's resource paths with paths from `asset_catalog_search`. Run `edl_validate` on `edl/examples/ripperdoc_clinic.edl.yaml`: it is valid and lists 2 rooms, 3 doors, 1 window and the other elements.
+2. Stand in open space and run `edl_apply`. The two rooms appear with their doors and window, and the bench row, chair, lights, cabinet, steam, collision block and nurse are placed as described. **UNDO** removes the whole location in one step.
+3. Apply again, change `surgery_width` to 9, and apply once more: the surgery grows and nothing is duplicated.
+4. Break a resource path and apply: the result names the failing step and the location is unchanged.
+5. Run `edl_build(run=false)`: the preflight runs for the clinic's premise, and the build report shows the streaming category, level and cell size from the document.
+
 ## v0.70 Shipping preflight smoke check
 
 1. Open **Spatial → Preflight** in a finished location and click **RUN CHECKS**. Every check lists pass/warn/fail. Open **Spawns** or **Exportable objects** and **SELECT** an issue: its object is selected.
