@@ -205,6 +205,20 @@ class HeadlessBuildTests(unittest.TestCase):
             self.assertTrue(allowed["ok"], json.dumps(allowed.get("stages"), indent=1)[:2000])
             self.assertTrue((root / "build/demo_world/automation/dependency-report.json").is_file())
 
+    def test_pipeline_stops_on_procedural_geometry_without_template(self):
+        with tempfile.TemporaryDirectory() as td, Sandbox(Path(td)):
+            root = Path(td)
+            server.PROJECT.write_text(json.dumps({"objects": [{"id": "g1", "name": "Wall", "enabled": True,
+                "transform": {"position": {"x": 1, "y": 2, "z": 3}, "rotation": {"yaw": 0}},
+                "metadata": {"procedural": {"generator": "box", "mesh_path": "mod\\ls\\wall.mesh", "material": {"template": ""},
+                             "parts": [{"shape": "box", "center": {"x": 0, "y": 0, "z": 0.5}, "size": {"x": 1, "y": 1, "z": 1}}]}}}]}), encoding="utf-8")
+            worker = write_fake_worker(root / "worker")
+            cli = write_fake_cli(root / "cp77tools")
+            result = json.loads(server.build_mod_from_project("demo_world", worker=str(worker), cli=str(cli), run=True))
+            self.assertEqual(result["failed_stage"], "procedural")
+            self.assertIn("material.template", result["stages"]["procedural"]["issues"][0]["error"])
+            self.assertTrue((root / "build/demo_world/source/raw/mod/ls/wall.glb").is_file(), "the glb is still written for inspection")
+
     def test_pipeline_reports_failing_stage(self):
         with tempfile.TemporaryDirectory() as td, Sandbox(Path(td), send_error="bridge offline"):
             result = json.loads(server.build_mod_from_project("demo_world", run=True))

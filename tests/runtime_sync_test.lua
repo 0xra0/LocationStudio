@@ -1,6 +1,6 @@
 local env=dofile(arg[2]..'/support/cet_mock.lua')
 local app=env.app
-assert(app.version=='0.71.0')
+assert(app.version=='0.72.0')
 local object=app.model:add_object({id='sync_target',name='Sync target',template='base\\sync.ent',transform={position={x=1,y=2,z=3},rotation={yaw=0}}})
 local first=assert(app.placement:spawn(object));local old_entity=app.placement.entity_ids[object.id]
 assert(first and old_entity and env.alive[old_entity])

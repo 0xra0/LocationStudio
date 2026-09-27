@@ -48,7 +48,8 @@ OCCLUDER_MESHES = {"box", "plane", "plane_two_sided"}
 DEVICE_KINDS = {"door", "loot_container", "shard", "item"}
 LOGIC_KINDS = {"terminal", "door", "elevator", "switch", "camera", "security_system", "fact", "action"}
 NAV_EDGES = {"walk", "door", "stairs", "elevator", "jump", "off_mesh", "custom"}
-ELEMENT_LISTS = ("objects", "lights", "collisions", "devices", "npcs", "workspots", "vfx", "triggers", "cameras", "occluders")
+ELEMENT_LISTS = ("objects", "geometry", "lights", "collisions", "devices", "npcs", "workspots", "vfx", "triggers", "cameras", "occluders")
+GEOMETRY = {"box", "wall", "floor", "ceiling", "column", "stairs", "ramp", "door_frame", "window", "railing", "pipe", "duct"}
 TOP_KEYS = {"edl", "id", "name", "description", "origin", "parameters", "templates", "materials", "premise", "defaults", "streaming",
             "floors", "audio", "splines", "navigation", "logic", "scene", *ELEMENT_LISTS}
 _OPS = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.Div: operator.truediv,
@@ -618,6 +619,32 @@ class Compiler:
         self.emit({"op": "place_resource", "as": self.alias(eid), "asset_id": asset, **step, "appearance": e.get("appearance"),
                    "layer": e.get("layer") or self.defaults.get("layer"), "stream_range": rng}, eid)
 
+    def el_geometry(self, e: dict[str, Any], frame: _Frame, where: str) -> None:
+        eid = self.register(e, "geometry", where)
+        step = self.common(e, frame, where) if eid else None
+        if step is None:
+            return
+        gen = e.get("generator")
+        if gen not in GEOMETRY:
+            self.err(where + ".generator", f"must be one of {', '.join(sorted(GEOMETRY))}")
+            return
+        params = e.get("params") or {}
+        if not isinstance(params, dict):
+            self.err(where + ".params", "must be a mapping")
+            return
+        material = e.get("material") or {}
+        if isinstance(material, str):
+            material = {"template": material}
+        template = str(material.get("template") or "")
+        if template and not template.lower().endswith(".mesh"):
+            self.err(where + ".material.template", "must be a .mesh depot path")
+        if not template:
+            self.warnings.append(f"{where}: no material.template; the geometry previews but Build Mod needs one to create the .mesh")
+        self.emit({"op": "create_procedural", "as": self.alias(eid), **step, "generator": gen, "params": params,
+                   "material": {"template": template, "appearance": material.get("appearance", "default"), "uv_scale": material.get("uv_scale", 1)},
+                   "collision": e.get("collision", True), "collision_preset": e.get("collision_preset"), "layer": e.get("layer"),
+                   "stream_range": e.get("stream_range", self.defaults.get("stream_range"))}, eid)
+
     def el_lights(self, e: dict[str, Any], frame: _Frame, where: str) -> None:
         eid = self.register(e, "light", where)
         step = self.common(e, frame, where) if eid else None
@@ -936,7 +963,7 @@ class Compiler:
                     continue
                 local.add(n["id"])
                 element = n.get("element")
-                if element is not None and self.ids.get(element) not in ("object", "device", "light", "vfx", "collision", "occluder", "npc", "audio_emitter"):
+                if element is not None and self.ids.get(element) not in ("object", "geometry", "device", "light", "vfx", "collision", "occluder", "npc", "audio_emitter"):
                     self.err(nw + ".element", f"{element!r} is not a placed element of this document")
                     continue
                 self.emit({"op": "add_device_node", "as": f"{galias}__{n['id']}", "graph_id": "$" + galias, "kind": n["kind"],

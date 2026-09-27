@@ -827,7 +827,7 @@ function Model:validate()
         if obj.premise_id and not premise_ids[obj.premise_id] then table.insert(issues,{severity='error',id=obj.id,message='Object references a missing premise'}) end
         if obj.room_id and not room_ids[obj.room_id] then table.insert(issues,{severity='warning',id=obj.id,message='Object references a missing room'}) end
         if not layer_ids[obj.layer] then table.insert(issues,{severity='warning',id=obj.id,message='Object uses an unknown layer: '..tostring(obj.layer)}) end
-        if obj.enabled and obj.kind~='marker' and Util.trim(obj.template)=='' and not (obj.metadata and type(obj.metadata.world_builder)=='table') then table.insert(issues,{severity='warning',id=obj.id,message='Enabled object has no spawn template'}) end
+        if obj.enabled and obj.kind~='marker' and Util.trim(obj.template)=='' and not (obj.metadata and (type(obj.metadata.world_builder)=='table' or type(obj.metadata.procedural)=='table')) then table.insert(issues,{severity='warning',id=obj.id,message='Enabled object has no spawn template'}) end
     end
     for _,variant in ipairs(self.data.world_state_variants or {}) do
         if Util.trim(variant.name or '')=='' then table.insert(issues,{severity='error',id=variant.id,message='World-state variant has an empty name'}) end

@@ -10,6 +10,14 @@
 The upgrade archive does not contain project/config JSON, logs, exports,
 thumbnails, or bridge state.
 
+## v0.72 Procedural geometry smoke check
+
+1. In **Spatial → Geometry**, create a `wall` at V with `{"length": 6, "height": 3, "openings": [{"offset": 0, "width": 1, "height": 2.1}]}`. The preview shows two side panels and a lintel, and V cannot walk through the solid parts but can walk through the doorway.
+2. Change `length` to 8 and click **APPLY PARAMETERS**: the preview and collision follow. **UNDO** returns to 6 m.
+3. Create `stairs` (`{"height": 3, "length": 5, "landing": 1}`) and a `railing` whose points follow the stair slope. Walk up the stairs.
+4. Extract a plaster wall mesh with WolvenKit into `mod_sources/`, set it as the material template, and run `build_mod_from_project(run=true)`. The `procedural` stage reports each converted mesh; after `build_deploy`, the real wall mesh appears in game with the template's material, tiled at 1 m.
+5. Remove the template and build again: the build stops at `procedural`, naming the object.
+
 ## v0.71 Environment Definition Language smoke check
 
 1. Replace the example's resource paths with paths from `asset_catalog_search`. Run `edl_validate` on `edl/examples/ripperdoc_clinic.edl.yaml`: it is valid and lists 2 rooms, 3 doors, 1 window and the other elements.

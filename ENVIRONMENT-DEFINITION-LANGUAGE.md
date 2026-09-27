@@ -59,6 +59,7 @@ Every element needs a unique `id` (letters, digits, `_` and `-`). Ids name what 
 | List | Fields | Builds |
 | --- | --- | --- |
 | `objects` | `resource` or `asset`, `scale`, `appearance`, `layer`, `stream_range` | a World Builder resource (mesh, entity, decal, particle…) |
+| `geometry` | `generator` (wall, floor, ceiling, column, stairs, ramp, door_frame, window, railing, pipe, duct, box), `params`, `material` (template `.mesh` or `{template, appearance, uv_scale}`), `collision` | [procedural geometry](PROCEDURAL-GEOMETRY.md) built from dimensions |
 | `lights` | `color [r,g,b]`, `intensity`, `radius`, `flicker {strength, period, offset}`, `preset` | a Static Light |
 | `collisions` | `shape box/capsule/sphere`, `size`, `radius`, `height`, `preset`, `material` | a collision primitive |
 | `devices` | `kind door/loot_container/shard/item`, `resource`, `locked`, `loot_table`, `loot [{item, min, max, chance}]`, `item`, `fact {name, value}` | an interactable (native wiring at Build Mod) |

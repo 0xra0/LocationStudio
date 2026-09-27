@@ -1,6 +1,6 @@
 local env=dofile(arg[2]..'/support/cet_mock.lua')
 local app=env.app
-assert(app.version=='0.71.0')
+assert(app.version=='0.72.0')
 local premise=assert(app.actions:create_premise_from_player('Collision Compat','exterior'))
 local path='base\\collision_compat.mesh'
 local wb={world_builder={definition_key='mesh_static',module_path='mesh/mesh',category='Mesh',variant='Mesh',resource_path=path,resource_name='collision_compat',entry={name=path,fileName='collision_compat',data={spawnData=path}}}}

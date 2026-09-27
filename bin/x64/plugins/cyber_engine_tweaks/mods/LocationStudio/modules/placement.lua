@@ -44,7 +44,11 @@ function Placement:is_opening_placeholder(object)
     return object and object.metadata and object.metadata.opening_id and Util.trim(object.template)==''
 end
 
+local function procedural(self,object) return object and object.metadata and object.metadata.procedural and self.app.procedural end
+
 function Placement:is_tracked(object)
+    -- Procedural geometry has no live mesh until the mod is built; its preview shapes stand in.
+    if procedural(self,object) then return self.app.procedural:is_shown(object) end
     return object and (self.entity_ids[object.id]~=nil or (self.app.runtime_shell and self.app.runtime_shell.handles[object.id]~=nil)) or false
 end
 
@@ -71,6 +75,7 @@ function Placement:_should_be_spawned(object)
     if not object or object.enabled==false or object.visible==false or self:is_opening_placeholder(object) then return false end
     local layer=object.layer
     for _,item in ipairs(self.app.model.data.layers or {}) do if item.id==layer and item.visible==false then return false end end
+    if procedural(self,object) then return true end
     return object.template~=nil and object.template~='' or self.app.runtime_shell and (self.app.runtime_shell:is_generated(object) or self.app.runtime_shell:is_world_builder(object))
 end
 
@@ -82,6 +87,7 @@ function Placement:compare_runtime()
     -- The VFX and environment editors own their transient preview nodes.
     tracked['__vfx_preview']=nil
     tracked['__env_fog_preview']=nil
+    for id in pairs(tracked) do if type(id)=='string' and id:sub(1,7)=='__proc_' then tracked[id]=nil end end
     for id in pairs(tracked) do if type(id)=='string' and id:sub(1,17)=='__spline_preview_' then tracked[id]=nil end end
     local report={items={},counts={remove=0,update=0,missing=0},has_changes=false,checked=0}
     for id in pairs(tracked) do
@@ -269,6 +275,10 @@ function Placement:spawn(object)
         if layer.id==object.layer and layer.visible==false then return nil,'layer '..tostring(layer.name)..' is hidden; show the layer to spawn its objects' end
     end
     if self:is_opening_placeholder(object) then return nil,'Empty opening; no door/window asset is assigned.' end
+    if procedural(self,object) then
+        local shown,err=self.app.procedural:show(object);if not shown then return nil,err end
+        return 'procedural:'..object.id,err
+    end
     if object.runtime and object.runtime.spawned then
         if object.runtime.backend=='world_builder_primitive' or object.runtime.backend=='world_builder' then self.expected_live[object.id]=true;return object.runtime.entity_id end
         if self.entity_ids[object.id] then self.expected_live[object.id]=true;return self.entity_ids[object.id] end
@@ -498,6 +508,7 @@ end
 
 function Placement:despawn(object)
     if not object then return false,'object not found',false end
+    if procedural(self,object) then local was=self.app.procedural:is_shown(object);self.app.procedural:hide(object);return true,nil,was end
     if object.runtime and (object.runtime.backend=='world_builder_primitive' or object.runtime.backend=='world_builder') and self.app.runtime_shell then
         local ok,err,did=self.app.runtime_shell:despawn(object)
         if not ok then return false,err,false end

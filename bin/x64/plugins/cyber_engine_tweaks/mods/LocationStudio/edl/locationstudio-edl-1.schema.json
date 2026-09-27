@@ -2493,6 +2493,174 @@
                       "id"
                     ]
                   }
+                },
+                "geometry": {
+                  "type": "array",
+                  "description": "Procedural geometry built from dimensions (see PROCEDURAL-GEOMETRY.md)",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "id",
+                      "generator"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z_][A-Za-z0-9_-]*$"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "at": {
+                        "oneOf": [
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": [
+                                "number",
+                                "string"
+                              ]
+                            },
+                            "minItems": 2,
+                            "maxItems": 3
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "x": {},
+                              "y": {},
+                              "z": {}
+                            },
+                            "required": [
+                              "x",
+                              "y"
+                            ]
+                          }
+                        ]
+                      },
+                      "yaw": {
+                        "type": [
+                          "number",
+                          "string"
+                        ]
+                      },
+                      "rotation": {
+                        "type": "object",
+                        "properties": {
+                          "roll": {},
+                          "pitch": {},
+                          "yaw": {}
+                        }
+                      },
+                      "room": {
+                        "type": "string"
+                      },
+                      "floor": {
+                        "type": "string"
+                      },
+                      "spawn": {
+                        "type": "boolean"
+                      },
+                      "use": {
+                        "type": "string",
+                        "description": "Name of a template to merge"
+                      },
+                      "repeat": {
+                        "type": "object",
+                        "properties": {
+                          "count": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 500
+                          },
+                          "step": {
+                            "oneOf": [
+                              {
+                                "type": "array",
+                                "items": {
+                                  "type": [
+                                    "number",
+                                    "string"
+                                  ]
+                                },
+                                "minItems": 2,
+                                "maxItems": 3
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "x": {},
+                                  "y": {},
+                                  "z": {}
+                                },
+                                "required": [
+                                  "x",
+                                  "y"
+                                ]
+                              }
+                            ]
+                          },
+                          "yaw_step": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "count"
+                        ]
+                      },
+                      "generator": {
+                        "enum": [
+                          "box",
+                          "wall",
+                          "floor",
+                          "ceiling",
+                          "column",
+                          "stairs",
+                          "ramp",
+                          "door_frame",
+                          "window",
+                          "railing",
+                          "pipe",
+                          "duct"
+                        ]
+                      },
+                      "params": {
+                        "type": "object"
+                      },
+                      "material": {
+                        "oneOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "template": {
+                                "type": "string",
+                                "pattern": "\\.mesh$"
+                              },
+                              "appearance": {
+                                "type": "string"
+                              },
+                              "uv_scale": {
+                                "type": "number"
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      "collision": {
+                        "type": "boolean"
+                      },
+                      "collision_preset": {},
+                      "layer": {
+                        "type": "string"
+                      },
+                      "stream_range": {
+                        "type": "number"
+                      }
+                    }
+                  }
                 }
               },
               "required": [
@@ -4597,6 +4765,174 @@
         "required": [
           "id"
         ]
+      }
+    },
+    "geometry": {
+      "type": "array",
+      "description": "Procedural geometry built from dimensions (see PROCEDURAL-GEOMETRY.md)",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "generator"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_-]*$"
+          },
+          "name": {
+            "type": "string"
+          },
+          "at": {
+            "oneOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": [
+                    "number",
+                    "string"
+                  ]
+                },
+                "minItems": 2,
+                "maxItems": 3
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "x": {},
+                  "y": {},
+                  "z": {}
+                },
+                "required": [
+                  "x",
+                  "y"
+                ]
+              }
+            ]
+          },
+          "yaw": {
+            "type": [
+              "number",
+              "string"
+            ]
+          },
+          "rotation": {
+            "type": "object",
+            "properties": {
+              "roll": {},
+              "pitch": {},
+              "yaw": {}
+            }
+          },
+          "room": {
+            "type": "string"
+          },
+          "floor": {
+            "type": "string"
+          },
+          "spawn": {
+            "type": "boolean"
+          },
+          "use": {
+            "type": "string",
+            "description": "Name of a template to merge"
+          },
+          "repeat": {
+            "type": "object",
+            "properties": {
+              "count": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 500
+              },
+              "step": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": [
+                        "number",
+                        "string"
+                      ]
+                    },
+                    "minItems": 2,
+                    "maxItems": 3
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "x": {},
+                      "y": {},
+                      "z": {}
+                    },
+                    "required": [
+                      "x",
+                      "y"
+                    ]
+                  }
+                ]
+              },
+              "yaw_step": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "count"
+            ]
+          },
+          "generator": {
+            "enum": [
+              "box",
+              "wall",
+              "floor",
+              "ceiling",
+              "column",
+              "stairs",
+              "ramp",
+              "door_frame",
+              "window",
+              "railing",
+              "pipe",
+              "duct"
+            ]
+          },
+          "params": {
+            "type": "object"
+          },
+          "material": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "template": {
+                    "type": "string",
+                    "pattern": "\\.mesh$"
+                  },
+                  "appearance": {
+                    "type": "string"
+                  },
+                  "uv_scale": {
+                    "type": "number"
+                  }
+                }
+              }
+            ]
+          },
+          "collision": {
+            "type": "boolean"
+          },
+          "collision_preset": {},
+          "layer": {
+            "type": "string"
+          },
+          "stream_range": {
+            "type": "number"
+          }
+        }
       }
     }
   }

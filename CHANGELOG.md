@@ -1,3 +1,14 @@
+## 0.72.0 - 2026-09-27
+
+- Added procedural geometry (`modules/procedural.lua`, Spatial → Geometry). Twelve generators turn dimensions into solid parts: wall with door/window openings, floor/ceiling (rectangle or any simple polygon), column (box/round with base and cap), straight stairs (solid or floating, landing, stringers), ramp, door frame, window (frame, mullions, glass slot), railing along a 3D polyline, pipe and duct along 3D polylines, and box.
+  - Parameters are validated, and creating or editing is one undo step.
+  - Parts give exact bounds (`asset_bounds`) and optional real collision boxes (exported).
+  - Transient preview: visualized collision shapes, a scaled unit mesh, or none. Placement, runtime comparison, layers and scenes treat the preview as the object's live state.
+- Added the build half (`lsbuild/procedural.py`). It triangulates parts with outward normals, box-projected UVs in world metres, and per-material primitives into glTF 2.0 binaries. The new Build Mod `procedural` stage imports each glb over a local copy of the object's material template mesh with the WolvenKit CLI (configurable command) and injects a native `worldMeshNode` into the nearest exported sector (before variant ranges; bounds and hashes updated). It stops the build with a reason when a template, local file or CLI is missing.
+- World Builder export leaves procedural objects to that stage. The preflight checks their template and counts them as exportable. The dependency resolver follows their template meshes.
+- EDL documents gain a `geometry:` element list (plan-v2 op `create_procedural`).
+- Added nine MCP tools (including offline `procedural_export_glb`), `PROCEDURAL-GEOMETRY.md`, and Lua/Python tests (watertight signed-volume checks, glTF structure, stage with a fake WolvenKit CLI, and a pipeline stop). Bumped to v0.72.0.
+
 ## 0.71.0 - 2026-09-27
 
 - Added the Environment Definition Language (EDL v1): a declarative JSON/YAML description of an entire location, with a JSON Schema for editor completion (`edl/locationstudio-edl-1.schema.json`) and a complete example (`edl/examples/ripperdoc_clinic.edl.yaml`).

@@ -56,7 +56,13 @@ function Preflight:_resource_paths(objects,args)
     local catalogs={}
     for _,o in ipairs(objects) do
         local wb=o.metadata and o.metadata.world_builder
-        if type(wb)=='table' then
+        local proc=o.metadata and o.metadata.procedural
+        if proc then
+            if #(proc.parts or {})==0 then c.add('error','procedural geometry has no parts; regenerate it',obj(o)) end
+            if not tostring(proc.mesh_path or ''):lower():match('%.mesh$') then c.add('error','procedural mesh path is not a .mesh depot path',obj(o)) end
+            local tpl=Util.trim(tostring(proc.material and proc.material.template or ''))
+            if tpl=='' then c.add('error','procedural geometry needs material.template (a .mesh whose materials the generated mesh uses) before Build Mod',obj(o)) end
+        elseif type(wb)=='table' then
             local key=wb.definition_key;local path=Util.trim(tostring(wb.resource_path or ''))
             if not (self.app.world_builder and self.app.world_builder:definition(key)) then c.add('error','unknown World Builder definition '..tostring(key),obj(o))
             elseif RESOURCE_KEYS[key] and path=='' then c.add('error','no resource path for '..key,obj(o))
@@ -262,7 +268,8 @@ function Preflight:_cet_entities(objects,live)
     for _,o in ipairs(objects) do
         if o.enabled~=false then
             local wb=o.metadata and o.metadata.world_builder
-            if type(wb)~='table' then c.add('error','CET entity-spawner object cannot be exported to a native sector; re-create it from a World Builder Entity Template asset',obj(o))
+            if o.metadata and o.metadata.procedural then exportable=exportable+1
+            elseif type(wb)~='table' then c.add('error','CET entity-spawner object cannot be exported to a native sector; re-create it from a World Builder Entity Template asset',obj(o))
             else
                 exportable=exportable+1
                 if live then
