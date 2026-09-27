@@ -1,6 +1,6 @@
 local env=dofile(arg[2]..'/support/cet_mock.lua')
 local app=env.app
-assert(app.version=='0.73.0')
+assert(app.version=='0.74.0')
 local premise=assert(app.actions:create_premise_from_player('NPC Population Test','interior'))
 local record='Character.test_population_guard'
 local asset=app.model:add_asset({name='Population Guard',kind='entity_record',template=record,size={x=1,y=1,z=1},metadata={world_builder={

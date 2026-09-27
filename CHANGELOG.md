@@ -1,3 +1,18 @@
+## 0.74.0 - 2026-09-27
+
+- Added the parametric room generator (`modules/room_generator.lua`, Spatial → Room gen). A spec with width, length, height, wall thickness, doors, windows, floor type (slab/raised/none), ceiling type (flat/beams/coffered/none), trims, materials and lighting produces:
+  - a room record with its openings (no kit shell; kit rebuilds refuse or skip parametric rooms);
+  - procedural geometry per role: floor, walls cut around every opening, ceiling with beams/coffers, skirting split at doors, door frames, and windows with mullions and a glass slot. Each role has its own materials (`.mi` slots or a `.mesh` template);
+  - collision boxes for floor, walls and ceiling, plus invisible blockers in window openings;
+  - portals with normals, linked to adjoining generated rooms;
+  - lighting anchors (grid or centre, optionally real static lights);
+  - snapping sockets: floor/ceiling centre, wall faces, corners, door thresholds, window sills and anchors;
+  - a persistent group of all generated pieces.
+- Create, regenerate (merged spec, same room) and delete are each one undo step and roll back completely on failure. `room_generator_snap` moves objects onto sockets.
+- Added the procedural `compound` generator (explicit parts), the authoring-plan v2 op `create_parametric_room`, EDL `build: parametric` rooms with a `parametric:` block, bridge ops and MCP tools `room_generator_preview/create/update/delete/list/get/snap`.
+- Project schema 22 adds `generated_rooms`.
+- Added `PARAMETRIC-ROOMS.md` and Lua/Python tests. Bumped to v0.74.0.
+
 ## 0.73.0 - 2026-09-27
 
 - Added native mesh resource generation (`mcp_server/lsbuild/meshres.py`). Generated geometry becomes a complete CMesh CR2W-JSON document:

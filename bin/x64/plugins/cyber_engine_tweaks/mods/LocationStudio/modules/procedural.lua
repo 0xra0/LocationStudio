@@ -219,6 +219,26 @@ G.duct={label='Rectangular duct along a polyline',params={points='[[x,y,z],...]'
     return parts
 end}
 
+-- Precomputed parts (used by the parametric room generator), validated.
+local SHAPE_OK={box=true,wedge=true,cylinder=true,sphere=true,prism=true}
+G.compound={label='Compound (explicit parts)',params={parts='[{shape, center, size | radius/length | points/z0/z1, rotation, material}]'},fn=function(p)
+    local out={}
+    for i,part in ipairs(type(p.parts)=='table' and p.parts or {}) do
+        if type(part)~='table' or not SHAPE_OK[part.shape] then return nil,'part '..i..' has an unknown shape' end
+        local q=Util.deepcopy(part);q.material=q.material=='glass' and 'glass' or 'main';q.rotation=q.rotation or {roll=0,pitch=0,yaw=0}
+        if q.shape=='prism' then
+            if type(q.points)~='table' or #q.points<3 or not num(q.z0) or not num(q.z1) or q.z1<=q.z0 then return nil,'prism part '..i..' needs 3+ points and z0 < z1' end
+        else
+            if not vec(q.center) then return nil,'part '..i..' needs a center' end
+            if q.shape=='box' or q.shape=='wedge' then local sz=vec(q.size);if not sz or sz.x<=0 or sz.y<=0 or sz.z<=0 then return nil,'part '..i..' needs a positive size' end
+            elseif not num(q.radius) or q.radius<=0 or (q.shape=='cylinder' and (not num(q.length) or q.length<=0)) then return nil,'part '..i..' needs a positive radius/length' end
+        end
+        out[#out+1]=q
+    end
+    if #out==0 then return nil,'compound geometry needs at least one part' end
+    return out
+end}
+
 Procedural.GENERATORS=G
 
 -- Local-frame AABB of the parts.

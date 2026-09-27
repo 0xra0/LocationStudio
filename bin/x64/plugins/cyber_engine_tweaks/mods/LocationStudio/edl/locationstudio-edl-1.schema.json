@@ -547,6 +547,139 @@
                     }
                   ]
                 },
+                "build": {
+                  "enum": [
+                    "kit",
+                    "parametric"
+                  ],
+                  "description": "kit (default): room-kit shell; parametric: generated geometry, collision, portals, light anchors and sockets"
+                },
+                "parametric": {
+                  "type": "object",
+                  "description": "Parametric room settings (build: parametric)",
+                  "properties": {
+                    "floor": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "enum": [
+                            "slab",
+                            "raised",
+                            "none"
+                          ]
+                        },
+                        "thickness": {
+                          "type": "number"
+                        },
+                        "raise": {
+                          "type": "number"
+                        }
+                      }
+                    },
+                    "ceiling": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "enum": [
+                            "flat",
+                            "beams",
+                            "coffered",
+                            "none"
+                          ]
+                        },
+                        "thickness": {
+                          "type": "number"
+                        },
+                        "beam_spacing": {
+                          "type": "number"
+                        },
+                        "beam_width": {
+                          "type": "number"
+                        },
+                        "beam_depth": {
+                          "type": "number"
+                        }
+                      }
+                    },
+                    "trim": {
+                      "type": "object",
+                      "properties": {
+                        "skirting": {
+                          "type": "boolean"
+                        },
+                        "skirting_height": {
+                          "type": "number"
+                        },
+                        "skirting_depth": {
+                          "type": "number"
+                        },
+                        "crown": {
+                          "type": "boolean"
+                        },
+                        "crown_size": {
+                          "type": "number"
+                        }
+                      }
+                    },
+                    "materials": {
+                      "type": "object",
+                      "properties": {
+                        "floor": {
+                          "type": "string"
+                        },
+                        "walls": {
+                          "type": "string"
+                        },
+                        "ceiling": {
+                          "type": "string"
+                        },
+                        "trim": {
+                          "type": "string"
+                        },
+                        "frame": {
+                          "type": "string"
+                        },
+                        "glass": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "lighting": {
+                      "type": "object",
+                      "properties": {
+                        "anchors": {
+                          "enum": [
+                            "grid",
+                            "center",
+                            "none"
+                          ]
+                        },
+                        "spacing": {
+                          "type": "number"
+                        },
+                        "drop": {
+                          "type": "number"
+                        },
+                        "create_lights": {
+                          "type": "boolean"
+                        },
+                        "light": {
+                          "type": "object"
+                        }
+                      }
+                    },
+                    "collision": {
+                      "type": "boolean"
+                    },
+                    "block_windows": {
+                      "type": "boolean"
+                    },
+                    "wall_thickness": {
+                      "type": "number"
+                    }
+                  },
+                  "additionalProperties": false
+                },
                 "height": {
                   "type": "number"
                 },
@@ -582,6 +715,21 @@
                       },
                       "sill": {
                         "type": "number"
+                      },
+                      "frame": {
+                        "type": "boolean"
+                      },
+                      "frame_width": {
+                        "type": "number"
+                      },
+                      "glass": {
+                        "type": "boolean"
+                      },
+                      "mullions_x": {
+                        "type": "integer"
+                      },
+                      "mullions_y": {
+                        "type": "integer"
                       }
                     },
                     "required": [
@@ -613,6 +761,21 @@
                       },
                       "sill": {
                         "type": "number"
+                      },
+                      "frame": {
+                        "type": "boolean"
+                      },
+                      "frame_width": {
+                        "type": "number"
+                      },
+                      "glass": {
+                        "type": "boolean"
+                      },
+                      "mullions_x": {
+                        "type": "integer"
+                      },
+                      "mullions_y": {
+                        "type": "integer"
                       }
                     },
                     "required": [

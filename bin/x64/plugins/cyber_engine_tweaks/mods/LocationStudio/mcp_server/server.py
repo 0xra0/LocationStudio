@@ -4920,6 +4920,80 @@ def procedural_export_glb(object_id: str = "", premise_id: str = "", output_dir:
     return _json({"count": len(files), "files": files})
 
 
+@mcp.tool()
+def room_generator_preview(spec: dict[str, Any]) -> str:
+    """Dry run of a parametric room: validated spec, part counts per role, portals, lighting anchors and sockets (room frame).
+    Room spec: {name, width (x, interior m), length (y), height, wall_thickness,
+    doors: [{wall north|south|east|west, offset (from the wall middle), width, height, frame}],
+    windows: [{wall, offset, width, height, sill, frame, glass, mullions_x, mullions_y}],
+    floor: {type slab|raised|none, thickness, raise}, ceiling: {type flat|beams|coffered|none, thickness, beam_spacing, beam_width, beam_depth},
+    trim: {skirting, skirting_height, crown}, materials: {floor, walls, ceiling, trim, frame, glass} (.mi from the catalog, or a .mesh template),
+    lighting: {anchors grid|center|none, spacing, create_lights, light {color, intensity, radius}}, collision, block_windows}."""
+    return _json(_send("room_generator_preview", {"spec": spec}))
+
+
+@mcp.tool()
+def room_generator_create(spec: dict[str, Any], premise_id: str = "", position: list[float] | None = None, yaw: float = 0.0,
+                          source: str = "player") -> str:
+    """Generate a complete room in one undo step: a room record with its openings, procedural geometry per role
+    (floor, walls, ceiling, trim, door frames, windows) with collision and material slots, window collision blockers,
+    portals (linked to adjoining generated rooms), lighting anchors (optionally real lights) and snapping sockets.
+    position [x,y,z] is the centre of the floor; otherwise source=player|aim.
+    Room spec: {name, width (x, interior m), length (y), height, wall_thickness,
+    doors: [{wall north|south|east|west, offset (from the wall middle), width, height, frame}],
+    windows: [{wall, offset, width, height, sill, frame, glass, mullions_x, mullions_y}],
+    floor: {type slab|raised|none, thickness, raise}, ceiling: {type flat|beams|coffered|none, thickness, beam_spacing, beam_width, beam_depth},
+    trim: {skirting, skirting_height, crown}, materials: {floor, walls, ceiling, trim, frame, glass} (.mi from the catalog, or a .mesh template),
+    lighting: {anchors grid|center|none, spacing, create_lights, light {color, intensity, radius}}, collision, block_windows}."""
+    args: dict[str, Any] = {"spec": spec, "premise_id": premise_id or None}
+    if position is not None:
+        p = _xyz(position, "position")
+        args["transform"] = {"position": {**p, "w": 1}, "rotation": {"roll": 0, "pitch": 0, "yaw": yaw}}
+    else:
+        if source not in {"player", "aim"}:
+            raise ValueError("source must be player or aim (or give position)")
+        args.update(source=source, yaw=yaw)
+    return _json(_send("room_generator_create", {k: v for k, v in args.items() if v is not None}))
+
+
+@mcp.tool()
+def room_generator_update(room_id: str, spec: dict[str, Any]) -> str:
+    """Regenerate a parametric room from changed spec keys (merged over the saved spec; lists replace). One undo step;
+    the room keeps its id and transform, generated pieces are replaced, hand-placed objects stay."""
+    return _json(_send("room_generator_update", {"room_id": room_id, "spec": spec}))
+
+
+@mcp.tool()
+def room_generator_delete(room_id: str) -> str:
+    """Delete a parametric room with all its generated pieces, colliders, lights and group (one undo step)."""
+    return _json(_send("room_generator_delete", {"room_id": room_id}))
+
+
+@mcp.tool()
+def room_generator_list(premise_id: str = "") -> str:
+    """Parametric rooms with size, openings, floor/ceiling type and piece/portal/socket counts."""
+    return _json(_send("room_generator_list", {"premise_id": premise_id or None}))
+
+
+@mcp.tool()
+def room_generator_get(room_id: str) -> str:
+    """Full record of a parametric room: spec, piece ids per role, collider/light ids, portals, anchors and sockets."""
+    return _json(_send("room_generator_get", {"room_id": room_id}))
+
+
+@mcp.tool()
+def room_generator_snap(object_id: str, room_id: str, socket_id: str, offset: list[float] | None = None, yaw: float = 0.0,
+                        align: bool = True) -> str:
+    """Move an object onto a room socket (wall_north, corner_ne, door_1, window_1, light_1, floor_center, ...). offset
+    [x,y,z] is in the socket frame (+y = the direction the socket faces, into the room); align sets the object's yaw
+    to the socket's facing plus yaw. One undo step."""
+    args: dict[str, Any] = {"object_id": object_id, "room_id": room_id, "socket_id": socket_id, "yaw": yaw, "align": align}
+    if offset is not None:
+        o = _xyz(offset, "offset")
+        args.update(offset_x=o["x"], offset_y=o["y"], offset_z=o["z"])
+    return _json(_send("room_generator_snap", args))
+
+
 EDL_EXPORTS = MOD_DIR / "exports" / "edl"
 EDL_EXAMPLE = MOD_DIR / "edl" / "examples" / "ripperdoc_clinic.edl.yaml"
 

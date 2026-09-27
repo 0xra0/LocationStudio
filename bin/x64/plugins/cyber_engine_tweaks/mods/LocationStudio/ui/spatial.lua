@@ -965,6 +965,45 @@ function SpatialUI:draw_procedural()
     end
 end
 
+local RG_EXAMPLE='{"name":"Clinic","width":6,"length":4,"height":3,"wall_thickness":0.2,"doors":[{"wall":"south","offset":-1,"width":1}],"windows":[{"wall":"east","offset":0,"width":1.5,"height":1.2,"sill":1}],"floor":{"type":"slab"},"ceiling":{"type":"beams"},"lighting":{"anchors":"grid","spacing":3}}'
+
+function SpatialUI:draw_room_generator()
+    local app=self.app;local R=app.room_generator
+    ImGui.Text('PARAMETRIC ROOMS')
+    if not R then ImGui.TextDisabled('Room generator failed to load.');return end
+    ImGui.TextWrapped('Describe a room (interior width/length/height, wall thickness, doors, windows, floor and ceiling type, trims, materials, lighting) and generate its geometry, collision, portals, light anchors and snapping sockets in one undo step. width runs along x, length along y; door/window offsets are measured from the middle of the wall.')
+    self.rg_spec=self.rg_spec or RG_EXAMPLE
+    self.rg_spec=select(1,ImGui.InputTextMultiline('Room spec (JSON)',self.rg_spec,4096))
+    local function spec() local ok,v=pcall(json.decode,self.rg_spec);if ok and type(v)=='table' then return v end;return nil end
+    if ImGui.Button('CHECK##rg',90,28) then local s=spec();if not s then self:toast('Room spec must be a JSON object') else local r,err=R:preview(s);self.rg_preview=r;self:toast(err or 'Spec is valid') end end
+    ImGui.SameLine();if ImGui.Button('CREATE AT V##rg',140,28) then local s=spec();if not s then self:toast('Room spec must be a JSON object') else local r,err=R:create({spec=s,premise_id=app.selected_premise_id,source='player'});if r then self.rg_selected=r.room.id end;self:toast(err or ('Generated '..r.room.name)) end end
+    ImGui.SameLine();if ImGui.Button('CREATE AT AIM##rg',150,28) then local s=spec();if not s then self:toast('Room spec must be a JSON object') else local r,err=R:create({spec=s,premise_id=app.selected_premise_id,source='aim'});if r then self.rg_selected=r.room.id end;self:toast(err or ('Generated '..r.room.name)) end end
+    if self.rg_preview then
+        local parts={};for role,n in pairs(self.rg_preview.parts) do parts[#parts+1]=role..' '..n end;table.sort(parts)
+        ImGui.TextDisabled('Parts: '..table.concat(parts,', ')..' | portals '..#self.rg_preview.portals..' | anchors '..#self.rg_preview.anchors..' | sockets '..#self.rg_preview.sockets)
+    end
+    ImGui.Separator()
+    for _,row in ipairs(R:list({premise_id=app.selected_premise_id}).items) do
+        if ImGui.Selectable(string.format('%s  %.1fx%.1fx%.1f m  %d door(s) %d window(s)  %s/%s##rgrow_%s',row.name,row.size.width,row.size.length,row.size.height,row.doors,row.windows,row.floor,row.ceiling,row.id),self.rg_selected==row.id) then
+            self.rg_selected=row.id;local rec=R:get(row.id);if rec then self.rg_spec=json.encode(rec.spec) end
+        end
+    end
+    local rec=R:get(self.rg_selected or '')
+    if rec then
+        if ImGui.Button('REGENERATE FROM SPEC##rg',210,26) then local s=spec();if not s then self:toast('Room spec must be a JSON object') else local _,err=R:update(rec.id,s);self:toast(err or 'Room regenerated') end end
+        ImGui.SameLine();if ImGui.Button('DELETE ROOM##rg',130,26) then local _,err=R:delete(rec.id);self:toast(err or 'Generated room deleted');if not err then self.rg_selected=nil end end
+        for _,p in ipairs(rec.portals or {}) do ImGui.TextDisabled(string.format('  %s on %s %.2fx%.2f m%s',p.id,p.wall,p.width,p.height,p.connects and (' -> '..tostring((app.model:get_room(p.connects) or {}).name or p.connects)) or '')) end
+        ImGui.Text('Sockets (snap the selected object):')
+        local target=app.selected_object_id
+        for _,sk in ipairs(rec.sockets or {}) do
+            ImGui.TextDisabled('  '..sk.id..' ['..sk.kind..']');ImGui.SameLine()
+            if ImGui.SmallButton('SNAP##rgsk_'..sk.id) then
+                if not target then self:toast('Select an object first') else local _,err=R:snap(target,rec.id,sk.id,{});self:toast(err or ('Snapped to '..sk.id)) end
+            end
+        end
+    end
+end
+
 function SpatialUI:draw_preflight()
     local app=self.app;local P=app.preflight
     ImGui.Text('SHIPPING PREFLIGHT')
@@ -1708,6 +1747,7 @@ function SpatialUI:draw()
     if ImGui.BeginTabBar('##spatial_tabs') then
         if ImGui.BeginTabItem('Preflight') then self:draw_preflight();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Geometry') then self:draw_procedural();ImGui.EndTabItem() end
+        if ImGui.BeginTabItem('Room gen') then self:draw_room_generator();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Layers') then self:draw_layers();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Splines') then self:draw_splines();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Timeline') then self:draw_timeline();ImGui.EndTabItem() end
