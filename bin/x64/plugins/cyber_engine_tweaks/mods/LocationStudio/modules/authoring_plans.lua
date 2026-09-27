@@ -12,17 +12,17 @@ local OP_KIND={
     edl_begin='edl',set_room_kit='settings',import_resource='asset',place_resource='object',create_light='object',create_collision='object',
     create_vfx='object',create_audio_emitter='object',create_reverb_zone='object',create_occluder='object',create_interactable='object',
     create_npc='object',create_workspot='location',create_npc_route='npc_route',add_route_waypoint='waypoint',create_device_graph='device_graph',
-    add_device_node='device_node',add_device_link='device_link',link_fact='volume',import_navigation='navigation_graph',create_spline='spline',create_procedural='object',create_parametric_room='room',create_material='material',
+    add_device_node='device_node',add_device_link='device_link',link_fact='volume',import_navigation='navigation_graph',create_spline='spline',create_procedural='object',create_parametric_room='room',create_material='material',set_collision_rules='collision_rules',
 }
 local V2_ONLY={}
 for _,op in ipairs({'edl_begin','set_room_kit','import_resource','place_resource','create_light','create_collision','create_vfx','create_audio_emitter',
     'create_reverb_zone','create_occluder','create_interactable','create_npc','create_workspot','create_npc_route','add_route_waypoint','create_device_graph',
-    'add_device_node','add_device_link','link_fact','import_navigation','create_spline','create_procedural','create_parametric_room','create_material'}) do V2_ONLY[op]=true end
+    'add_device_node','add_device_link','link_fact','import_navigation','create_spline','create_procedural','create_parametric_room','create_material','set_collision_rules'}) do V2_ONLY[op]=true end
 local NEEDS_PREMISE={create_room=true,create_volume=true,create_camera=true,create_scene=true,capture_scene=true,place_asset=true,place_resource=true,
     create_light=true,create_collision=true,create_vfx=true,create_audio_emitter=true,create_occluder=true,create_interactable=true,create_npc=true,create_procedural=true,create_parametric_room=true}
 -- Ops that do not need the World Builder runtime.
 local NO_RUNTIME={edl_begin=true,create_workspot=true,create_npc_route=true,add_route_waypoint=true,create_device_graph=true,add_device_node=true,
-    add_device_link=true,link_fact=true,import_navigation=true,create_spline=true,create_material=true}
+    add_device_link=true,link_fact=true,import_navigation=true,create_spline=true,create_material=true,set_collision_rules=true}
 local MAX_STEPS={[1]=100,[2]=2000}
 local EDL_DOC='^[%a_][%w_%-]*$'
 
@@ -101,6 +101,7 @@ function Plans:schema()
             link_fact={'volume_id','fact_name','value?'},import_navigation={'as','name','nodes [{id,offset}]','edges'},
             create_spline={'as','premise_id','points [offset]','closed?'},
             create_procedural={'as','premise_id','generator','params','offset','yaw?','material?','collision?','layer?'},
+            set_collision_rules={'rules','room_id? | object_id? (default: project default)','regenerate?'},
             create_material={'as?','key','preset?','base?','path?','params?','textures?','overrides?','variants?'},
             create_parametric_room={'as','premise_id','spec {name,width,length,height,wall_thickness,doors,windows,floor,ceiling,trim,materials,lighting,collision}','offset','yaw?'},
         },
@@ -198,6 +199,10 @@ function Plans:validate(plan)
         if step.as and not aliases[step.as] then aliases[step.as]=OP_KIND[op] or 'unknown' end
         if op=='place_asset' and not is_ref(step.asset_id) then local _,err=self:resolve_asset(step.asset_id,step.asset_query);if err then table.insert(errors,string.format('step %d: %s',index,err)) end end
         if op=='create_room' then local ok,err=Builder.validate_size({width=step.width or 4,depth=step.depth or 4,height=step.height or 3},step.wall_thickness);if not ok then table.insert(errors,string.format('step %d: %s',index,err)) end end
+        if op=='set_collision_rules' or ((op=='create_procedural') and step.collision_rules~=nil) then
+            local CG=package.loaded['modules/collision_gen']
+            if CG then local ok,err=CG.normalize_rules(op=='set_collision_rules' and step.rules or step.collision_rules);if not ok then table.insert(errors,string.format('step %d: %s',index,err)) end end
+        end
         if op=='create_material' then
             local ML=package.loaded['modules/materials']
             if ML then local ok,err=ML.normalize(step);if not ok then table.insert(errors,string.format('step %d: %s',index,err)) end end
@@ -454,8 +459,13 @@ function Plans:_run_step(step,aliases,origin)
     elseif op=='create_procedural' then
         if not app.procedural then return nil,'procedural geometry is unavailable' end
         local r;r,warning=app.procedural:create({generator=a.generator,params=a.params,premise_id=a.premise_id,room_id=a.room_id,name=a.name,layer=a.layer,
-            material=a.material,collision=a.collision,collision_preset=a.collision_preset,stream_range=a.stream_range,transform=self:_transform(origin,a),spawn=a.spawn})
+            material=a.material,collision=a.collision,collision_preset=a.collision_preset,collision_rules=a.collision_rules,stream_range=a.stream_range,transform=self:_transform(origin,a),spawn=a.spawn})
         item=r and r.object;kind='object';if r and r.preview_error then warning=r.preview_error end
+    elseif op=='set_collision_rules' then
+        if not app.collision_gen then return nil,'collision rules are unavailable' end
+        local scope=a.room_id and ('room:'..a.room_id) or a.object_id and ('object:'..a.object_id) or 'default'
+        local r;r,warning=app.collision_gen:set_rules(scope,a.rules or {},{regenerate=a.regenerate~=false})
+        item=r and {id=scope,scope=scope,rules=r.rules};kind='collision_rules'
     elseif op=='create_material' then
         if not app.material_library then return nil,'material library is unavailable' end
         local def=Util.deepcopy(a);def.op=nil;def.as=nil;def.edl_element=nil

@@ -972,6 +972,51 @@ function SpatialUI:draw_procedural()
     end
 end
 
+function SpatialUI:draw_collision_rules()
+    local app=self.app;local C=app.collision_gen
+    ImGui.Text('COLLISION RULES')
+    if not C then ImGui.TextDisabled('Collision generator failed to load.');return end
+    ImGui.TextWrapped('Procedural geometry gets its colliders from rules: project default, overridden per room, overridden per object. mode exact|simplified|convex|bounds|none, actors all|player|npc|player_vehicles|vehicles|camera|sight, doorways auto|keep, rails solid|parts|none, glass pass|block, per_room, exclude boxes, max_boxes, tolerance, material.')
+    local scopes={{'default','Project default'}}
+    if app.selected_room_id and app.model:get_room(app.selected_room_id) then scopes[#scopes+1]={'room:'..app.selected_room_id,'Selected room'} end
+    local o=app.model:get_object(app.selected_object_id)
+    if o and o.metadata and o.metadata.procedural then scopes[#scopes+1]={'object:'..o.id,'Selected geometry: '..tostring(o.name)} end
+    self.cr_scope=self.cr_scope or 'default'
+    local valid=false;for _,sc in ipairs(scopes) do if sc[1]==self.cr_scope then valid=true end end
+    if not valid then self.cr_scope='default';self.cr_text=nil end
+    for i,sc in ipairs(scopes) do
+        if i>1 then ImGui.SameLine() end
+        if ImGui.SmallButton(sc[2]..'##crscope_'..i) then self.cr_scope=sc[1];self.cr_text=nil;self.cr_preview=nil end
+    end
+    if not self.cr_text then local r=C:get_rules(self.cr_scope);self.cr_text=json.encode(r and r.rules or {}) end
+    ImGui.Text('Scope: '..self.cr_scope)
+    self.cr_text=select(1,ImGui.InputTextMultiline('Rules (JSON)',self.cr_text,4096))
+    local function rules() local ok,v=pcall(json.decode,self.cr_text);if ok and type(v)=='table' then return v end;return nil end
+    if ImGui.Button('APPLY RULES##cr',150,28) then
+        local r=rules();if not r then self:toast('Rules must be a JSON object') else
+            local res,err=C:set_rules(self.cr_scope,r,{replace=true});self:toast(err or ('Rules saved; '..tostring(res.regenerated and res.regenerated.colliders or 0)..' collider(s) regenerated'))
+        end
+    end
+    if self.cr_scope:sub(1,7)=='object:' then
+        ImGui.SameLine();if ImGui.Button('PREVIEW##cr',110,28) then
+            local r=rules();if not r then self:toast('Rules must be a JSON object') else local p,err=C:preview({object_id=self.cr_scope:sub(8),rules=r});self.cr_preview=p;if err then self:toast(err) end end
+        end
+    end
+    ImGui.SameLine();if ImGui.Button('REGENERATE ALL##cr',170,28) then local r,err=C:regenerate({premise_id=app.selected_premise_id});self:toast(err or (r.colliders..' collider(s) on '..r.objects..' object(s)')) end
+    if self.cr_preview then
+        local st=self.cr_preview.stats
+        ImGui.TextDisabled(string.format('Preview: %d collider(s), preset %s, from %d source box(es); merged %d, doorway cuts %d, room splits %d',self.cr_preview.colliders,tostring(self.cr_preview.preset),st.source_boxes,st.merged,st.excluded,st.split))
+        for _,w in ipairs(self.cr_preview.warnings or {}) do ImGui.TextDisabled('  ! '..w) end
+    end
+    ImGui.Separator();ImGui.Text('Per room')
+    for _,r in ipairs(C:report({premise_id=app.selected_premise_id}).rooms) do
+        ImGui.TextDisabled(string.format('%s: %d collider(s), %d enabled, block player %d / npc %d',r.room or '(no room)',r.colliders,r.enabled,r.blocks_player,r.blocks_npc))
+        if r.room_id then
+            ImGui.SameLine();if ImGui.SmallButton((r.enabled>0 and 'DISABLE' or 'ENABLE')..'##crroom_'..r.room_id) then local _,err=C:set_room_enabled(r.room_id,r.enabled==0);if err then self:toast(err) end end
+        end
+    end
+end
+
 local MAT_EXAMPLE='{"key":"clinic_tile","preset":"metal_base","params":{"roughness":0.6,"metallic":0,"tint":[0.9,0.95,1,1],"uv_scale":[2,2]},"textures":{"base_color":{"solid":[0.8,0.82,0.85,1]}},"variants":[{"name":"dirty","params":{"roughness":0.85,"tint":[0.7,0.68,0.62,1]}}]}'
 
 function SpatialUI:draw_materials()
@@ -1790,6 +1835,7 @@ function SpatialUI:draw()
         if ImGui.BeginTabItem('Geometry') then self:draw_procedural();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Room gen') then self:draw_room_generator();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Materials') then self:draw_materials();ImGui.EndTabItem() end
+        if ImGui.BeginTabItem('Collision rules') then self:draw_collision_rules();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Layers') then self:draw_layers();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Splines') then self:draw_splines();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Timeline') then self:draw_timeline();ImGui.EndTabItem() end

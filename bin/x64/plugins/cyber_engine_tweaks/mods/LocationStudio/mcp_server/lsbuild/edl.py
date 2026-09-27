@@ -37,6 +37,11 @@ FACT_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
 RECORD_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z0-9_.-]+$")
 PARAM_RE = re.compile(r"\$\{([^}]+)\}")
 WALLS = {"north", "south", "east", "west"}
+COLLISION_RULE_KEYS = ("mode", "actors", "preset", "material", "doorways", "door_clearance", "exclude", "rails", "rail_height",
+                       "rail_thickness", "glass", "min_thickness", "max_boxes", "tolerance", "per_room")
+COLLISION_RULE_ENUMS = {"mode": ("exact", "simplified", "convex", "bounds", "none"),
+                        "actors": ("all", "player", "npc", "player_vehicles", "vehicles", "camera", "sight"),
+                        "doorways": ("auto", "keep"), "rails": ("solid", "parts", "none"), "glass": ("pass", "block")}
 MATERIAL_KEYS = ("key", "name", "preset", "base", "path", "params", "textures", "overrides", "variants", "notes")
 PARAMETRIC_KEYS = ("floor", "ceiling", "trim", "materials", "lighting", "collision", "block_windows", "wall_thickness")
 EXTENSION_TYPES = {"mesh": "mesh_static", "ent": "entity_template", "mi": "decal", "particle": "particle", "effect": "effect"}
@@ -521,6 +526,20 @@ class Compiler:
             self.counts["materials"] = self.counts.get("materials", 0) + 1
             self.emit({"op": "create_material", **{k: v for k, v in d.items() if k in MATERIAL_KEYS}})
 
+    def collision_rules(self, value: Any, where: str) -> dict[str, Any] | None:
+        """Collision generator rules (checked fully in game); key names and enums are checked here."""
+        if value is None:
+            return None
+        if not isinstance(value, dict):
+            self.err(where, "must be a mapping of collision rules")
+            return None
+        for k, v in value.items():
+            if k not in COLLISION_RULE_KEYS:
+                self.err(f"{where}.{k}", "is not a collision rule")
+            elif k in COLLISION_RULE_ENUMS and v not in COLLISION_RULE_ENUMS[k]:
+                self.err(f"{where}.{k}", f"must be one of {', '.join(COLLISION_RULE_ENUMS[k])}")
+        return value
+
     def material_ref(self, value: Any, where: str) -> None:
         """Warn about @key references that this document does not define (they must exist in the project)."""
         if isinstance(value, str) and value.startswith("@"):
@@ -601,6 +620,9 @@ class Compiler:
         spawn = room.get("spawn", self.defaults.get("spawn", True))
         if spawn:
             self.emit({"op": "spawn", "kind": "room", "id": "$" + self.alias(rid)})
+        rules = self.collision_rules(room.get("collision_rules"), where + ".collision_rules")
+        if rules is not None:
+            self.emit({"op": "set_collision_rules", "room_id": "$" + self.alias(rid), "rules": rules})
         frame = self.rooms[rid]["frame"]
         for kind in ELEMENT_LISTS:
             for element in _expand_list(room.get(kind), self.templates, f"{where}.{kind}", self.errors):
@@ -626,6 +648,9 @@ class Compiler:
             if key not in PARAMETRIC_KEYS:
                 self.err(f"{where}.parametric.{key}", "is not a parametric room setting")
         spec.update({"name": room.get("name") or rid, "width": size[0], "length": size[1], "height": size[2]})
+        rules = self.collision_rules(room.get("collision_rules"), where + ".collision_rules")
+        if rules is not None:
+            spec["collision_rules"] = rules
         if isinstance(wall, dict) and wall.get("thickness") is not None:
             spec["wall_thickness"] = float(wall["thickness"])
         for kind, default_h, sill in (("doors", 2.1, 0.0), ("windows", 1.2, 1.0)):
@@ -740,7 +765,8 @@ class Compiler:
             mat_out["materials"] = slots
         self.emit({"op": "create_procedural", "as": self.alias(eid), **step, "generator": gen, "params": params,
                    "material": mat_out,
-                   "collision": e.get("collision", True), "collision_preset": e.get("collision_preset"), "layer": e.get("layer"),
+                   "collision": e.get("collision", True), "collision_preset": e.get("collision_preset"),
+                   "collision_rules": self.collision_rules(e.get("collision_rules"), where + ".collision_rules"), "layer": e.get("layer"),
                    "stream_range": e.get("stream_range", self.defaults.get("stream_range"))}, eid)
 
     def el_lights(self, e: dict[str, Any], frame: _Frame, where: str) -> None:

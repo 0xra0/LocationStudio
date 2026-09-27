@@ -10,6 +10,14 @@
 The upgrade archive does not contain project/config JSON, logs, exports,
 thumbnails, or bridge state.
 
+## v0.77 Collision rules smoke check
+
+1. Create a kit room with a door, and a procedural wall across the doorway (box generator). With collision visualization on, the collider has a gap in the doorway; walk through it.
+2. In Spatial → Collision rules, select the wall and apply `{"actors":"player"}`. V is blocked but an NPC walks through: check with a patrol route or a follower. Then apply `{"actors":"npc"}` and check the opposite.
+3. Create a railing along a ledge, and check that V cannot jump the default barrier. Set `rail_height` to 1.6 and check again.
+4. Apply `{"mode":"simplified"}` to stairs, and check that walking up and down still feels smooth.
+5. Set `per_room` on a floor spanning two rooms. Disable one room in the report, check that its floor no longer blocks, then enable it again.
+
 ## v0.76 CSG smoke check
 
 1. In Spatial → Geometry choose the generator `csg` and press the `wall_door_window` example. Then press **CREATE AT V**. The preview shows the wall with the doorway and window gaps. Walk through the doorway; the wall blocks you elsewhere.

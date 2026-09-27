@@ -1,6 +1,6 @@
 local env=dofile(arg[2]..'/support/cet_mock.lua')
 local app=env.app
-assert(app.version=='0.76.0')
+assert(app.version=='0.77.0')
 
 local created,err=app.quickstart:create_first_room({location_name='Director Location',room_name='Stage',width=6,depth=5,height=3})
 assert(created,err);local premise,room=created.premise,created.room
