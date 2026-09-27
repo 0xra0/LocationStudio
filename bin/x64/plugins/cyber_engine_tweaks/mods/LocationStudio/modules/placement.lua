@@ -82,6 +82,7 @@ function Placement:compare_runtime()
     -- The VFX and environment editors own their transient preview nodes.
     tracked['__vfx_preview']=nil
     tracked['__env_fog_preview']=nil
+    for id in pairs(tracked) do if type(id)=='string' and id:sub(1,17)=='__spline_preview_' then tracked[id]=nil end end
     local report={items={},counts={remove=0,update=0,missing=0},has_changes=false,checked=0}
     for id in pairs(tracked) do
         report.checked=report.checked+1

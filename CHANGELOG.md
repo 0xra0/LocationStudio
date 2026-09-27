@@ -1,3 +1,10 @@
+## 0.65.0 - 2026-09-27
+
+- Added persistent editable splines (project schema 18, `splines`; `modules/splines.lua`, Spatial → Splines). They have control points with cubic Bezier handles and auto (Catmull-Rom with tension), aligned (mirrored direction), free or linear modes, open or closed curves, and insertion on the curve at a distance.
+- Added arc-length sampling by spacing or count with offsets, and a transient World Builder marker preview that is ignored by Runtime Sync and cleared on overlay close.
+- Added spline uses that are remembered and rebuilt by Regenerate as one undo step: cable/fence/road through the existing generators, object distribution (aligned, offsets, random yaw), NPC routes (looping for closed curves, same route kept), camera paths (ordered look-ahead shots with speed-based durations), and a native World Builder `worldSplineNode` with Hermite tangents. Failed uses leave no history or partial output.
+- Added fourteen MCP tools, `SPLINES.md`, and Lua/Python tests. Bumped to v0.65.0.
+
 ## 0.64.0 - 2026-09-27
 
 - Added a layer manager (`modules/layers.lua`, Spatial → Layers) with default Architecture, Props, Gameplay, NPC, Lighting, Audio, Quest and Debug layers. The ids `shell`/`decoration` are kept; older projects gain the new layers and have their untouched default names renamed.
