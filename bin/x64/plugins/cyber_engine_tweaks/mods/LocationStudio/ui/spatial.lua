@@ -927,7 +927,14 @@ function SpatialUI:draw_procedural()
         ImGui.EndCombo()
     end
     for _,g in ipairs(gens.items) do if g.id==self.pg_gen then for k,v in pairs(g.params) do ImGui.TextDisabled('  '..k..': '..v) end end end
-    self.pg_params=select(1,ImGui.InputTextMultiline('Parameters (JSON)',self.pg_params,2048))
+    if self.pg_gen=='csg' then
+        ImGui.TextDisabled('Load an example tree:')
+        self.csg_examples=self.csg_examples or require('modules/csg').examples()
+        for _,e in ipairs(self.csg_examples) do
+            ImGui.SameLine();if ImGui.SmallButton(e.id..'##csgex_'..e.id) then self.pg_params=json.encode({tree=e.tree,resolution=0.25});self.pg_name=e.label end
+        end
+    end
+    self.pg_params=select(1,ImGui.InputTextMultiline('Parameters (JSON)',self.pg_params,8192))
     self.pg_name=select(1,ImGui.InputText('Name##pg',self.pg_name,64))
     self.pg_mi=select(1,ImGui.InputText('Material .mi (native mesh)',self.pg_mi or '',256))
     self.pg_template=select(1,ImGui.InputText('or template .mesh (import)',self.pg_template,256))

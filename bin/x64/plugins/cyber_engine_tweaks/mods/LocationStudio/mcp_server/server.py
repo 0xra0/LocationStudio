@@ -3756,7 +3756,7 @@ def status_resource() -> str:
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from mod_inventory import scan_mod_installation as _scan_mod_installation  # noqa: E402
-from lsbuild import build as _lsb, native as _lsn, worker as _lsw, wiring as _lswire, rng as _lsrng, interactables as _lsip, population as _lsp, vfx as _lsvfx, sectors as _lssec, performance as _lsperf, vanilla as _lsvan, dependencies as _lsdep, preflight as _lspf, edl as _lsedl, procedural as _lsproc, meshres as _lsmesh, materials as _lsmat  # noqa: E402
+from lsbuild import build as _lsb, native as _lsn, worker as _lsw, wiring as _lswire, rng as _lsrng, interactables as _lsip, population as _lsp, vfx as _lsvfx, sectors as _lssec, performance as _lsperf, vanilla as _lsvan, dependencies as _lsdep, preflight as _lspf, edl as _lsedl, procedural as _lsproc, meshres as _lsmesh, materials as _lsmat, csg as _lscsg  # noqa: E402
 
 WORLD_BUILDER_ROOT = MOD_DIR.parent / "entSpawner"
 BUILD_ROOT = MOD_DIR / "exports" / "build"
@@ -4928,7 +4928,7 @@ def material_inspect(path: str) -> str:
 @mcp.tool()
 def procedural_generators() -> str:
     """Procedural geometry generators (wall, floor, ceiling, column, stairs, ramp, door_frame, window, railing, pipe,
-    duct, box) with their parameters, and the preview/mesh-path settings."""
+    duct, box, compound, csg) with their parameters, and the preview/mesh-path settings."""
     return _json(_send("procedural_generators"))
 
 
@@ -5089,6 +5089,71 @@ def procedural_export_glb(object_id: str = "", premise_id: str = "", output_dir:
         _lsproc.write_glb(mesh, target, name=name)
         files.append({"object_id": o.get("id"), "file": str(target), "triangles": mesh.triangle_count, "bounds": mesh.bounds()})
     return _json({"count": len(files), "files": files})
+
+
+CSG_EXAMPLES = MOD_DIR / "csg" / "examples.json"
+
+
+@mcp.tool()
+def csg_examples() -> str:
+    """Example CSG trees (wall - doorway - window, arched doorway, tunnel, shaft, recess, vents, L-shaped room shell,
+    round glass window, intersection). Pass one to csg_create (example=...) or edit its tree."""
+    return _json(json.loads(CSG_EXAMPLES.read_text(encoding="utf-8")))
+
+
+@mcp.tool()
+def csg_create(tree: dict[str, Any] | None = None, example: str = "", name: str = "", position: list[float] | None = None,
+               yaw: float = 0.0, source: str = "player", premise_id: str = "", room_id: str = "",
+               materials: dict[str, str] | None = None, material_template: str = "", collision: bool = True,
+               resolution: float = 0.25, layer: str = "") -> str:
+    """Create architecture from constructive solid geometry (one undo step): a procedural object with generator csg.
+
+    tree: {op: union|subtract|intersect, children: [...], cut_material?} whose leaves are parts
+    {shape: box|wedge|cylinder|sphere|prism, center, size | radius/length(/sides) | points/z0/z1, rotation, material main|glass}
+    or generator outputs {generator: wall|stairs|..., params, offset, rotation}. Any node or leaf may carry
+    repeat {count, step [x,y,z]}. subtract removes every later child from the first; intersect keeps the overlap.
+    Cylinders run along local +Y; wedges rise towards +Y. Units are metres in the object frame (z up).
+    The Build Mod mesh is the exact boolean result, watertight and with material slots kept.
+    The in-game preview and collision are grid boxes: exact for axis-aligned box trees, and approximated at
+    `resolution` for curved or rotated leaves (see stats.csg.approximate).
+    materials: slot -> .mi or @library key. example: the name of a csg_examples tree."""
+    if example:
+        examples = json.loads(CSG_EXAMPLES.read_text(encoding="utf-8"))["examples"]
+        if example not in examples:
+            raise ValueError(f"unknown example {example!r}; see csg_examples")
+        tree = examples[example]["tree"]
+        name = name or examples[example]["label"]
+    if not isinstance(tree, dict):
+        raise ValueError("give a tree or an example name")
+    create = getattr(procedural_create, "fn", procedural_create)
+    return create("csg", params={"tree": tree, "resolution": resolution}, name=name, position=position, yaw=yaw, source=source,
+                  premise_id=premise_id, room_id=room_id, material_template=material_template, collision=collision,
+                  materials=materials, layer=layer)
+
+
+@mcp.tool()
+def csg_mesh(object_id: str = "", tree: dict[str, Any] | None = None, glb_path: str = "") -> str:
+    """Offline: the exact boolean mesh of a saved CSG object (object_id) or of a raw tree with primitive leaves
+    (generator leaves are only expanded in game). Reports triangles per material slot, bounds, enclosed volume and
+    open (unmatched) edges, which is 0 for a watertight result. glb_path writes the mesh as glTF for checking."""
+    if object_id:
+        project = json.loads(PROJECT.read_text(encoding="utf-8")) if PROJECT.is_file() else {"objects": []}
+        obj = next((o for o in project.get("objects") or [] if o.get("id") == object_id), None)
+        cfg = ((obj or {}).get("metadata") or {}).get("procedural") or {}
+        if cfg.get("generator") != "csg":
+            raise ValueError("object_id is not a saved CSG object; save the project first")
+        mesh = _lsproc.object_mesh(obj)
+    elif isinstance(tree, dict):
+        mesh = _lscsg.mesh_from_tree(_lscsg.expand(tree))
+    else:
+        raise ValueError("give object_id or tree")
+    out: dict[str, Any] = {"triangles": mesh.triangle_count, "slots": {k: len(v["idx"]) // 3 for k, v in mesh.prims.items()},
+                           "bounds": mesh.bounds(), "volume": round(_lscsg.volume(mesh), 6), "open_edges": _lscsg.open_edges(mesh)}
+    if glb_path:
+        target = Path(glb_path).expanduser()
+        _lsproc.write_glb(mesh, target, name=target.stem)
+        out["glb"] = str(target)
+    return _json(out)
 
 
 @mcp.tool()

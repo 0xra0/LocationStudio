@@ -1,0 +1,433 @@
+{
+ "format": "locationstudio-csg-examples",
+ "version": 1,
+ "examples": {
+  "wall_door_window": {
+   "label": "Wall - doorway - window",
+   "tree": {
+    "op": "subtract",
+    "children": [
+     {
+      "shape": "box",
+      "center": [
+       0,
+       0,
+       1.5
+      ],
+      "size": [
+       5,
+       0.2,
+       3
+      ]
+     },
+     {
+      "shape": "box",
+      "center": [
+       -1.2,
+       0,
+       1.05
+      ],
+      "size": [
+       1,
+       0.4,
+       2.1
+      ]
+     },
+     {
+      "shape": "box",
+      "center": [
+       1.1,
+       0,
+       1.6
+      ],
+      "size": [
+       1.4,
+       0.4,
+       1.2
+      ]
+     }
+    ]
+   }
+  },
+  "arched_doorway": {
+   "label": "Wall with an arched doorway",
+   "tree": {
+    "op": "subtract",
+    "children": [
+     {
+      "shape": "box",
+      "center": [
+       0,
+       0,
+       1.6
+      ],
+      "size": [
+       4,
+       0.3,
+       3.2
+      ]
+     },
+     {
+      "op": "union",
+      "children": [
+       {
+        "shape": "box",
+        "center": [
+         0,
+         0,
+         0.9
+        ],
+        "size": [
+         1.2,
+         0.5,
+         1.8
+        ]
+       },
+       {
+        "shape": "cylinder",
+        "center": [
+         0,
+         0,
+         1.8
+        ],
+        "radius": 0.6,
+        "length": 0.5,
+        "sides": 24
+       }
+      ]
+     }
+    ]
+   }
+  },
+  "tunnel": {
+   "label": "Tunnel through rock",
+   "tree": {
+    "op": "subtract",
+    "cut_material": "main",
+    "children": [
+     {
+      "shape": "box",
+      "center": [
+       0,
+       0,
+       2
+      ],
+      "size": [
+       8,
+       10,
+       4
+      ]
+     },
+     {
+      "op": "union",
+      "children": [
+       {
+        "shape": "box",
+        "center": [
+         0,
+         0,
+         1
+        ],
+        "size": [
+         3,
+         10.2,
+         2
+        ]
+       },
+       {
+        "shape": "cylinder",
+        "center": [
+         0,
+         0,
+         2
+        ],
+        "radius": 1.5,
+        "length": 10.2,
+        "sides": 24
+       }
+      ]
+     }
+    ]
+   }
+  },
+  "shaft": {
+   "label": "Floor slab with a stair/elevator shaft",
+   "tree": {
+    "op": "subtract",
+    "children": [
+     {
+      "shape": "box",
+      "center": [
+       0,
+       0,
+       -0.15
+      ],
+      "size": [
+       10,
+       8,
+       0.3
+      ]
+     },
+     {
+      "shape": "box",
+      "center": [
+       3,
+       2,
+       -0.15
+      ],
+      "size": [
+       2,
+       2.5,
+       0.5
+      ]
+     }
+    ]
+   }
+  },
+  "recess": {
+   "label": "Wall with a shelf recess",
+   "tree": {
+    "op": "subtract",
+    "children": [
+     {
+      "shape": "box",
+      "center": [
+       0,
+       0,
+       1.5
+      ],
+      "size": [
+       3,
+       0.4,
+       3
+      ]
+     },
+     {
+      "shape": "box",
+      "center": [
+       0,
+       -0.1,
+       1.2
+      ],
+      "size": [
+       1.6,
+       0.25,
+       0.9
+      ]
+     }
+    ]
+   }
+  },
+  "vents": {
+   "label": "Panel with a row of vent slots",
+   "tree": {
+    "op": "subtract",
+    "children": [
+     {
+      "shape": "box",
+      "center": [
+       0,
+       0,
+       1
+      ],
+      "size": [
+       1.2,
+       0.05,
+       0.6
+      ]
+     },
+     {
+      "shape": "box",
+      "center": [
+       -0.45,
+       0,
+       1
+      ],
+      "size": [
+       0.06,
+       0.2,
+       0.4
+      ],
+      "repeat": {
+       "count": 8,
+       "step": [
+        0.128571,
+        0,
+        0
+       ]
+      }
+     }
+    ]
+   }
+  },
+  "l_room": {
+   "label": "L-shaped room shell (outer minus inner)",
+   "tree": {
+    "op": "subtract",
+    "children": [
+     {
+      "op": "union",
+      "children": [
+       {
+        "shape": "box",
+        "center": [
+         0,
+         0,
+         1.6
+        ],
+        "size": [
+         8.4,
+         4.4,
+         3.2
+        ]
+       },
+       {
+        "shape": "box",
+        "center": [
+         2.2,
+         3,
+         1.6
+        ],
+        "size": [
+         4,
+         6.4,
+         3.2
+        ]
+       }
+      ]
+     },
+     {
+      "op": "union",
+      "children": [
+       {
+        "shape": "box",
+        "center": [
+         0,
+         0,
+         1.6
+        ],
+        "size": [
+         8,
+         4,
+         2.8
+        ]
+       },
+       {
+        "shape": "box",
+        "center": [
+         2.2,
+         3,
+         1.6
+        ],
+        "size": [
+         3.6,
+         6,
+         2.8
+        ]
+       }
+      ]
+     },
+     {
+      "shape": "box",
+      "center": [
+       -4.1,
+       0,
+       1.05
+      ],
+      "size": [
+       0.5,
+       1,
+       2.1
+      ]
+     }
+    ]
+   }
+  },
+  "round_window": {
+   "label": "Wall with a round glass window",
+   "tree": {
+    "op": "union",
+    "children": [
+     {
+      "op": "subtract",
+      "children": [
+       {
+        "shape": "box",
+        "center": [
+         0,
+         0,
+         1.5
+        ],
+        "size": [
+         3,
+         0.2,
+         3
+        ]
+       },
+       {
+        "shape": "cylinder",
+        "center": [
+         0,
+         0,
+         1.6
+        ],
+        "radius": 0.5,
+        "length": 0.4,
+        "sides": 24
+       }
+      ]
+     },
+     {
+      "shape": "cylinder",
+      "center": [
+       0,
+       0,
+       1.6
+      ],
+      "radius": 0.5,
+      "length": 0.01,
+      "sides": 24,
+      "material": "glass"
+     }
+    ]
+   }
+  },
+  "column_capital": {
+   "label": "Intersection: rounded column block",
+   "tree": {
+    "op": "intersect",
+    "children": [
+     {
+      "shape": "box",
+      "center": [
+       0,
+       0,
+       1
+      ],
+      "size": [
+       1,
+       1,
+       2
+      ]
+     },
+     {
+      "shape": "cylinder",
+      "center": [
+       0,
+       0,
+       1
+      ],
+      "radius": 0.62,
+      "length": 2,
+      "rotation": {
+       "roll": 0,
+       "pitch": 90,
+       "yaw": 0
+      },
+      "sides": 32
+     }
+    ]
+   }
+  }
+ }
+}

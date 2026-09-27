@@ -1,4 +1,5 @@
 local Util=require('modules/util')
+local Csg=require('modules/csg')
 
 -- Procedural geometry. Generators turn dimensions and parameters into a list
 -- of solid "parts" (box, wedge, cylinder, sphere, prism) in the object's local
@@ -239,6 +240,23 @@ G.compound={label='Compound (explicit parts)',params={parts='[{shape, center, si
     return out
 end}
 
+-- Constructive solid geometry: union / subtract / intersect of parts and generator outputs
+-- (modules/csg.lua). Parts are the preview/collision boxes; the exact tree is saved as
+-- metadata.procedural.csg.tree and meshed exactly at Build Mod.
+G.csg={label='CSG (union / subtract / intersect)',params={tree='{op = union|subtract|intersect, children = [...]} | part | {generator, params, offset, rotation}; any node may have repeat = {count, step}',
+    resolution='grid for curved/rotated shapes in the preview and collision (m, default 0.25)'},fn=function(p)
+    local res=num(p.resolution,0.25);if res<0.02 or res>2 then return nil,'resolution must be between 0.02 and 2 m' end
+    if type(p.tree)~='table' then return nil,'csg needs a tree' end
+    local tree,err=Csg.expand(p.tree,function(name,params)
+        local g=G[name];if not g or name=='csg' then return nil,'unknown generator '..tostring(name) end
+        return g.fn(params)
+    end)
+    if not tree then return nil,err end
+    local parts,stats=Csg.decompose(tree,res);if not parts then return nil,stats end
+    parts.csg={tree=tree,resolution=stats.resolution,approximate=stats.approximate,cells=stats.cells,boxes=stats.boxes}
+    return parts
+end}
+
 Procedural.GENERATORS=G
 
 -- Local-frame AABB of the parts.
@@ -289,7 +307,10 @@ function Procedural.generate(generator,params)
     if not parts then return nil,err end
     if #parts==0 then return nil,'the parameters produce no geometry' end
     if #parts>MAX_PARTS then return nil,'the parameters produce '..#parts..' parts; the limit is '..MAX_PARTS end
-    return {parts=parts,bounds=bounds(parts),stats={parts=#parts}}
+    local csg=parts.csg;parts.csg=nil
+    local info={parts=parts,bounds=bounds(parts),stats={parts=#parts},csg=csg}
+    if csg then info.stats.csg={approximate=csg.approximate,resolution=csg.resolution,boxes=csg.boxes} end
+    return info
 end
 
 -- Collision boxes approximating the parts (exported as World Builder collision shapes).
@@ -428,7 +449,7 @@ function Procedural:create(args)
         name=Util.trim(args.name or '')~='' and Util.trim(args.name) or (G[args.generator].label),kind='procedural',template='',
         layer=args.layer or 'shell',transform=transform,size={x=1,y=1,z=1},enabled=true,
         metadata={source='LocationStudio procedural geometry',procedural={generator=args.generator,params=Util.deepcopy(args.params or {}),parts=info.parts,
-            bounds=info.bounds,stats=info.stats,material=material,collision=args.collision==true,collision_preset=args.collision_preset,collider_ids={},
+            bounds=info.bounds,stats=info.stats,csg=info.csg,material=material,collision=args.collision==true,collision_preset=args.collision_preset,collider_ids={},
             stream_range=num(args.stream_range,nil)},asset_bounds={min=Util.deepcopy(info.bounds.min),max=Util.deepcopy(info.bounds.max),source='procedural'}}})
     if not object then self:_abort(before,mark);return nil,'project model rejected the procedural object' end
     object.metadata.procedural.mesh_path=args.mesh_path or self:_mesh_path(object)
@@ -461,7 +482,7 @@ function Procedural:update(object_id,patch)
     for _,id in ipairs(cfg.collider_ids or {}) do local c=model:get_object(id);if c and self.app.placement:is_tracked(c) then old_colliders[#old_colliders+1]=id end end
     self:hide(object)
     model:snapshot('Edit procedural geometry');local mark=#model.undo_stack
-    cfg.generator=generator;cfg.params=params;cfg.parts=info.parts;cfg.bounds=info.bounds;cfg.stats=info.stats;cfg.material=material
+    cfg.generator=generator;cfg.params=params;cfg.parts=info.parts;cfg.bounds=info.bounds;cfg.stats=info.stats;cfg.csg=info.csg;cfg.material=material
     if patch.collision~=nil then cfg.collision=patch.collision==true end
     if patch.stream_range~=nil then cfg.stream_range=num(patch.stream_range,nil) end
     object.metadata.asset_bounds={min=Util.deepcopy(info.bounds.min),max=Util.deepcopy(info.bounds.max),source='procedural'}

@@ -1,3 +1,13 @@
+## 0.76.0 - 2026-09-27
+
+- Added constructive solid geometry: the procedural generator `csg`, `modules/csg.lua` and `mcp_server/lsbuild/csg.py`.
+  - **Trees:** `union` / `subtract` / `intersect` nodes, with up to 64 children, 16 levels and 500 leaves. Leaves are parts (box, wedge, cylinder, sphere, prism) or any generator's output with an offset and rotation. `repeat {count, step}` works on any node or leaf, and `cut_material` sets the material of cut faces.
+  - **Build Mod mesh:** the exact boolean of the faceted solids, computed with an iterative BSP (the csg.js algorithm). Vertices are welded and T-junctions repaired, so the result is watertight. Material slots, smooth normals and world-projected UVs are kept, and it works with both mesh backends and library materials.
+  - **Preview, bounds and collision:** grid boxes merged greedily. They are exact for axis-aligned box trees and axis-aligned prisms; curved or rotated leaves are sampled at `resolution` and flagged `approximate`. The grid coarsens automatically when it passes 40 000 cells.
+  - **Examples:** nine trees in `csg/examples.json`: wall-doorway-window, arched doorway, tunnel, shaft, recess, vents, L-shaped room shell, round glass window and an intersection. They load from the Geometry tab.
+  - **MCP tools:** `csg_create` (a tree or an example), `csg_examples`, and `csg_mesh` (offline exact mesh with volume, watertightness and optional glb). EDL geometry accepts `csg` and `compound`.
+- Added `CSG.md` and Lua/Python tests. They check exact volumes for every operation and architecture case, watertightness of every example, materials, UVs, the build stage, EDL and the tools. Bumped to v0.76.0.
+
 ## 0.75.0 - 2026-09-27
 
 - Added the material library and material resource generator (`modules/materials.lua`, `mcp_server/lsbuild/materials.py`, Spatial → Materials). A definition has:

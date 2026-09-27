@@ -3109,7 +3109,9 @@
                           "window",
                           "railing",
                           "pipe",
-                          "duct"
+                          "duct",
+                          "compound",
+                          "csg"
                         ]
                       },
                       "params": {
@@ -5393,7 +5395,9 @@
               "window",
               "railing",
               "pipe",
-              "duct"
+              "duct",
+              "compound",
+              "csg"
             ]
           },
           "params": {
