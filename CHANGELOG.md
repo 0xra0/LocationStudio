@@ -1,3 +1,22 @@
+## 0.75.0 - 2026-09-27
+
+- Added the material library and material resource generator (`modules/materials.lua`, `mcp_server/lsbuild/materials.py`, Spatial → Materials). A definition has:
+  - a base material: preset `metal_base`, `glass` or `multilayered`, or any `.mt`/`.remt`/`.mi`;
+  - textures: a depot `.xbm`, a local image, or a generated solid-colour PNG;
+  - semantic parameters: roughness, metallic, scales, normal strength, tint, emissive colour and EV, alpha threshold, IOR, opacity;
+  - tiling and UV scale, baked into the UVs of generated meshes;
+  - raw overrides and up to 16 variants.
+- Geometry references materials as `@key` / `@key:variant`: procedural slots, parametric-room materials and EDL. Unknown references are refused, flagged by preflight and stop the build.
+- New Build Mod `materials` stage, which runs before the procedural meshes:
+  - `CMaterialInstance` CR2W-JSON is written to `.mi` by the WolvenKit worker;
+  - variants become `.mi` files chained on the parent, storing only the values that differ;
+  - textures are imported to `.xbm` with the WolvenKit CLI.
+- Meshes whose slot uses an unqualified `@key` get one appearance per variant, and `material.appearance` selects the node's look. `meshres.build_mesh_resource` gained `appearances`.
+- Parameter names are checked against a WolvenKit JSON export of the base material when one is in the mod sources (`base-json`), or confirmed by a reference `.mi` (`reference-mi`). Otherwise they are reported as `builtin-unverified`.
+- The dependency resolver treats generated materials and textures as shipped and still follows their base materials and textures.
+- Added the authoring-plan v2 op `create_material`, EDL `materials.library`, bridge ops and MCP tools `material_presets/create/update/delete/list/get/assign/settings/build/inspect`. Project schema 23 adds `material_defs`.
+- Added `MATERIAL-RESOURCES.md` and Lua/Python tests. Bumped to v0.75.0.
+
 ## 0.74.0 - 2026-09-27
 
 - Added the parametric room generator (`modules/room_generator.lua`, Spatial → Room gen). A spec with width, length, height, wall thickness, doors, windows, floor type (slab/raised/none), ceiling type (flat/beams/coffered/none), trims, materials and lighting produces:

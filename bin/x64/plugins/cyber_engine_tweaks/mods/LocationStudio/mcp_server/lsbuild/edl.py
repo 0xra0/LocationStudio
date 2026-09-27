@@ -37,6 +37,7 @@ FACT_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
 RECORD_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z0-9_.-]+$")
 PARAM_RE = re.compile(r"\$\{([^}]+)\}")
 WALLS = {"north", "south", "east", "west"}
+MATERIAL_KEYS = ("key", "name", "preset", "base", "path", "params", "textures", "overrides", "variants", "notes")
 PARAMETRIC_KEYS = ("floor", "ceiling", "trim", "materials", "lighting", "collision", "block_windows", "wall_thickness")
 EXTENSION_TYPES = {"mesh": "mesh_static", "ent": "entity_template", "mi": "decal", "particle": "particle", "effect": "effect"}
 RESOURCE_TYPES = {"mesh_static", "mesh_rotating", "mesh_cloth", "mesh_dynamic", "mesh_proxy", "entity_template", "entity_amm",
@@ -247,6 +248,7 @@ class Compiler:
         self.rooms: dict[str, dict[str, Any]] = {}
         self.floors: dict[str, dict[str, Any]] = {}
         self.counts: dict[str, int] = {}
+        self.material_keys: set[str] = set()
         self.deferred: list[tuple[str, dict[str, Any], _Frame]] = []
 
     # -- helpers
@@ -500,6 +502,31 @@ class Compiler:
             self.warnings.append("materials.roles changes the project's room kit, so it affects every room built afterwards, not only this document")
         if len(step) > 1:
             self.emit(step)
+        library = value.get("library") or []
+        if not isinstance(library, list):
+            self.err("materials.library", "must be a list of material definitions")
+            return
+        for i, d in enumerate(library):
+            where = f"materials.library[{i}]"
+            if not isinstance(d, dict) or not ID_RE.match(str(d.get("key") or "")) or "-" in str(d.get("key")):
+                self.err(where + ".key", "each material needs a key (letters, digits, _), referenced as @key")
+                continue
+            if d["key"] in self.material_keys:
+                self.err(where + ".key", f"repeats material {d['key']}")
+                continue
+            unknown = [k for k in d if k not in MATERIAL_KEYS]
+            for k in unknown:
+                self.err(f"{where}.{k}", "is not a material definition field")
+            self.material_keys.add(d["key"])
+            self.counts["materials"] = self.counts.get("materials", 0) + 1
+            self.emit({"op": "create_material", **{k: v for k, v in d.items() if k in MATERIAL_KEYS}})
+
+    def material_ref(self, value: Any, where: str) -> None:
+        """Warn about @key references that this document does not define (they must exist in the project)."""
+        if isinstance(value, str) and value.startswith("@"):
+            key = value[1:].partition(":")[0]
+            if key not in self.material_keys:
+                self.warnings.append(f"{where}: @{key} is not in materials.library; it must already exist in the project's material library")
 
     def compile_floors(self, floors: Any) -> None:
         if not isinstance(floors, list):
@@ -593,6 +620,8 @@ class Compiler:
             self.err(where + ".parametric", "must be a mapping")
             return
         spec: dict[str, Any] = {k: v for k, v in extra.items() if k in PARAMETRIC_KEYS}
+        for role, value in (extra.get("materials") or {}).items() if isinstance(extra.get("materials"), dict) else []:
+            self.material_ref(value, f"{where}.parametric.materials.{role}")
         for key in extra:
             if key not in PARAMETRIC_KEYS:
                 self.err(f"{where}.parametric.{key}", "is not a parametric room setting")
@@ -690,13 +719,16 @@ class Compiler:
             return
         material = e.get("material") or {}
         if isinstance(material, str):
-            material = {"template": material}
+            material = {"materials": {"main": material}} if material.startswith("@") else {"template": material}
         template = str(material.get("template") or "")
         slots = material.get("materials") or {}
         if not isinstance(slots, dict):
             self.err(where + ".material.materials", "must map slots (main, glass) to .mi paths")
             slots = {}
         for slot, mi in slots.items():
+            if slot in ("main", "glass") and str(mi).startswith("@"):
+                self.material_ref(mi, f"{where}.material.materials.{slot}")
+                continue
             if slot not in ("main", "glass") or not str(mi).lower().endswith((".mi", ".mt", ".remt")):
                 self.err(f"{where}.material.materials.{slot}", "slots are main/glass and values .mi/.mt depot paths")
         if template and not template.lower().endswith(".mesh"):

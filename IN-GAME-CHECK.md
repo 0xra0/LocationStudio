@@ -10,6 +10,14 @@
 The upgrade archive does not contain project/config JSON, logs, exports,
 thumbnails, or bridge state.
 
+## v0.75 Material resource smoke check
+
+1. Open Spatial → Materials, keep the example definition and press **ADD MATERIAL**.
+2. Select a procedural object (or a parametric room's walls), then press **ASSIGN TO MAIN**. Give it `material.appearance: "dirty"` if you want the variant.
+3. Put a WolvenKit JSON export of `base\materials\metal_base.remt` into `mod_sources` (`base/materials/metal_base.remt.json`). Run `material_build` and confirm that `profile_source` is `base-json` with no errors.
+4. Run Build Mod and deploy. In game, the geometry shows the tint and roughness, and the variant appearance looks dirtier. Solid-colour and image textures load without the missing-texture checkerboard.
+5. Open the generated `.mi` files in WolvenKit and check the base material and values.
+
 ## v0.74 Parametric room smoke check
 
 1. Select a premise and open Spatial → Room gen. Keep the example spec and press **CHECK**: the part counts, portals, anchors and sockets appear.

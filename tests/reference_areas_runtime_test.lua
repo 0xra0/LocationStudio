@@ -2,7 +2,7 @@ local env=dofile(arg[2]..'/support/cet_mock.lua')
 local app=env.app
 local R=assert(app.reference_areas,'reference areas must be constructed')
 local model=app.model
-assert(model.data.schema_version==22 and type(model.data.reference_areas)=='table')
+assert(model.data.schema_version==23 and type(model.data.reference_areas)=='table')
 
 local known={['base\\clinic\\bed.mesh']=true,['base\\clinic\\cabinet.mesh']=true,['base\\clinic\\monitor.ent']=true}
 function app.world_builder:prepare_favorite_record(record,name)
