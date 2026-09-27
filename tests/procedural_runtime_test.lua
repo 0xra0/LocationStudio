@@ -7,7 +7,7 @@ local function close(a,b) return math.abs(a-b)<1e-6 end
 
 -- Generators.
 local names={};for _,g in ipairs(P:generators().items) do names[#names+1]=g.id end
-assert(table.concat(names,',')=='box,ceiling,column,compound,door_frame,duct,floor,pipe,railing,ramp,stairs,wall,window')
+assert(table.concat(names,',')=='box,ceiling,column,compound,csg,door_frame,duct,floor,pipe,railing,ramp,stairs,wall,window')
 
 local wall=assert(G('wall',{length=6,height=3,thickness=0.2,openings={{offset=-1,width=1,height=2.1,sill=0},{offset=1.5,width=1.2,height=1.2,sill=1}}}))
 -- left solid, above door, right-of-door solid, above window, below window, right solid
@@ -131,7 +131,7 @@ assert(P:delete(o.id).colliders==#ids and not model:get_object(o.id) and not mod
 assert(model:undo() and model:get_object(o.id) and model:get_object(ids[1]))
 
 -- Bridge.
-assert(assert(app.bridge:handle({id='g1',op='procedural_generators',args={}})).count==13)
+assert(assert(app.bridge:handle({id='g1',op='procedural_generators',args={}})).count==14)
 assert(#assert(app.bridge:handle({id='g2',op='procedural_preview_parts',args={generator='door_frame',params={}}})).parts==3)
 local bc=assert(app.bridge:handle({id='g3',op='procedural_create',args={generator='column',params={height=3},transform=T,material={template='base\\a.mesh'}}}))
 assert(assert(app.bridge:handle({id='g4',op='procedural_update',args={id=bc.object.id,params={height=4}}})).bounds.max.z==4)

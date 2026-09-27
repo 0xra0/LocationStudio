@@ -51,7 +51,7 @@ DEVICE_KINDS = {"door", "loot_container", "shard", "item"}
 LOGIC_KINDS = {"terminal", "door", "elevator", "switch", "camera", "security_system", "fact", "action"}
 NAV_EDGES = {"walk", "door", "stairs", "elevator", "jump", "off_mesh", "custom"}
 ELEMENT_LISTS = ("objects", "geometry", "lights", "collisions", "devices", "npcs", "workspots", "vfx", "triggers", "cameras", "occluders")
-GEOMETRY = {"box", "wall", "floor", "ceiling", "column", "stairs", "ramp", "door_frame", "window", "railing", "pipe", "duct"}
+GEOMETRY = {"box", "wall", "floor", "ceiling", "column", "stairs", "ramp", "door_frame", "window", "railing", "pipe", "duct", "compound", "csg"}
 TOP_KEYS = {"edl", "id", "name", "description", "origin", "parameters", "templates", "materials", "premise", "defaults", "streaming",
             "floors", "audio", "splines", "navigation", "logic", "scene", *ELEMENT_LISTS}
 _OPS = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.Div: operator.truediv,

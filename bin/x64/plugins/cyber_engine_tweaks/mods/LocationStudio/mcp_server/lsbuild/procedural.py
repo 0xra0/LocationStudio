@@ -352,7 +352,16 @@ def procedural_objects(project: dict[str, Any], premise_id: str | None = None) -
 def object_mesh(obj: dict[str, Any]) -> Mesh:
     cfg = obj["metadata"]["procedural"]
     material = cfg.get("material") or {}
-    return mesh_from_parts(cfg.get("parts") or [], uv_scale=float(material.get("uv_scale") or 1.0), slot_uv=material.get("slot_uv"))
+    uv_scale = float(material.get("uv_scale") or 1.0)
+    if cfg.get("generator") == "csg":
+        # The saved parts are grid boxes for the preview; mesh the exact tree instead.
+        from .csg import mesh_from_tree
+
+        tree = (cfg.get("csg") or {}).get("tree")
+        if not isinstance(tree, dict):
+            raise ValueError("CSG object has no saved tree; regenerate it in LocationStudio")
+        return mesh_from_tree(tree, uv_scale=uv_scale, slot_uv=material.get("slot_uv"))
+    return mesh_from_parts(cfg.get("parts") or [], uv_scale=uv_scale, slot_uv=material.get("slot_uv"))
 
 
 def _node(obj: dict[str, Any]) -> dict[str, Any]:

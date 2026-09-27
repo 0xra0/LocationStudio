@@ -390,3 +390,13 @@ and use them on generated geometry as `@key` or `@key:variant`. Never invent
 `profile_source`. If it is `builtin-unverified`, say that the parameter names are
 unchecked and suggest exporting the base material to JSON into mod_sources. Do not
 describe a material as correct until the user has seen it in game.
+
+## Constructive solid geometry
+
+For openings, tunnels, shafts, recesses, vents and non-rectangular rooms, use
+`csg_create` (or EDL geometry with `generator: csg`) with a
+union/subtract/intersect tree rather than stacking boxes. Start from
+`csg_examples`, and check an offline tree with `csg_mesh` (volume, `open_edges`).
+Tell the user that the in-game preview and collision are grid boxes, approximate
+when `stats.csg.approximate` is true, and that only the built mesh is exact. Verify
+it in game.

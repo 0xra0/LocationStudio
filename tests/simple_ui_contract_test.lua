@@ -57,7 +57,7 @@ function ImGui.SliderFloat(label,value,...) return value,false end
 function ImGui.GetContentRegionAvail() return 1400,760 end
 function ImGui.GetWindowDrawList() error('raw draw list must not be used') end
 
-local app=dofile(mod..'/init.lua');events.onInit();assert(app.ready);assert(app.version=='0.75.0')
+local app=dofile(mod..'/init.lua');events.onInit();assert(app.ready);assert(app.version=='0.76.0')
 app.config.window_open=true;app.model.data.settings.workspace.beginner_mode=true;app.model.data.settings.workspace.panel='HOME'
 events.onOverlayOpen();events.onDraw();assert(app.ui_failed==nil,tostring(app.ui_failed))
 for _,required in ipairs({'BUILD','ASSETS','SCENE','SAVE PROJECT','CREATE ROOM HERE'}) do assert(labels[required],required..' missing from Simple UI') end

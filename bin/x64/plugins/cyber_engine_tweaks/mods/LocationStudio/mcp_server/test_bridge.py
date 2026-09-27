@@ -28,7 +28,7 @@ def test_mcp_operations_are_handled() -> None:
     handled.update(re.findall(r"or op == '([a-z_]+)'", bridge))
     handled.update(re.findall(r"'((?:wb_)?(?:clipcheck|fixturecheck|fitcheck))'", bridge))
     assert sent <= handled, f'MCP operations missing in CET bridge: {sorted(sent - handled)}'
-    assert len(re.findall(r'@mcp\.tool\(\)', server)) == 497
+    assert len(re.findall(r'@mcp\.tool\(\)', server)) == 500
     for operation in ('register_asset', 'update_asset', 'delete_asset', 'place_asset', 'clear_debug_log', 'run_diagnostics',
                       'capture_camera', 'copy_transform', 'paste_transform', 'move_item_to_aim',
                       'drop_item_to_ground', 'aim_item_at_target', 'scatter_at_aim',
@@ -173,6 +173,14 @@ def test_v6_modules_are_packaged() -> None:
     assert (mod / 'mcp_server' / 'test_materials.py').is_file()
     assert (mod.parents[5] / 'tests' / 'materials_runtime_test.lua').is_file()
     assert (mod.parents[5] / 'MATERIAL-RESOURCES.md').is_file()
+    assert (mod / 'modules' / 'csg.lua').is_file()
+    assert (mod / 'mcp_server' / 'lsbuild' / 'csg.py').is_file()
+    assert (mod / 'csg' / 'examples.json').is_file()
+    assert (mod / 'mcp_server' / 'test_csg.py').is_file()
+    assert (mod.parents[5] / 'tests' / 'csg_runtime_test.lua').is_file()
+    assert (mod.parents[5] / 'CSG.md').is_file()
+    for tool in ('csg_examples', 'csg_create', 'csg_mesh'):
+        assert re.search(rf'def {tool}\(', (mod / 'mcp_server' / 'server.py').read_text(encoding='utf-8')), tool
     for tool in ('material_build', 'material_inspect'):
         assert re.search(rf'def {tool}\(', (mod / 'mcp_server' / 'server.py').read_text(encoding='utf-8')), tool
     assert (mod / 'edl' / 'locationstudio-edl-1.schema.json').is_file()

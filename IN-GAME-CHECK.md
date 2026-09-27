@@ -10,6 +10,13 @@
 The upgrade archive does not contain project/config JSON, logs, exports,
 thumbnails, or bridge state.
 
+## v0.76 CSG smoke check
+
+1. In Spatial → Geometry choose the generator `csg` and press the `wall_door_window` example. Then press **CREATE AT V**. The preview shows the wall with the doorway and window gaps. Walk through the doorway; the wall blocks you elsewhere.
+2. Load `arched_doorway`. The preview arch is stepped, because curved cutters are approximated on the grid. `stats.csg.approximate` is true.
+3. Run `csg_mesh` with the object id: `open_edges` is 0. Open the glb in Blender and check the arch, the smooth hole and the normals.
+4. Build Mod with a material, deploy, and check in game that the arch is round, has no cracks, and uses the right materials.
+
 ## v0.75 Material resource smoke check
 
 1. Open Spatial → Materials, keep the example definition and press **ADD MATERIAL**.
