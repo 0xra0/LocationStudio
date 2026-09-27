@@ -60,6 +60,13 @@ local function blank_project()
                 },
                 camera_shake_vars={},extra_vars={},
             },
+            -- Streaming/performance analyzer. Costs are relative estimates, not
+            -- measured frame time; budgets and cluster thresholds are editable.
+            performance={
+                cell_size=5.0,cluster_min_cost=40,cluster_sigma=3.0,light_overlap_limit=4,
+                room_budget={nodes=250,lights=12,audio=8,decals=60,vfx=10,dynamic=25,cost=400},
+                premise_budget={nodes=1200,lights=40,audio=30,decals=250,vfx=40,dynamic=100,cost=1800},
+            },
             starter_assets_seeded=false,
         },
     }
@@ -351,7 +358,7 @@ function Model:normalize()
     self.data.volumes=self.data.volumes or {}; self.data.cameras=self.data.cameras or {}; self.data.scenes=self.data.scenes or {}; self.data.assets=self.data.assets or {}; self.data.vanilla_removals=self.data.vanilla_removals or {};self.data.room_frames=type(self.data.room_frames)=='table' and self.data.room_frames or {}
     self.data.layers=self.data.layers or defaults.layers; self.data.settings=self.data.settings or defaults.settings
     for k,v in pairs(defaults.settings) do if self.data.settings[k] == nil then self.data.settings[k]=Util.deepcopy(v) end end
-    for _,key in ipairs({'snapping','visuals','shell_templates','workspace','quickstart','ent_tools','asset_preview','asset_browser','transform_grab','transform_edit','screenshot_mode'}) do
+    for _,key in ipairs({'snapping','visuals','shell_templates','workspace','quickstart','ent_tools','asset_preview','asset_browser','transform_grab','transform_edit','screenshot_mode','performance'}) do
         self.data.settings[key]=self.data.settings[key] or Util.deepcopy(defaults.settings[key])
         for k,v in pairs(defaults.settings[key]) do if self.data.settings[key][k]==nil then self.data.settings[key][k]=Util.deepcopy(v) end end
     end

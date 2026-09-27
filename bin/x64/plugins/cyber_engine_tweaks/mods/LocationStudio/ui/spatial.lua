@@ -21,6 +21,7 @@ function SpatialUI.new(app,notify)
         questsim_filter='',questsim_fact='',questsim_value=1,questsim_trigger_id='',questsim_pending=nil,questsim_catalog=nil,
         world_variant_id='',world_variant_name='before_quest',world_variant_fact='',world_variant_value=1,world_variant_operator='==',world_variant_priority=0,world_variant_object_visible=true,world_variant_auto=false,
         cover_name='Cover Node',cover_type='crouch',cover_exposure='medium',cover_spacing=1.5,cover_radius=8,cover_samples=24,cover_nodes_scan=nil,cover_selected_id='',cover_position={0,0,0},cover_yaw=0,
+        perf_report=nil,perf_scope='premise',
         sector_filter='',sector_severity='',
         col_shape='box',col_size={2,0.3,3},col_radius=0.5,col_height=1.8,col_preset=33,col_material='',col_visualize=true,col_name='Blocker',col_mesh_query='',col_mesh_results=nil,col_mesh_path='',col_edit_id=nil,col_edit=nil,
         pass_actor='both',pass_step=0.5,pass_half=8,pass_goal=nil,pass_live=false,pass_result=nil,
@@ -856,6 +857,56 @@ function SpatialUI:_vfx_args(extra)
     return args
 end
 
+local function perf_counts(c)
+    return string.format('%d nodes · %d lights · %d audio · %d decals · %d VFX · %d dynamic · %d expensive · cost %.0f',
+        c.nodes or 0,c.lights or 0,c.audio or 0,c.decals or 0,c.vfx or 0,c.dynamic or 0,c.expensive or 0,c.cost or 0)
+end
+
+function SpatialUI:draw_performance()
+    local app=self.app;local perf=app.performance
+    ImGui.Text('STREAMING / PERFORMANCE ANALYZER')
+    if not perf then ImGui.TextDisabled('The performance module failed to load.');return end
+    ImGui.TextWrapped('Estimates what each room, premise and exported sector asks the engine to stream. Costs are relative weights by resource type (not measured frame time); budgets are editable in project settings.')
+    if ImGui.BeginCombo('Scope##perf',self.perf_scope=='premise' and 'Selected premise' or 'Whole project') then
+        if ImGui.Selectable('Selected premise##perfscope',self.perf_scope=='premise') then self.perf_scope='premise' end
+        if ImGui.Selectable('Whole project##perfscope',self.perf_scope=='project') then self.perf_scope='project' end
+        ImGui.EndCombo()
+    end
+    if ImGui.Button('ANALYZE STREAMING COST',210,30) then
+        self.perf_report=perf:analyze({premise_id=self.perf_scope=='premise' and app.selected_premise_id or nil})
+        self:toast(#self.perf_report.warnings..' budget warning(s), '..#self.perf_report.clusters..' dense cluster(s)')
+    end
+    local r=self.perf_report
+    if not r then ImGui.TextDisabled('Run the analysis to see rooms, clusters and budget warnings.') else
+        ImGui.Text('Total: '..perf_counts(r.totals))
+        ImGui.TextDisabled(r.player_position and 'Distances are from V’s current position.' or 'Player position unavailable; distances omitted.')
+        ImGui.Text('ROOMS (highest cost first)')
+        ImGui.BeginChild('##perf_rooms',0,150,true)
+        for _,room in ipairs(r.rooms) do
+            local over={};for _,o in ipairs(room.over_budget) do over[#over+1]=o.metric..' '..o.value..'/'..o.limit end
+            ImGui.TextWrapped(room.name..(room.distance_from_player and string.format(' · %.0f m',room.distance_from_player) or '')..': '..perf_counts(room.counts)..(#over>0 and ('  ! over budget: '..table.concat(over,', ')) or ''))
+        end
+        ImGui.EndChild()
+        ImGui.Text('DENSE CLUSTERS ('..r.cluster_stats.cell_size..' m cells, threshold cost '..r.cluster_stats.threshold..')')
+        ImGui.BeginChild('##perf_clusters',0,110,true)
+        for i,c in ipairs(r.clusters) do
+            ImGui.TextWrapped(string.format('#%d r=%.0f m at (%.0f, %.0f)',i,c.radius,c.center.x,c.center.y)..(c.distance_from_player and string.format(' · %.0f m away',c.distance_from_player) or '')..': '..perf_counts(c.counts))
+            ImGui.SameLine();if ImGui.SmallButton('SELECT##perfcluster_'..i) then local ok,err=perf:select_cluster(i);self:toast(err or ('Selected '..ok.selected..' object(s)')) end
+        end
+        if #r.clusters==0 then ImGui.TextDisabled('No unusually dense clusters.') end
+        ImGui.EndChild()
+        for _,l in ipairs(r.light_overlaps) do ImGui.TextDisabled('! '..tostring(l.name)..' overlaps '..l.overlapping..' other lights (limit '..l.limit..')') end
+    end
+    local sr=app.sector_inspector and app.sector_inspector.report
+    if sr and sr.performance then
+        ImGui.Separator();ImGui.Text('EXPORTED SECTORS ('..tostring(sr.export_name)..')')
+        for _,sec in ipairs(sr.performance.sectors or {}) do
+            local over={};for _,o in ipairs(sec.over_budget or {}) do over[#over+1]=o.metric end
+            ImGui.BulletText(sec.name..': '..perf_counts(sec.counts)..((sec.long_streaming_total or 0)>0 and (' · '..sec.long_streaming_total..' long-range') or '')..(#over>0 and ('  ! '..table.concat(over,', ')) or ''))
+        end
+    else ImGui.TextDisabled('Load a sector report (Sectors tab) to include exported-sector costs.') end
+end
+
 function SpatialUI:draw_sectors()
     local app=self.app;local si=app.sector_inspector
     ImGui.Text('STREAMING-SECTOR INSPECTOR')
@@ -1227,6 +1278,7 @@ function SpatialUI:draw()
         if ImGui.BeginTabItem('Environment') then self:draw_environment();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Collision') then self:draw_collision();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Sectors') then self:draw_sectors();ImGui.EndTabItem() end
+        if ImGui.BeginTabItem('Performance') then self:draw_performance();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Ambient Audio') then self:draw_ambient_audio();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Meshes + Decals') then self:draw_mesh_appearance();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Interactables') then self:draw_interactables();ImGui.EndTabItem() end

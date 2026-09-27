@@ -262,3 +262,9 @@ After exporting, run `sector_inspect(name)` and review `likely_wrong_sector`,
 `duplicate_psid` and cross-sector references before building. Treat flags as
 heuristics: explain them to the user and use `sector_node` for details; never
 edit the export to "fix" a sector without the user's approval.
+
+## Performance estimates
+
+`performance_analyze` / `performance_export` give relative cost estimates, not
+frame times. Use them to point at dense clusters and over-budget rooms; do not
+promise FPS gains. Ask before deleting or thinning objects to meet a budget.
