@@ -10,6 +10,14 @@
 The upgrade archive does not contain project/config JSON, logs, exports,
 thumbnails, or bridge state.
 
+## v0.66 Cinematic timeline smoke check
+
+1. Save two cameras in a room. In **Spatial → Timeline**, create a 20 s timeline. Select the camera track and the first camera, then click **CUT TO SELECTED CAMERA** at 0 s. Select the second camera, set the playhead to 4 s and click **MOVE TO SELECTED CAMERA**.
+2. Add a dialogue line at 1 s, a **SHOW SELECTED OBJECT** event for an unspawned lamp at 3 s, and a fact at 7 s.
+3. Click **PLAY**: V cuts to the first shot and glides to the second, the lamp appears at 3 s, the line shows while it is spoken, and the fact is listed as "would set" but is not written.
+4. Click **STOP & RESTORE**: the lamp disappears again and V is back where the preview started.
+5. Click **EXPORT HANDOFF** and open `exports/timeline_<name>.json` and `_dialogue.csv`: they contain two shots, the line and the fact.
+
 ## v0.65 Spline editor smoke check
 
 1. In **Spatial → Splines**, create a spline at aim and add four points along a street. Click **PREVIEW IN WORLD**: markers follow a smooth curve through the points.

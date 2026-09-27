@@ -4406,6 +4406,153 @@ def spline_preview_clear() -> str:
     return _json(_send("spline_preview_clear"))
 
 
+_TIMELINE_TRACKS = {"camera", "npc", "look_at", "dialogue", "event", "fact", "marker"}
+
+
+@mcp.tool()
+def timeline_list(premise_id: str = "") -> str:
+    """List cinematic timelines with duration, track/key counts and which one is previewing."""
+    return _json(_send("timeline_list", {"premise_id": premise_id or None}))
+
+
+@mcp.tool()
+def timeline_get(timeline_id: str) -> str:
+    """Return a timeline with all tracks and their time-ordered keys."""
+    return _json(_send("timeline_get", {"id": timeline_id}))
+
+
+@mcp.tool()
+def timeline_create(name: str, duration: float = 30.0, fps: int = 30, premise_id: str = "", scene_id: str = "",
+                    notes: str = "", default_tracks: bool = True) -> str:
+    """Create a cinematic timeline (seconds). default_tracks adds empty camera, dialogue, event and marker tracks."""
+    if not 0.1 <= duration <= 3600:
+        raise ValueError("duration must be between 0.1 and 3600 seconds")
+    return _json(_send("timeline_create", {"name": name, "duration": duration, "fps": fps, "premise_id": premise_id or None,
+                                           "scene_id": scene_id or None, "notes": notes, "default_tracks": default_tracks}))
+
+
+@mcp.tool()
+def timeline_update(timeline_id: str, name: str | None = None, duration: float | None = None, fps: int | None = None,
+                    scene_id: str | None = None, notes: str | None = None) -> str:
+    """Rename a timeline or change its duration, fps, linked scene or notes."""
+    patch = {k: v for k, v in (("name", name), ("duration", duration), ("fps", fps), ("scene_id", scene_id), ("notes", notes)) if v is not None}
+    return _json(_send("timeline_update", {"id": timeline_id, "patch": patch}))
+
+
+@mcp.tool()
+def timeline_delete(timeline_id: str) -> str:
+    """Delete a timeline (stops its preview first). Undoable."""
+    return _json(_send("timeline_delete", {"id": timeline_id}))
+
+
+@mcp.tool()
+def timeline_add_track(timeline_id: str, kind: str, name: str = "", target_id: str = "", npc_key: str = "") -> str:
+    """Add a track. kind: camera, npc, look_at, dialogue, event, fact or marker. An npc track needs target_id (a saved
+    NPC population object) and/or npc_key (a live NPC key from npc_list, required for animation preview)."""
+    if kind not in _TIMELINE_TRACKS:
+        raise ValueError("kind must be one of: " + ", ".join(sorted(_TIMELINE_TRACKS)))
+    return _json(_send("timeline_add_track", {"id": timeline_id, "kind": kind, "name": name, "target_id": target_id or None,
+                                              "npc_key": npc_key or None}))
+
+
+@mcp.tool()
+def timeline_update_track(timeline_id: str, track_id: str, name: str | None = None, enabled: bool | None = None,
+                          muted: bool | None = None, target_id: str | None = None, npc_key: str | None = None) -> str:
+    """Rename, enable/disable (disabled tracks are left out of the export), mute (skipped in preview) or rebind a track."""
+    patch = {k: v for k, v in (("name", name), ("enabled", enabled), ("muted", muted), ("target_id", target_id), ("npc_key", npc_key)) if v is not None}
+    return _json(_send("timeline_update_track", {"id": timeline_id, "track_id": track_id, "patch": patch}))
+
+
+@mcp.tool()
+def timeline_delete_track(timeline_id: str, track_id: str) -> str:
+    """Delete a track and its keys."""
+    return _json(_send("timeline_delete_track", {"id": timeline_id, "track_id": track_id}))
+
+
+@mcp.tool()
+def timeline_add_key(timeline_id: str, track_id: str, time: float, key: dict[str, Any] | None = None) -> str:
+    """Add a key at `time` seconds. Payload by track kind:
+    camera {camera_id, transition: cut|move, duration (move blend s), fov};
+    npc {position: {x,y,z}, yaw, anim: {name, comp, ent} (AMM workspot), action: 'stop'};
+    look_at {subject_id, target_object_id | target: {x,y,z}};
+    dialogue {speaker, line, duration, line_id};
+    event {object_id, action: show|hide|toggle} for lights, VFX, audio emitters or props;
+    fact {fact, value} (recorded for handoff, never written to the game); marker {label}."""
+    if time < 0:
+        raise ValueError("time must be >= 0")
+    payload = dict(key or {})
+    payload["time"] = time
+    return _json(_send("timeline_add_key", {"id": timeline_id, "track_id": track_id, "key": payload}))
+
+
+@mcp.tool()
+def timeline_update_key(timeline_id: str, track_id: str, key_id: str, patch: dict[str, Any]) -> str:
+    """Change fields of a key (including time); the payload is re-validated for the track kind."""
+    return _json(_send("timeline_update_key", {"id": timeline_id, "track_id": track_id, "key_id": key_id, "patch": patch}))
+
+
+@mcp.tool()
+def timeline_delete_key(timeline_id: str, track_id: str, key_id: str) -> str:
+    """Delete one key."""
+    return _json(_send("timeline_delete_key", {"id": timeline_id, "track_id": track_id, "key_id": key_id}))
+
+
+@mcp.tool()
+def timeline_evaluate(timeline_id: str, time: float) -> str:
+    """State at a time: active camera (with move blend), NPC positions/animations, look-ats, spoken dialogue,
+    object visibility from events, latest quest fact values and markers passed."""
+    return _json(_send("timeline_evaluate", {"id": timeline_id, "time": time}))
+
+
+@mcp.tool()
+def timeline_validate(timeline_id: str) -> str:
+    """Check missing cameras/objects, keys past the end, overlapping lines per speaker and shot-less timelines."""
+    return _json(_send("timeline_validate", {"id": timeline_id}))
+
+
+@mcp.tool()
+def timeline_play(timeline_id: str, speed: float = 1.0, start: float | None = None, loop: bool = False,
+                  apply_camera: bool = True, apply_events: bool = True, apply_npcs: bool = True) -> str:
+    """Preview in game: teleports V to camera keys, shows/hides event objects and plays NPC animations on bound live
+    NPCs. Quest facts are only logged. Always finish with timeline_stop, which restores everything."""
+    args: dict[str, Any] = {"id": timeline_id, "speed": speed, "loop": loop, "apply_camera": apply_camera,
+                            "apply_events": apply_events, "apply_npcs": apply_npcs}
+    if start is not None:
+        args["from"] = start
+    return _json(_send("timeline_play", args))
+
+
+@mcp.tool()
+def timeline_seek(time: float) -> str:
+    """Jump the active preview to a time and apply that state."""
+    return _json(_send("timeline_seek", {"time": time}))
+
+
+@mcp.tool()
+def timeline_pause() -> str:
+    """Pause the active preview at its current time (state stays applied)."""
+    return _json(_send("timeline_pause"))
+
+
+@mcp.tool()
+def timeline_stop() -> str:
+    """End the preview: restore shown/hidden objects, stop started animations and return V to the start position."""
+    return _json(_send("timeline_stop"))
+
+
+@mcp.tool()
+def timeline_status() -> str:
+    """Preview status: time, current camera, active dialogue, facts that would be set, warnings."""
+    return _json(_send("timeline_status"))
+
+
+@mcp.tool()
+def timeline_export(timeline_id: str, path: str = "") -> str:
+    """Write the structured scene handoff: exports/timeline_<name>.json (shot list, chronological cues, dialogue script,
+    quest facts, resolved camera/object/NPC references, validation) plus a dialogue cue-sheet CSV. Not a native .scene."""
+    return _json(_send("timeline_export", {"id": timeline_id, "path": path or None}))
+
+
 @mcp.tool()
 def layer_list() -> str:
     """List layers (Architecture, Props, Gameplay, NPC, Lighting, Audio, Quest, Debug and custom) with colour, visibility, lock, export flag, object/live/room counts, isolation state and unknown layer ids in use."""

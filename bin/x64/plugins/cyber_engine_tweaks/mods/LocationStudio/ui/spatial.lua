@@ -22,6 +22,7 @@ function SpatialUI.new(app,notify)
         world_variant_id='',world_variant_name='before_quest',world_variant_fact='',world_variant_value=1,world_variant_operator='==',world_variant_priority=0,world_variant_object_visible=true,world_variant_auto=false,
         cover_name='Cover Node',cover_type='crouch',cover_exposure='medium',cover_spacing=1.5,cover_radius=8,cover_samples=24,cover_nodes_scan=nil,cover_selected_id='',cover_position={0,0,0},cover_yaw=0,
         spline_id='',spline_name='New Spline',spline_point=1,spline_handle={2,0,0},spline_use_kind='distribute',spline_asset_id='',spline_spacing=2,spline_npc_id='',spline_sample=nil,
+        tl_id='',tl_name='New Timeline',tl_duration=30,tl_time=0,tl_track_id='',tl_speaker='V',tl_line='',tl_line_dur=3,tl_fact='',tl_fact_value=1,tl_marker='Beat',tl_move=2,tl_npc_key='',tl_validation=nil,
         layer_new_name='Set Dressing',layer_edit_id='',layer_auto=nil,
         vis_mesh='plane_two_sided',vis_size={4,1,3},vis_pvs=nil,vis_hidden=nil,vis_live=false,
         perf_report=nil,perf_scope='premise',
@@ -911,6 +912,105 @@ function SpatialUI:draw_splines()
     end
 end
 
+function SpatialUI:draw_timeline()
+    local app=self.app;local T=app.timeline
+    ImGui.Text('CINEMATIC TIMELINE')
+    if not T then ImGui.TextDisabled('The timeline editor failed to load.');return end
+    ImGui.TextWrapped('Camera cuts and moves, NPC positions and animations, look-ats, dialogue timing, light/VFX/audio events and quest facts on one timeline. PLAY previews it in game (facts are only logged); STOP restores everything. EXPORT HANDOFF writes a structured scene handoff, not a native .scene.')
+    self.tl_name=select(1,ImGui.InputText('Timeline name',self.tl_name,64))
+    self.tl_duration=select(1,ImGui.InputFloat('Duration (s)',self.tl_duration,1,10,'%.1f'))
+    if ImGui.Button('NEW TIMELINE',140,28) then local tl,err=T:create({name=self.tl_name,duration=self.tl_duration});if tl then self.tl_id=tl.id;self.tl_time=0;self.tl_track_id=tl.tracks[1] and tl.tracks[1].id or '' end;self:toast(err or 'Timeline created') end
+    ImGui.BeginChild('##timeline_list',0,70,true)
+    for _,row in ipairs(T:list({}).items) do
+        if ImGui.Selectable(string.format('%s · %.1f s · %d track(s) · %d key(s)##tl_%s',row.name,row.duration,row.tracks,row.keys,row.id),self.tl_id==row.id) then self.tl_id=row.id;self.tl_time=0;self.tl_track_id='' end
+    end
+    ImGui.EndChild()
+    local tl=T:get(self.tl_id)
+    if not tl then ImGui.TextDisabled('Create or select a timeline.');return end
+    local status=T:status()
+    local playing_this=status.active and status.timeline_id==tl.id
+    if playing_this then self.tl_time=status.time end
+    local t=select(1,ImGui.SliderFloat('Playhead (s)',self.tl_time,0,tl.duration,'%.2f'))
+    t=math.max(0,math.min(tl.duration,tonumber(t) or 0))
+    if t~=self.tl_time then self.tl_time=t;if playing_this then local _,err=T:seek(t);if err then self:toast(err) end end end
+    if ImGui.Button(playing_this and status.playing and 'PAUSE##tl' or 'PLAY##tl',90,28) then
+        if playing_this and status.playing then T:pause() else local _,err=T:play(tl.id,{from=self.tl_time});self:toast(err or 'Previewing timeline') end
+    end
+    ImGui.SameLine();if ImGui.Button('STOP & RESTORE##tl',160,28) then local _,err=T:stop();self:toast(err or 'Preview stopped and restored') end
+    ImGui.SameLine();if ImGui.Button('VALIDATE##tl',100,28) then self.tl_validation=T:validate(tl.id);self:toast(self.tl_validation.valid and 'No errors' or (self.tl_validation.errors..' error(s)')) end
+    ImGui.SameLine();if ImGui.Button('EXPORT HANDOFF',150,28) then local r,err=T:export(tl.id);self:toast(err or ('Wrote '..r.json)) end
+    local state=T:evaluate(tl,self.tl_time)
+    if state then
+        ImGui.TextDisabled('Camera: '..(state.camera and (tostring(state.camera.name)..(state.camera.blend<1 and string.format(' (moving %.0f%%)',state.camera.blend*100) or '')) or 'none'))
+        for _,d in ipairs(state.dialogue) do ImGui.TextColored(0.6,0.9,1,1,d.speaker..': '..d.line) end
+        if playing_this then for _,f in ipairs(status.facts_not_written or {}) do ImGui.TextDisabled('would set '..f.fact..' = '..f.value) end end
+    end
+    if self.tl_validation and self.tl_validation.timeline_id==tl.id then for _,i in ipairs(self.tl_validation.issues) do ImGui.BulletText(i.severity..': '..i.message) end end
+    ImGui.Separator();ImGui.Text('TRACKS')
+    for _,track in ipairs(tl.tracks) do
+        if ImGui.Selectable(string.format('[%s] %s · %d key(s)%s%s##tltrack_%s',track.kind,track.name,#track.keys,track.muted and ' · muted' or '',track.enabled and '' or ' · disabled',track.id),self.tl_track_id==track.id) then self.tl_track_id=track.id end
+        ImGui.SameLine();if ImGui.SmallButton((track.muted and 'UNMUTE' or 'MUTE')..'##tlmute_'..track.id) then T:update_track(tl.id,track.id,{muted=not track.muted}) end
+        ImGui.SameLine();if ImGui.SmallButton('DELETE##tltrackdel_'..track.id) then local _,err=T:delete_track(tl.id,track.id);self:toast(err or 'Track deleted') end
+        if self.tl_track_id==track.id then
+            for _,k in ipairs(track.keys) do
+                local label=k.camera_id and ((k.transition or 'cut')..' '..k.camera_id) or k.line and (k.speaker..': '..k.line) or k.fact and (k.fact..'='..k.value) or k.object_id and (k.action..' '..k.object_id) or k.label or (k.anim and k.anim.name) or (k.position and 'position') or k.subject_id or ''
+                ImGui.BulletText(string.format('%.2f s  %s',k.time,label))
+                ImGui.SameLine();if ImGui.SmallButton('GO##tlkeygo_'..k.id) then self.tl_time=k.time;if playing_this then T:seek(k.time) end end
+                ImGui.SameLine();if ImGui.SmallButton('DEL##tlkeydel_'..k.id) then T:delete_key(tl.id,track.id,k.id) end
+            end
+        end
+    end
+    for _,kind in ipairs({'camera','dialogue','event','fact','marker','look_at'}) do
+        if ImGui.SmallButton('+ '..kind..'##tladd_'..kind) then local tr,err=T:add_track(tl.id,{kind=kind});if tr then self.tl_track_id=tr.id end;self:toast(err or (kind..' track added')) end
+        ImGui.SameLine()
+    end
+    ImGui.NewLine()
+    self.tl_npc_key=select(1,ImGui.InputText('Live NPC key (for animation preview)',self.tl_npc_key,32))
+    if ImGui.SmallButton('+ NPC TRACK FROM SELECTED OBJECT') then
+        local tr,err=T:add_track(tl.id,{kind='npc',target_id=app.selected_object_id,npc_key=self.tl_npc_key~='' and self.tl_npc_key or nil})
+        if tr then self.tl_track_id=tr.id end;self:toast(err or 'NPC track added')
+    end
+    local track=nil;for _,tr in ipairs(tl.tracks) do if tr.id==self.tl_track_id then track=tr end end
+    if not track then ImGui.TextDisabled('Select a track to add keys at the playhead.');return end
+    ImGui.Separator();ImGui.Text(string.format('ADD %s KEY AT %.2f s',track.kind:upper(),self.tl_time))
+    local function add(payload,msg) payload.time=self.tl_time;local _,err=T:add_key(tl.id,track.id,payload);self:toast(err or msg) end
+    if track.kind=='camera' then
+        self.tl_move=select(1,ImGui.InputFloat('Move blend (s)',self.tl_move,0.5,1,'%.1f'))
+        if ImGui.Button('CUT TO SELECTED CAMERA',200,26) then add({camera_id=app.selected_camera_id,transition='cut'},'Cut added') end
+        ImGui.SameLine();if ImGui.Button('MOVE TO SELECTED CAMERA',210,26) then add({camera_id=app.selected_camera_id,transition='move',duration=self.tl_move},'Move added') end
+    elseif track.kind=='dialogue' then
+        self.tl_speaker=select(1,ImGui.InputText('Speaker',self.tl_speaker,48))
+        self.tl_line=select(1,ImGui.InputText('Line',self.tl_line,256))
+        self.tl_line_dur=select(1,ImGui.InputFloat('Line duration (s)',self.tl_line_dur,0.5,1,'%.1f'))
+        if ImGui.Button('ADD LINE',120,26) then add({speaker=self.tl_speaker,line=self.tl_line,duration=self.tl_line_dur},'Line added') end
+    elseif track.kind=='event' then
+        for _,action in ipairs({'show','hide','toggle'}) do
+            if ImGui.Button(action:upper()..' SELECTED OBJECT##tlev_'..action,190,26) then add({object_id=app.selected_object_id,action=action},'Event added') end
+            ImGui.SameLine()
+        end
+        ImGui.NewLine()
+    elseif track.kind=='fact' then
+        self.tl_fact=select(1,ImGui.InputText('Fact name',self.tl_fact,96))
+        self.tl_fact_value=select(1,ImGui.InputInt('Fact value',self.tl_fact_value))
+        if ImGui.Button('ADD FACT',120,26) then add({fact=self.tl_fact,value=self.tl_fact_value},'Fact added') end
+    elseif track.kind=='marker' then
+        self.tl_marker=select(1,ImGui.InputText('Marker label',self.tl_marker,64))
+        if ImGui.Button('ADD MARKER',120,26) then add({label=self.tl_marker},'Marker added') end
+    elseif track.kind=='npc' then
+        local o=app.model:get_object(track.target_id or '')
+        if ImGui.Button('KEY NPC POSITION FROM ITS OBJECT',260,26) then
+            if not o then self:toast('This track has no saved NPC object') else add({position={x=o.transform.position.x,y=o.transform.position.y,z=o.transform.position.z},yaw=o.transform.rotation.yaw},'Position keyed') end
+        end
+        if ImGui.Button('STOP ANIMATION KEY',180,26) then add({action='stop'},'Stop keyed') end
+        ImGui.TextDisabled('Animation keys take AMM workspot data {name, comp, ent}; add them through MCP timeline_add_key.')
+    elseif track.kind=='look_at' then
+        if ImGui.Button('SELECTED OBJECT LOOKS AT CROSSHAIR',290,26) then
+            local hit,err=app.game:aim_point(30)
+            if not hit then self:toast(err or 'No aim point') else add({subject_id=app.selected_object_id,target={x=hit.position.x,y=hit.position.y,z=hit.position.z}},'Look-at added') end
+        end
+    end
+end
+
 function SpatialUI:draw_layers()
     local app=self.app;local L=app.layers
     ImGui.Text('LAYERS')
@@ -1409,6 +1509,7 @@ function SpatialUI:draw()
     if ImGui.BeginTabBar('##spatial_tabs') then
         if ImGui.BeginTabItem('Layers') then self:draw_layers();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Splines') then self:draw_splines();ImGui.EndTabItem() end
+        if ImGui.BeginTabItem('Timeline') then self:draw_timeline();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Volumes') then if premise then self:draw_volumes(premise) else ImGui.TextDisabled('Select a premise in Premises Builder first.') end;ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Cameras') then if premise then self:draw_cameras(premise) else ImGui.TextDisabled('Select a premise in Premises Builder first.') end;ImGui.EndTabItem() end
         if ImGui.BeginTabItem('NPC workspots') then if premise then self:draw_workspots(premise) else ImGui.TextDisabled('Select a premise in Premises Builder first.') end;ImGui.EndTabItem() end

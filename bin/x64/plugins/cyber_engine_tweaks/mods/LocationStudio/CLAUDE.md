@@ -292,3 +292,11 @@ cables, fences, roads, rows of props, NPC patrols and camera paths. After
 editing a curve, call `spline_regenerate`; warn the user that hand edits to
 generated objects are replaced unless the use is removed with
 `keep_outputs=true`.
+
+## Cinematic timeline
+
+Build timelines from saved cameras and objects; never invent ids. Use
+`timeline_validate` before `timeline_export`, and describe the export as a
+structured handoff for `.scene` authoring: no native `.scene` is generated.
+`timeline_play` moves V and spawns/hides objects: tell the user, and always
+finish with `timeline_stop`. Fact keys are never written to the game.
