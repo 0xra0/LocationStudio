@@ -1,4 +1,4 @@
-# LocationStudio v0.60.0 — Collision Authoring
+# LocationStudio v0.61.0 — Streaming-Sector Inspector
 
 LocationStudio is an in-game Cyber Engine Tweaks editor for building locations,
 placing the full World Builder game-resource catalog, moving live objects, and
@@ -11,6 +11,8 @@ v0.53.0 adds persistent Device Logic graphs for terminals, doors, elevators, swi
 v0.54.0 adds a conflict-aware Quest Forge round-trip. Preview/import matches exact LocationStudio IDs (or previously linked NodeRefs), displays linked facts beside selected objects, preserves local notes and placement by default, and only applies changed coordinates when explicitly enabled. See [QUEST-FORGE-ROUNDTRIP.md](QUEST-FORGE-ROUNDTRIP.md).
 
 v0.55.0 adds a quest simulation/debug panel with live fact reads, writer/consumer mapping, and staged fact writes. Each write/reset/manual trigger requires a second confirmation after a persistent-save warning. Manual trigger simulation sets the configured fact; it does not dispatch a native volume event. See [QUEST-SIMULATION.md](QUEST-SIMULATION.md).
+
+v0.61.0 adds a streaming-sector inspector for World Builder exports. It shows each node's sector, variant, NodeRef, device/PSID and references, sector bounds and counts, and cross-sector NodeRef/device references. It flags nodes likely in the wrong sector (outside their sector box and inside another, or far from the rest of their sector), duplicate PSIDs and orphan devices, and maps flags back to project objects in Spatial → Sectors. See [SECTOR-INSPECTOR.md](SECTOR-INSPECTOR.md).
 
 v0.60.0 adds collision authoring. It places and edits real World Builder collision boxes, capsules and spheres, imported collision meshes, and boxes fitted to object bounds. Each has a collision layer (preset with its physics groups), a physics material and a wireframe visualization toggle. A player/NPC passability preview draws a blocked/free map and routes from the saved colliders, optionally cross-checked with live collision rays. See [COLLISION-AUTHORING.md](COLLISION-AUTHORING.md).
 
@@ -99,7 +101,7 @@ can be imported as a validated manifest, tuned through MCP, used to calculate
 fit scales, transformed into world AABBs, and checked for pairwise overlap.
 This is authoring math; it does not create or modify the game's collision mesh.
 
-Start with [FIRST-RUN.md](FIRST-RUN.md), then the guides for [device logic](DEVICE-LOGIC.md), [navigation graphs](NAVIGATION.md), [cover nodes](COVER-NODES.md), [combat encounters](COMBAT-ENCOUNTERS.md), [NPC patrol routes](NPC-AI-ROUTES.md), [NPC population](NPC-POPULATION.md), [mesh appearances and decals](MESH-APPEARANCES-AND-DECALS.md), [lighting](LIGHTING.md), [VFX / particles](VFX.md), [environment & weather preview](ENVIRONMENT-PREVIEW.md), [collision authoring](COLLISION-AUTHORING.md), [interactables](INTERACTABLES.md), [walkability checks](WALKABILITY.md), and [NPC workspots](NPC-WORKSPOTS.md). Read [WB-ASSET-BOUNDS.md](WB-ASSET-BOUNDS.md)
+Start with [FIRST-RUN.md](FIRST-RUN.md), then the guides for [device logic](DEVICE-LOGIC.md), [navigation graphs](NAVIGATION.md), [cover nodes](COVER-NODES.md), [combat encounters](COMBAT-ENCOUNTERS.md), [NPC patrol routes](NPC-AI-ROUTES.md), [NPC population](NPC-POPULATION.md), [mesh appearances and decals](MESH-APPEARANCES-AND-DECALS.md), [lighting](LIGHTING.md), [VFX / particles](VFX.md), [environment & weather preview](ENVIRONMENT-PREVIEW.md), [collision authoring](COLLISION-AUTHORING.md), [sector inspector](SECTOR-INSPECTOR.md), [interactables](INTERACTABLES.md), [walkability checks](WALKABILITY.md), and [NPC workspots](NPC-WORKSPOTS.md). Read [WB-ASSET-BOUNDS.md](WB-ASSET-BOUNDS.md)
 for bounds manifests and calculations, [WB-FAVORITES.md](WB-FAVORITES.md) for
 native favorite workflows, [WB-PREFAB-THUMBNAILS.md](WB-PREFAB-THUMBNAILS.md)
 for capture requirements, [WB-ARRAYS.md](WB-ARRAYS.md) for arrays and layout,

@@ -255,3 +255,10 @@ and a preset from `collision_presets`; never invent collision mesh paths, use
 `collision_search_meshes`. `collision_passability` is an estimate from saved
 colliders on one floor level: report it as such, and use `live=true` or the
 walkability/navigation tools before claiming an actor can or cannot pass.
+
+## Streaming sectors
+
+After exporting, run `sector_inspect(name)` and review `likely_wrong_sector`,
+`duplicate_psid` and cross-sector references before building. Treat flags as
+heuristics: explain them to the user and use `sector_node` for details; never
+edit the export to "fix" a sector without the user's approval.

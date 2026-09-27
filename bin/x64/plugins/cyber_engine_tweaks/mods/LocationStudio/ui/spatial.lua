@@ -21,6 +21,7 @@ function SpatialUI.new(app,notify)
         questsim_filter='',questsim_fact='',questsim_value=1,questsim_trigger_id='',questsim_pending=nil,questsim_catalog=nil,
         world_variant_id='',world_variant_name='before_quest',world_variant_fact='',world_variant_value=1,world_variant_operator='==',world_variant_priority=0,world_variant_object_visible=true,world_variant_auto=false,
         cover_name='Cover Node',cover_type='crouch',cover_exposure='medium',cover_spacing=1.5,cover_radius=8,cover_samples=24,cover_nodes_scan=nil,cover_selected_id='',cover_position={0,0,0},cover_yaw=0,
+        sector_filter='',sector_severity='',
         col_shape='box',col_size={2,0.3,3},col_radius=0.5,col_height=1.8,col_preset=33,col_material='',col_visualize=true,col_name='Blocker',col_mesh_query='',col_mesh_results=nil,col_mesh_path='',col_edit_id=nil,col_edit=nil,
         pass_actor='both',pass_step=0.5,pass_half=8,pass_goal=nil,pass_live=false,pass_result=nil,
         env_selected_id='',env_new_name='Golden hour rain',env_edit_id=nil,env_edit=nil,env_force=true,
@@ -855,6 +856,47 @@ function SpatialUI:_vfx_args(extra)
     return args
 end
 
+function SpatialUI:draw_sectors()
+    local app=self.app;local si=app.sector_inspector
+    ImGui.Text('STREAMING-SECTOR INSPECTOR')
+    if not si then ImGui.TextDisabled('The sector inspector module failed to load.');return end
+    ImGui.TextWrapped('Shows the last report from the MCP tool sector_inspect or the Build Mod sectors stage: sector bounds, node/NodeRef/device/PSID counts, cross-sector references, and nodes likely in the wrong sector.')
+    if ImGui.Button('LOAD LATEST REPORT',180,28) or (not si.report and not si.last_error) then local r,err=si:load();self:toast(err or ('Loaded '..r.sector_count..' sector(s), '..r.node_count..' node(s)')) end
+    local r=si.report
+    if not r then ImGui.TextDisabled(si.last_error or 'No report loaded.');return end
+    local c=r.flag_counts or {}
+    ImGui.Text(tostring(r.export_name)..': '..r.sector_count..' sector(s), '..r.node_count..' node(s), '..r.device_count..' device(s), '..tostring(r.ps_entry_count)..' persistent entries')
+    ImGui.TextDisabled((c.error or 0)..' error(s) · '..(c.warning or 0)..' warning(s) · '..(c.info or 0)..' info · '..#(r.likely_wrong_sector or {})..' likely wrong sector · '..#(r.cross_sector_references or {})..' cross-sector reference(s)')
+    ImGui.BeginChild('##sector_list',0,130,true)
+    for _,sec in ipairs(r.sectors or {}) do
+        local b=sec.bounds
+        local box=b and string.format(' [%.0f,%.0f,%.0f → %.0f,%.0f,%.0f]',b.min.x,b.min.y,b.min.z,b.max.x,b.max.y,b.max.z) or ' [no bounds]'
+        if ImGui.Selectable(sec.name..' · '..tostring(sec.category)..' L'..tostring(sec.level)..' · '..sec.node_count..' nodes, '..sec.node_refs..' refs, '..sec.devices..' dev, '..sec.ps_entries..' PS'..box..'##sec_'..sec.index,self.sector_filter==sec.name) then
+            self.sector_filter=self.sector_filter==sec.name and '' or sec.name
+        end
+    end
+    ImGui.EndChild()
+    if ImGui.BeginCombo('Severity##sectors',self.sector_severity=='' and 'all' or self.sector_severity) then
+        for _,level in ipairs({'','error','warning','info'}) do if ImGui.Selectable((level=='' and 'all' or level)..'##sev_'..level,self.sector_severity==level) then self.sector_severity=level end end
+        ImGui.EndCombo()
+    end
+    ImGui.BeginChild('##sector_flags',0,200,true)
+    for i,f in ipairs(r.flags or {}) do
+        if (self.sector_filter=='' or f.sector==self.sector_filter) and (self.sector_severity=='' or f.severity==self.sector_severity) then
+            ImGui.TextWrapped('['..f.severity..'] '..tostring(f.sector or '-')..' · '..tostring(f.node_name or f.device_hash or f.psid or '')..(f.suggested_sector and (' → '..f.suggested_sector) or '')..': '..f.message)
+            if f.object_id then ImGui.SameLine();if ImGui.SmallButton('SELECT##secflag_'..i) then local ok,err=si:select_flagged(i);self:toast(err or ('Selected '..ok.name)) end end
+        end
+    end
+    ImGui.EndChild()
+    local refs=r.cross_sector_references or {}
+    if #refs>0 then
+        ImGui.Text('CROSS-SECTOR REFERENCES')
+        ImGui.BeginChild('##sector_refs',0,100,true)
+        for _,ref in ipairs(refs) do ImGui.TextDisabled(ref.kind..': '..tostring(ref.from_sector)..' → '..tostring(ref.target_sector or '?')..' ('..ref.status..') '..tostring(ref.target_ref or ref.to_device or '')) end
+        ImGui.EndChild()
+    end
+end
+
 function SpatialUI:_collision_args(extra)
     local args={shape=self.col_shape,preset=self.col_preset,material=self.col_material~='' and self.col_material or nil,visualize=self.col_visualize,name=self.col_name,
         premise_id=self.app.selected_premise_id,room_id=self.app.selected_room_id}
@@ -1184,6 +1226,7 @@ function SpatialUI:draw()
         if ImGui.BeginTabItem('VFX') then self:draw_vfx();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Environment') then self:draw_environment();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Collision') then self:draw_collision();ImGui.EndTabItem() end
+        if ImGui.BeginTabItem('Sectors') then self:draw_sectors();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Ambient Audio') then self:draw_ambient_audio();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Meshes + Decals') then self:draw_mesh_appearance();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Interactables') then self:draw_interactables();ImGui.EndTabItem() end

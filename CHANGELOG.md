@@ -1,3 +1,9 @@
+## 0.61.0 - 2026-09-27
+
+- Added a streaming-sector inspector (`lsbuild/sectors.py`) for World Builder exports. Per node it reports sector, variant range, NodeRef, position/streaming reference point, ranges, device/PSID and referenced NodeRefs, and maps nodes back to LocationStudio objects. Per sector it reports bounds, category, level, node types and NodeRef/device/persistent-entry counts.
+- Automatic flags: likely wrong sector (outside own box and inside another; far outlier from the sector's content, with a suggested sector), outside bounds, streaming reference point outside the sector, beyond streaming range, missing position, duplicate PSIDs and devices without a node. Cross-sector NodeRef and device references are listed with `cross_sector`/`external_or_missing`/`missing_device` status, along with premises split across sectors. The export is never modified.
+- Added MCP tools `sector_inspect` and `sector_node`, an advisory `sectors` stage in Build Mod, and a Spatial → Sectors tab that reads `exports/sector-inspection.json` and selects flagged objects. Added `SECTOR-INSPECTOR.md` and Python/Lua tests. Bumped to v0.61.0.
+
 ## 0.60.0 - 2026-09-27
 
 - Added collision authoring (`modules/collision.lua`, Spatial → Collision). It places World Builder `worldCollisionNode` box/capsule/sphere primitives, imports collision resources from World Builder's Collision Mesh catalog, and fits box colliders to a placed object's imported bounds. Shape, dimensions, layer, material, visualization and rotation are editable and undoable; live colliders respawn.
