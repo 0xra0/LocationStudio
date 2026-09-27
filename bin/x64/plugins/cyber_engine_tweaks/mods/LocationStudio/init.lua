@@ -54,6 +54,7 @@ local Splines=safe_require('modules/splines')
 local Timeline=safe_require('modules/timeline')
 local VanillaClone=safe_require('modules/vanilla_clone')
 local ReferenceAreas=safe_require('modules/reference_areas')
+local Dependencies=safe_require('modules/dependencies')
 local BuildExport=safe_require('modules/build_export')
 local WbImport=safe_require('modules/wb_import')
 local AssetBounds=safe_require('modules/asset_bounds')
@@ -65,7 +66,7 @@ local Checkpoints=safe_require('modules/checkpoints')
 local Editor=safe_require('ui/editor')
 
 local LocationStudio={
-    version='0.68.0',ready=false,diagnostic_ready=true,init_failed=nil,ui_failed=nil,
+    version='0.69.0',ready=false,diagnostic_ready=true,init_failed=nil,ui_failed=nil,
     overlay_open=false,editor_visible=true,dirty=false,dirty_since=0,last_autosave=0,last_bridge_poll=0,
     selected_location_id=nil,selected_route_id=nil,selected_premise_id=nil,selected_room_id=nil,
     selected_object_id=nil,selected_volume_id=nil,selected_camera_id=nil,selected_scene_id=nil,editing_scene_id=nil,live_scene_id=nil,selected_asset_id=nil,last_asset_id=nil,selected_item_kind=nil,
@@ -214,6 +215,7 @@ function LocationStudio:initialize()
     self.timeline=Timeline and construct('timeline',function() return Timeline.new(self) end) or nil
     self.vanilla_clone=VanillaClone and construct('vanilla_clone',function() return VanillaClone.new(self) end) or nil
     self.reference_areas=ReferenceAreas and construct('reference_areas',function() return ReferenceAreas.new(self) end) or nil
+    self.dependencies=Dependencies and construct('dependencies',function() return Dependencies.new(self) end) or nil
     self.build_export=BuildExport and construct('build_export',function() return BuildExport.new(self) end) or nil
     self.wb_import=WbImport and construct('wb_import',function() return WbImport.new(self) end) or nil
     self.asset_bounds=AssetBounds and construct('asset_bounds',function() return AssetBounds.new(self) end) or nil

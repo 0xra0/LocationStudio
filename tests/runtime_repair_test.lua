@@ -53,7 +53,7 @@ function Game.GetTeleportationFacility() return {Teleport=function() return true
 ImGui={};ImGuiCond={FirstUseEver=1};ImGuiCol={Button=1,ButtonHovered=2,ButtonActive=3,Header=4,HeaderHovered=5,Tab=6,TabHovered=7,Border=8}
 for _,n in ipairs({'Begin','End','BeginChild','EndChild','Button','SmallButton','Text','TextDisabled','TextWrapped','TextColored','Separator','SameLine','Selectable','InputText','InputTextWithHint','InputTextMultiline','InputFloat','InputFloat3','InputInt','Checkbox','SliderFloat','BeginTabBar','EndTabBar','BeginTabItem','EndTabItem','BeginCombo','EndCombo','BeginPopup','EndPopup','OpenPopup','CloseCurrentPopup','SetTooltip','SetNextWindowSize','PushStyleColor','PopStyleColor','PushStyleVar','PopStyleVar','PushItemWidth','PopItemWidth','GetContentRegionAvail','Spacing','NewLine','BulletText','IsItemHovered'}) do ImGui[n]=function(...) return false end end
 
-local app=dofile(mod..'/init.lua');events.onInit();assert(app.ready);assert(app.version=='0.68.0')
+local app=dofile(mod..'/init.lua');events.onInit();assert(app.ready);assert(app.version=='0.69.0')
 assert(app.model.data.schema_version==20)
 assert(#app.model.data.assets>=6,'starter catalog was not seeded')
 local shell=app.runtime_shell:status(true);assert(shell.available,shell.reason)

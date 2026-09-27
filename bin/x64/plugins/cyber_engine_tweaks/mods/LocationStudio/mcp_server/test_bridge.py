@@ -28,7 +28,7 @@ def test_mcp_operations_are_handled() -> None:
     handled.update(re.findall(r"or op == '([a-z_]+)'", bridge))
     handled.update(re.findall(r"'((?:wb_)?(?:clipcheck|fixturecheck|fitcheck))'", bridge))
     assert sent <= handled, f'MCP operations missing in CET bridge: {sorted(sent - handled)}'
-    assert len(re.findall(r'@mcp\.tool\(\)', server)) == 455
+    assert len(re.findall(r'@mcp\.tool\(\)', server)) == 460
     for operation in ('register_asset', 'update_asset', 'delete_asset', 'place_asset', 'clear_debug_log', 'run_diagnostics',
                       'capture_camera', 'copy_transform', 'paste_transform', 'move_item_to_aim',
                       'drop_item_to_ground', 'aim_item_at_target', 'scatter_at_aim',
@@ -87,7 +87,8 @@ def test_mcp_operations_are_handled() -> None:
                       'reference_area_list', 'reference_area_get', 'reference_area_box', 'reference_area_capture', 'reference_area_show',
                       'reference_area_compare', 'reference_area_copy', 'reference_area_align', 'reference_area_delete'):
         assert operation in sent
-    for operation in ('sector_report_load', 'sector_report_flags', 'sector_report_select'):
+    for operation in ('sector_report_load', 'sector_report_flags', 'sector_report_select',
+                      'dependency_report_load', 'dependency_report_objects', 'dependency_report_select'):
         assert operation in handled, operation
     for tool in ('performance_export', 'sector_inspect', 'sector_node', 'wb_favorite_add', 'wb_favorites_list', 'wb_device_connect', 'wb_elevator_wire',
                  'wb_polygon_scatter', 'wb_volume_scatter', 'wb_live_surface_scatter', 'wb_rng_create'):
@@ -147,6 +148,11 @@ def test_v6_modules_are_packaged() -> None:
     assert (mod / 'modules' / 'timeline.lua').is_file()
     assert (mod / 'modules' / 'vanilla_clone.lua').is_file()
     assert (mod / 'modules' / 'reference_areas.lua').is_file()
+    assert (mod / 'modules' / 'dependencies.lua').is_file()
+    assert (mod / 'mcp_server' / 'lsbuild' / 'dependencies.py').is_file()
+    assert (mod / 'mcp_server' / 'test_dependencies.py').is_file()
+    assert (mod.parents[5] / 'ASSET-DEPENDENCIES.md').is_file()
+    assert (mod.parents[5] / 'tests' / 'dependencies_runtime_test.lua').is_file()
     assert (mod / 'mcp_server' / 'test_reference_areas.py').is_file()
     assert (mod.parents[5] / 'REFERENCE-AREAS.md').is_file()
     assert (mod.parents[5] / 'tests' / 'reference_areas_runtime_test.lua').is_file()

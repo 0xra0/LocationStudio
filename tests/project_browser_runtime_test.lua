@@ -1,6 +1,6 @@
 local env=dofile(arg[2]..'/support/cet_mock.lua')
 local app=env.app
-assert(app.version=='0.68.0' and app.project_browser)
+assert(app.version=='0.69.0' and app.project_browser)
 local location=assert(app.model:add_location({id='loc-clinic',name='Clinic Door',tags={'clinic','entry'},notes='front entrance'}))
 local route=assert(app.model:add_route({id='route-clinic',name='Clinic Patrol',location_ids={location.id}}))
 local premise=assert(app.model:add_premise({id='prem-clinic',name='Clinic Premise'}))

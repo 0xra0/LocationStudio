@@ -914,6 +914,25 @@ function SpatialUI:draw_splines()
     end
 end
 
+function SpatialUI:draw_dependencies()
+    local app=self.app;local D=app.dependencies
+    ImGui.Text('ASSET DEPENDENCIES')
+    if not D then ImGui.TextDisabled('The dependency report viewer failed to load.');return end
+    ImGui.TextWrapped('Everything the exported objects reference (meshes, templates, materials, textures, particles, TweakDB records, audio) is resolved recursively by the MCP server (dependency_scan, or the Build Mod dependencies stage): project files ship, vanilla and other installed mods do not, and missing files block the build.')
+    if ImGui.Button('LOAD LATEST REPORT##deps',190,28) then local _,err=D:load();self:toast(err or 'Dependency report loaded') end
+    local s=D:summary()
+    if not s then ImGui.TextDisabled(D.last_error or 'No report loaded.');return end
+    if s.ready then ImGui.TextColored(0.4,1,0.4,1,'Ready: no missing dependencies') else ImGui.TextColored(1,0.4,0.3,1,s.missing..' missing dependenc'..(s.missing==1 and 'y' or 'ies')) end
+    ImGui.Text(string.format('%d object(s) · %d to ship · %d external mod(s) · %d unverified · %d unknown',s.objects_scanned or 0,s.ship,s.external_mods,s.unverified,s.unknown))
+    if not s.vanilla_index then ImGui.TextColored(1,0.8,0.2,1,'No vanilla archive index: run dependency_index_build so vanilla files are not reported as unknown.') end
+    local rows=D:objects({include_unknown=true})
+    for i,o in ipairs(rows.items) do
+        ImGui.BulletText(string.format('%s: %d missing%s',tostring(o.name),#o.missing,(o.unknown or 0)>0 and (', '..o.unknown..' unknown') or ''))
+        if o.object_exists then ImGui.SameLine();if ImGui.SmallButton('SELECT##depobj_'..i) then local _,err=D:select(o.object_id);if err then self:toast(err) end end end
+        for _,m in ipairs(o.missing) do ImGui.TextDisabled('    '..m) end
+    end
+end
+
 function SpatialUI:draw_reference_areas()
     local app=self.app;local R=app.reference_areas
     ImGui.Text('REFERENCE AREAS')
@@ -1624,6 +1643,7 @@ function SpatialUI:draw()
         if ImGui.BeginTabItem('Environment') then self:draw_environment();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Collision') then self:draw_collision();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Sectors') then self:draw_sectors();ImGui.EndTabItem() end
+        if ImGui.BeginTabItem('Dependencies') then self:draw_dependencies();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Performance') then self:draw_performance();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Visibility') then self:draw_visibility();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Ambient Audio') then self:draw_ambient_audio();ImGui.EndTabItem() end

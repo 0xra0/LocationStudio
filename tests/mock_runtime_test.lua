@@ -64,7 +64,7 @@ function ImGui.GetWindowDrawList() error('raw draw list must not be used') end
 local app=dofile(mod..'/init.lua')
 assert(events.onInit,'onInit missing');events.onInit()
 assert(app.ready==true,'app not ready')
-assert(app.version=='0.68.0','wrong version '..tostring(app.version))
+assert(app.version=='0.69.0','wrong version '..tostring(app.version))
 events.onOverlayOpen();events.onDraw();events.onUpdate(0.016)
 assert(app.ui_failed==nil,'full editor failed: '..tostring(app.ui_failed))
 assert(app.model.data.settings.workspace.panel=='HOME','v0.6 should open in HOME for first-time/simple users')

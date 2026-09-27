@@ -320,3 +320,13 @@ export or edit their items. Build with `reference_area_copy` and
 Prefer `reference_capture_from_sector` for exact transforms, and describe live
 captures with approximate items as approximate. Uncloneable originals (lights,
 collision) are only markers; tell the user to recreate them with their tools.
+
+## Asset dependencies
+
+Run `dependency_scan` before building anything that uses modded resources, and
+show the user every `missing` item with its chain. Never create or rename files
+to silence a missing dependency, and pass `allow_missing_dependencies` only
+with the user's explicit approval. If `vanilla_index` is false, run
+`dependency_index_build` rather than treating `unknown` as vanilla.
+`unverified` records/events are assumptions: mention them, do not claim they exist.
+External requirements are other mods the user's players must install.
