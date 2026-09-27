@@ -1,3 +1,17 @@
+## 0.77.0 - 2026-09-27
+
+- Added the collision code generator (`modules/collision_gen.lua`, Spatial → Collision rules). Procedural geometry builds its World Builder colliders from rules at three levels, project default → room → object:
+  - **Modes:** `exact`, `simplified` (lossless face merges, then greedy merging within `tolerance` and `max_boxes`), `convex` (one fitted box per connected piece), `bounds` and `none`.
+  - **Actors:** blocking presets for `all`, `player`, `npc`, `player_vehicles`, `vehicles`, `camera` and `sight`, or any `preset`, plus a physics `material`.
+  - **Doorways:** the premise's door openings are cut out automatically, and `exclude` boxes cut more in the scope's frame. Cuts are exact for aligned boxes, and pieces under 2 cm are dropped.
+  - **Rails:** one solid barrier per railing segment with its own height and thickness, or per-part colliders, or none.
+  - **Glass:** pass or block. Thin colliders get a minimum thickness.
+  - **Per room:** colliders are split at room volumes and assigned to rooms, with a per-room report and on/off switches. Disabled room collision is despawned and excluded from the export.
+- Setting rules plans every affected object first, then saves and regenerates in one undo step, and refuses rule sets that would fail anywhere.
+- `procedural_create`/`procedural_update` accept `collision_rules`, and parametric rooms take `collision_rules` in the spec as room rules.
+- Added the authoring-plan v2 op `set_collision_rules`, EDL `collision_rules` on rooms and geometry, bridge ops and MCP tools `collision_rules_get/set/preview/regenerate/report/room_enabled`. Project schema 24 adds `collision_rules`.
+- Added `COLLISION-RULES.md` and Lua/Python tests. Bumped to v0.77.0.
+
 ## 0.76.0 - 2026-09-27
 
 - Added constructive solid geometry: the procedural generator `csg`, `modules/csg.lua` and `mcp_server/lsbuild/csg.py`.

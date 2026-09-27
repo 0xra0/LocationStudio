@@ -3159,7 +3159,187 @@
                       },
                       "stream_range": {
                         "type": "number"
+                      },
+                      "collision_rules": {
+                        "type": "object",
+                        "description": "Collision generator rules (collision_rules_set)",
+                        "additionalProperties": false,
+                        "properties": {
+                          "mode": {
+                            "enum": [
+                              "exact",
+                              "simplified",
+                              "convex",
+                              "bounds",
+                              "none"
+                            ]
+                          },
+                          "actors": {
+                            "enum": [
+                              "all",
+                              "player",
+                              "npc",
+                              "player_vehicles",
+                              "vehicles",
+                              "camera",
+                              "sight"
+                            ]
+                          },
+                          "preset": {
+                            "type": "string"
+                          },
+                          "material": {
+                            "type": "string"
+                          },
+                          "doorways": {
+                            "enum": [
+                              "auto",
+                              "keep"
+                            ]
+                          },
+                          "door_clearance": {
+                            "type": "number"
+                          },
+                          "exclude": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "center": {},
+                                "size": {},
+                                "yaw": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "center",
+                                "size"
+                              ]
+                            }
+                          },
+                          "rails": {
+                            "enum": [
+                              "solid",
+                              "parts",
+                              "none"
+                            ]
+                          },
+                          "rail_height": {
+                            "type": "number"
+                          },
+                          "rail_thickness": {
+                            "type": "number"
+                          },
+                          "glass": {
+                            "enum": [
+                              "pass",
+                              "block"
+                            ]
+                          },
+                          "min_thickness": {
+                            "type": "number"
+                          },
+                          "max_boxes": {
+                            "type": "integer"
+                          },
+                          "tolerance": {
+                            "type": "number"
+                          },
+                          "per_room": {
+                            "type": "boolean"
+                          }
+                        }
                       }
+                    }
+                  }
+                },
+                "collision_rules": {
+                  "type": "object",
+                  "description": "Collision generator rules (collision_rules_set)",
+                  "additionalProperties": false,
+                  "properties": {
+                    "mode": {
+                      "enum": [
+                        "exact",
+                        "simplified",
+                        "convex",
+                        "bounds",
+                        "none"
+                      ]
+                    },
+                    "actors": {
+                      "enum": [
+                        "all",
+                        "player",
+                        "npc",
+                        "player_vehicles",
+                        "vehicles",
+                        "camera",
+                        "sight"
+                      ]
+                    },
+                    "preset": {
+                      "type": "string"
+                    },
+                    "material": {
+                      "type": "string"
+                    },
+                    "doorways": {
+                      "enum": [
+                        "auto",
+                        "keep"
+                      ]
+                    },
+                    "door_clearance": {
+                      "type": "number"
+                    },
+                    "exclude": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "center": {},
+                          "size": {},
+                          "yaw": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "center",
+                          "size"
+                        ]
+                      }
+                    },
+                    "rails": {
+                      "enum": [
+                        "solid",
+                        "parts",
+                        "none"
+                      ]
+                    },
+                    "rail_height": {
+                      "type": "number"
+                    },
+                    "rail_thickness": {
+                      "type": "number"
+                    },
+                    "glass": {
+                      "enum": [
+                        "pass",
+                        "block"
+                      ]
+                    },
+                    "min_thickness": {
+                      "type": "number"
+                    },
+                    "max_boxes": {
+                      "type": "integer"
+                    },
+                    "tolerance": {
+                      "type": "number"
+                    },
+                    "per_room": {
+                      "type": "boolean"
                     }
                   }
                 }
@@ -5445,6 +5625,96 @@
           },
           "stream_range": {
             "type": "number"
+          },
+          "collision_rules": {
+            "type": "object",
+            "description": "Collision generator rules (collision_rules_set)",
+            "additionalProperties": false,
+            "properties": {
+              "mode": {
+                "enum": [
+                  "exact",
+                  "simplified",
+                  "convex",
+                  "bounds",
+                  "none"
+                ]
+              },
+              "actors": {
+                "enum": [
+                  "all",
+                  "player",
+                  "npc",
+                  "player_vehicles",
+                  "vehicles",
+                  "camera",
+                  "sight"
+                ]
+              },
+              "preset": {
+                "type": "string"
+              },
+              "material": {
+                "type": "string"
+              },
+              "doorways": {
+                "enum": [
+                  "auto",
+                  "keep"
+                ]
+              },
+              "door_clearance": {
+                "type": "number"
+              },
+              "exclude": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "center": {},
+                    "size": {},
+                    "yaw": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "center",
+                    "size"
+                  ]
+                }
+              },
+              "rails": {
+                "enum": [
+                  "solid",
+                  "parts",
+                  "none"
+                ]
+              },
+              "rail_height": {
+                "type": "number"
+              },
+              "rail_thickness": {
+                "type": "number"
+              },
+              "glass": {
+                "enum": [
+                  "pass",
+                  "block"
+                ]
+              },
+              "min_thickness": {
+                "type": "number"
+              },
+              "max_boxes": {
+                "type": "integer"
+              },
+              "tolerance": {
+                "type": "number"
+              },
+              "per_room": {
+                "type": "boolean"
+              }
+            }
           }
         }
       }

@@ -11,7 +11,7 @@ local function blank_project()
             id = 'default', name = 'Night City Location Project', description = '', author = '', tags = {},
             created_at = Util.now_iso(), updated_at = Util.now_iso(),
         },
-        locations = {}, routes = {}, npc_routes = {}, combat_encounters = {}, cover_nodes = {}, navigation_graphs = {}, device_logic_graphs = {}, world_state_variants = {}, environments = {}, splines = {}, timelines = {}, reference_areas = {}, edl_builds = {}, generated_rooms = {}, material_defs = {}, premises = {}, rooms = {}, objects = {}, object_groups = {}, object_prefabs = {}, volumes = {}, cameras = {}, scenes = {}, assets = {}, vanilla_removals = {}, room_frames = {},
+        locations = {}, routes = {}, npc_routes = {}, combat_encounters = {}, cover_nodes = {}, navigation_graphs = {}, device_logic_graphs = {}, world_state_variants = {}, environments = {}, splines = {}, timelines = {}, reference_areas = {}, edl_builds = {}, generated_rooms = {}, material_defs = {}, collision_rules = {}, premises = {}, rooms = {}, objects = {}, object_groups = {}, object_prefabs = {}, volumes = {}, cameras = {}, scenes = {}, assets = {}, vanilla_removals = {}, room_frames = {},
         -- Layer ids 'shell' and 'decoration' are kept for compatibility; they are
         -- shown as Architecture and Props.
         layers = {
@@ -407,7 +407,7 @@ function Model.blank() return blank_project() end
 
 function Model:normalize()
     if type(self.data) ~= 'table' then self.data=blank_project() end
-    local defaults=blank_project(); self.data.schema_version=23
+    local defaults=blank_project(); self.data.schema_version=24
     self.data.project=self.data.project or defaults.project; self.data.locations=self.data.locations or {}; self.data.routes=self.data.routes or {}
     self.data.npc_routes=type(self.data.npc_routes)=='table' and self.data.npc_routes or {}
     self.data.combat_encounters=type(self.data.combat_encounters)=='table' and self.data.combat_encounters or {}
@@ -421,6 +421,9 @@ function Model:normalize()
     self.data.edl_builds=type(self.data.edl_builds)=='table' and self.data.edl_builds or {}
     self.data.generated_rooms=type(self.data.generated_rooms)=='table' and self.data.generated_rooms or {}
     self.data.material_defs=type(self.data.material_defs)=='table' and self.data.material_defs or {}
+    self.data.collision_rules=type(self.data.collision_rules)=='table' and self.data.collision_rules or {}
+    if type(self.data.collision_rules.default)~='table' then self.data.collision_rules.default={} end
+    if type(self.data.collision_rules.rooms)~='table' then self.data.collision_rules.rooms={} end
     self.data.reference_areas=type(self.data.reference_areas)=='table' and self.data.reference_areas or {}
     for i,v in ipairs(self.data.reference_areas) do self.data.reference_areas[i]=normalize_reference_area(v) end
     self.data.timelines=type(self.data.timelines)=='table' and self.data.timelines or {}
@@ -757,6 +760,7 @@ function Model:delete_room(id)
     for i=#self.data.cameras,1,-1 do if self.data.cameras[i].room_id==id then table.remove(self.data.cameras,i) end end
     for i=#self.data.object_groups,1,-1 do if self.data.object_groups[i].room_id==id then table.remove(self.data.object_groups,i) end end
     for i=#(self.data.generated_rooms or {}),1,-1 do if self.data.generated_rooms[i].id==id then table.remove(self.data.generated_rooms,i) end end
+    if type(self.data.collision_rules)=='table' and type(self.data.collision_rules.rooms)=='table' then self.data.collision_rules.rooms[id]=nil end
     for _,scene in ipairs(self.data.scenes or {}) do
         local rooms={};for _,value in ipairs(scene.room_ids or {}) do if value~=id then table.insert(rooms,value) end end;scene.room_ids=rooms
         local objects={};for _,value in ipairs(scene.object_ids or {}) do if not removed_objects[value] then table.insert(objects,value) end end;scene.object_ids=objects
@@ -769,6 +773,7 @@ function Model:delete_premise(id)
     local _,idx=self:get_premise(id); if not idx then return false,'premise not found' end; self:snapshot(); table.remove(self.data.premises,idx)
     for i=#self.data.rooms,1,-1 do if self.data.rooms[i].premise_id==id then table.remove(self.data.rooms,i) end end
     for i=#(self.data.generated_rooms or {}),1,-1 do if not self:get_room(self.data.generated_rooms[i].id) then table.remove(self.data.generated_rooms,i) end end
+    if type(self.data.collision_rules)=='table' and type(self.data.collision_rules.rooms)=='table' then for rid in pairs(self.data.collision_rules.rooms) do if not self:get_room(rid) then self.data.collision_rules.rooms[rid]=nil end end end
     for i=#self.data.objects,1,-1 do if self.data.objects[i].premise_id==id then table.remove(self.data.objects,i) end end
     for i=#self.data.volumes,1,-1 do if self.data.volumes[i].premise_id==id then table.remove(self.data.volumes,i) end end
     for i=#self.data.cameras,1,-1 do if self.data.cameras[i].premise_id==id then table.remove(self.data.cameras,i) end end

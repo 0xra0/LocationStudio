@@ -404,19 +404,33 @@ function Procedural:_rebuild_colliders(object,info)
         if c then if self.app.placement:is_tracked(c) then self.app.placement:despawn(c) end;self.app.model:delete_objects({id}) end
     end
     cfg.collider_ids={}
+    cfg.collision_warnings=nil;cfg.collision_stats=nil
     if not cfg.collision then return true end
     if not self.app.collision then return nil,'collision authoring is unavailable' end
-    local boxes=Procedural.colliders(info.parts)
+    local boxes,preset,material=nil,cfg.collision_preset,nil
+    local gen=self.app.collision_gen
+    if gen then
+        -- Collision rules (modules/collision_gen.lua): mode, actors, doorways, rails, rooms.
+        local plan,err=gen:plan(object,info.parts);if not plan then return nil,err end
+        boxes,preset,material=plan.boxes,plan.preset,plan.material
+        cfg.collision_warnings=#plan.warnings>0 and plan.warnings or nil;cfg.collision_stats=plan.stats
+    else
+        boxes=Procedural.colliders(info.parts)
+        for _,b in ipairs(boxes) do b.shape='box';b.rotation=b.rotation or {} end
+    end
     if #boxes>MAX_COLLIDERS then return nil,'this geometry needs '..#boxes..' collision boxes; the limit is '..MAX_COLLIDERS..' (turn collision off or simplify)' end
     local base=object.transform
     for i,b in ipairs(boxes) do
         local c=rotate(b.center,base.rotation)
         local transform={position={x=base.position.x+c.x,y=base.position.y+c.y,z=base.position.z+c.z,w=1},
             rotation={roll=b.rotation.roll or 0,pitch=b.rotation.pitch or 0,yaw=(b.rotation.yaw or 0)+(base.rotation.yaw or 0)}}
-        local r,err=self.app.collision:create_primitive({premise_id=object.premise_id,room_id=object.room_id,name=object.name..' collision '..i,shape='box',
-            size={x=b.size.x,y=b.size.y,z=b.size.z},preset=cfg.collision_preset,transform=transform,visualize=false,spawn=cfg.spawn_collision~=false})
+        local args={premise_id=object.premise_id,room_id=b.room_id or object.room_id,name=object.name..' collision '..i,shape=b.shape or 'box',
+            preset=preset,material=material,transform=transform,visualize=false,spawn=cfg.spawn_collision~=false}
+        if args.shape=='sphere' then args.radius=b.radius else args.size={x=b.size.x,y=b.size.y,z=b.size.z} end
+        local r,err=self.app.collision:create_primitive(args)
         if not r then return nil,err end
         r.object.metadata.procedural_owner=object.id
+        r.object.metadata.collision_gen={owner=object.id,role=b.role or 'geometry'}
         cfg.collider_ids[#cfg.collider_ids+1]=r.object.id
     end
     return true
@@ -442,6 +456,12 @@ function Procedural:create(args)
     local info,err=Procedural.generate(args.generator,args.params);if not info then return nil,err end
     local material;material,err=clean_material(args.material,nil,self.app.material_library);if not material then return nil,err end
     local transform;transform,err=self:_transform(args);if not transform then return nil,err end
+    local rules
+    if args.collision_rules~=nil then
+        if not self.app.collision_gen then return nil,'collision rules are unavailable' end
+        rules,err=self.app.collision_gen.normalize_rules(args.collision_rules);if not rules then return nil,err end
+        if next(rules)==nil then rules=nil end
+    end
     local model=self.app.model
     local before=Util.deepcopy(model.data)
     model:snapshot('Create procedural '..tostring(args.generator));local mark=#model.undo_stack
@@ -449,7 +469,7 @@ function Procedural:create(args)
         name=Util.trim(args.name or '')~='' and Util.trim(args.name) or (G[args.generator].label),kind='procedural',template='',
         layer=args.layer or 'shell',transform=transform,size={x=1,y=1,z=1},enabled=true,
         metadata={source='LocationStudio procedural geometry',procedural={generator=args.generator,params=Util.deepcopy(args.params or {}),parts=info.parts,
-            bounds=info.bounds,stats=info.stats,csg=info.csg,material=material,collision=args.collision==true,collision_preset=args.collision_preset,collider_ids={},
+            bounds=info.bounds,stats=info.stats,csg=info.csg,material=material,collision=args.collision==true,collision_rules=rules,collision_preset=args.collision_preset,collider_ids={},
             stream_range=num(args.stream_range,nil)},asset_bounds={min=Util.deepcopy(info.bounds.min),max=Util.deepcopy(info.bounds.max),source='procedural'}}})
     if not object then self:_abort(before,mark);return nil,'project model rejected the procedural object' end
     object.metadata.procedural.mesh_path=args.mesh_path or self:_mesh_path(object)
@@ -476,13 +496,22 @@ function Procedural:update(object_id,patch)
     local info,err=Procedural.generate(generator,params);if not info then return nil,err end
     local material=cfg.material
     if patch.material~=nil then material,err=clean_material(patch.material,cfg.material,self.app.material_library);if not material then return nil,err end end
+    local rules=cfg.collision_rules
+    if patch.collision_rules~=nil then
+        if patch.collision_rules==false then rules=nil
+        else
+            if not self.app.collision_gen then return nil,'collision rules are unavailable' end
+            rules,err=self.app.collision_gen.normalize_rules(patch.collision_rules);if not rules then return nil,err end
+            if next(rules)==nil then rules=nil end
+        end
+    end
     local model=self.app.model
     local before=Util.deepcopy(model.data)
     local old_colliders={}
     for _,id in ipairs(cfg.collider_ids or {}) do local c=model:get_object(id);if c and self.app.placement:is_tracked(c) then old_colliders[#old_colliders+1]=id end end
     self:hide(object)
     model:snapshot('Edit procedural geometry');local mark=#model.undo_stack
-    cfg.generator=generator;cfg.params=params;cfg.parts=info.parts;cfg.bounds=info.bounds;cfg.stats=info.stats;cfg.csg=info.csg;cfg.material=material
+    cfg.generator=generator;cfg.params=params;cfg.parts=info.parts;cfg.bounds=info.bounds;cfg.stats=info.stats;cfg.csg=info.csg;cfg.material=material;cfg.collision_rules=rules
     if patch.collision~=nil then cfg.collision=patch.collision==true end
     if patch.stream_range~=nil then cfg.stream_range=num(patch.stream_range,nil) end
     object.metadata.asset_bounds={min=Util.deepcopy(info.bounds.min),max=Util.deepcopy(info.bounds.max),source='procedural'}

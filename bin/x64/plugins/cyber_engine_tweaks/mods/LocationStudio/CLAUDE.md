@@ -400,3 +400,13 @@ union/subtract/intersect tree rather than stacking boxes. Start from
 Tell the user that the in-game preview and collision are grid boxes, approximate
 when `stats.csg.approximate` is true, and that only the built mesh is exact. Verify
 it in game.
+
+## Collision rules
+
+Generated geometry takes its colliders from rules. Change them with
+`collision_rules_set` at the narrowest scope that fits (object, then room, then
+default); do not hand-place colliders over generated geometry. Check a rule
+change with `collision_rules_preview` and report its warnings, such as
+unaligned cuts left whole. Actor-specific presets are estimates: confirm
+blocking in game or with walkability tools. Run `collision_rules_regenerate`
+after door openings change. Ask before disabling a room's collision.

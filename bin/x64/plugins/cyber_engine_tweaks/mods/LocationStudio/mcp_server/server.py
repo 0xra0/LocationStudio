@@ -4943,7 +4943,8 @@ def procedural_create(generator: str, params: dict[str, Any] | None = None, name
                       yaw: float = 0.0, source: str = "player", premise_id: str = "", room_id: str = "",
                       material_template: str = "", appearance: str = "default", uv_scale: float = 1.0, glass_template: str = "",
                       collision: bool = True, collision_preset: str = "", layer: str = "", stream_range: float | None = None,
-                      mesh_path: str = "", spawn: bool = True, materials: dict[str, str] | None = None) -> str:
+                      mesh_path: str = "", spawn: bool = True, materials: dict[str, str] | None = None,
+                      collision_rules: dict[str, Any] | None = None) -> str:
     """Generate structural geometry from dimensions (one undo step). The object keeps its parameters and parts, shows
     a World Builder shape preview, optionally gets real collision boxes, and becomes a real .mesh at Build Mod:
     material_template must be an existing .mesh (catalog path) whose materials the generated mesh reuses, and a
@@ -4952,7 +4953,7 @@ def procedural_create(generator: str, params: dict[str, Any] | None = None, name
     Place at position [x,y,z] + yaw, or at source=player|aim."""
     args: dict[str, Any] = {"generator": generator, "params": params or {}, "name": name or None, "premise_id": premise_id or None,
                             "room_id": room_id or None, "layer": layer or None, "collision": collision, "collision_preset": collision_preset or None,
-                            "stream_range": stream_range, "mesh_path": mesh_path or None, "spawn": spawn,
+                            "stream_range": stream_range, "mesh_path": mesh_path or None, "spawn": spawn, "collision_rules": collision_rules,
                             "material": {"template": material_template, "appearance": appearance, "uv_scale": uv_scale, "glass_template": glass_template,
                                          "materials": materials or {}}}
     if position is not None:
@@ -4969,12 +4970,15 @@ def procedural_create(generator: str, params: dict[str, Any] | None = None, name
 def procedural_update(object_id: str, params: dict[str, Any] | None = None, replace_params: bool = False, generator: str = "",
                       material_template: str | None = None, appearance: str | None = None, uv_scale: float | None = None,
                       collision: bool | None = None, name: str | None = None, stream_range: float | None = None,
-                      materials: dict[str, str] | None = None) -> str:
-    """Change a procedural object's parameters (merged unless replace_params), generator, material or collision and
-    regenerate it, replacing its collision boxes and preview. One undo step; invalid parameters change nothing."""
+                      materials: dict[str, str] | None = None, collision_rules: dict[str, Any] | None = None,
+                      clear_collision_rules: bool = False) -> str:
+    """Change a procedural object's parameters (merged unless replace_params), generator, material, collision or
+    object-level collision_rules (see collision_rules_set) and regenerate it, replacing its collision boxes and
+    preview. One undo step; invalid parameters change nothing."""
     material = {k: v for k, v in (("template", material_template), ("appearance", appearance), ("uv_scale", uv_scale), ("materials", materials)) if v is not None}
     args: dict[str, Any] = {"id": object_id, "params": params or {}, "replace_params": replace_params, "generator": generator or None,
-                            "material": material or None, "collision": collision, "name": name, "stream_range": stream_range}
+                            "material": material or None, "collision": collision, "name": name, "stream_range": stream_range,
+                            "collision_rules": False if clear_collision_rules else collision_rules}
     return _json(_send("procedural_update", {k: v for k, v in args.items() if v is not None}))
 
 
@@ -5089,6 +5093,60 @@ def procedural_export_glb(object_id: str = "", premise_id: str = "", output_dir:
         _lsproc.write_glb(mesh, target, name=name)
         files.append({"object_id": o.get("id"), "file": str(target), "triangles": mesh.triangle_count, "bounds": mesh.bounds()})
     return _json({"count": len(files), "files": files})
+
+
+@mcp.tool()
+def collision_rules_get(scope: str = "default") -> str:
+    """Collision generator rules of a scope: default (project), room:<room_id> or object:<procedural object id>; plus
+    the built-in defaults and the actor -> collision preset table. Effective rules merge default < room < object."""
+    return _json(_send("collision_rules_get", {"scope": scope}))
+
+
+@mcp.tool()
+def collision_rules_set(rules: dict[str, Any], scope: str = "default", replace: bool = False, clear: list[str] | None = None,
+                        regenerate: bool = True) -> str:
+    """Set collision generator rules for a scope and regenerate the colliders of the procedural geometry they affect,
+    in one undo step. Every affected object is planned first; a rule set that would fail anywhere changes nothing.
+    replace=true drops the scope's other keys, and clear removes the keys it names.
+    Rules (all optional): mode exact|simplified|convex|bounds|none, actors all|player|npc|player_vehicles|vehicles|camera|sight
+    (or preset: any collision_presets name), material (physics material), doorways auto|keep, door_clearance (m),
+    exclude [{center, size, yaw}] (boxes cut out, in the scope's frame: world / room / object), rails solid|parts|none,
+    rail_height, rail_thickness, glass pass|block, min_thickness, max_boxes, tolerance (extra volume per merge 0-1), per_room."""
+    return _json(_send("collision_rules_set", {"scope": scope, "rules": rules, "replace": replace, "clear": clear or None,
+                                               "regenerate": regenerate}))
+
+
+@mcp.tool()
+def collision_rules_preview(object_id: str = "", rules: dict[str, Any] | None = None, generator: str = "",
+                            params: dict[str, Any] | None = None, room_id: str = "") -> str:
+    """Dry run: the colliders (object frame) a procedural object, or a generator's output, would get under its
+    effective rules plus the trial `rules`. Returns the preset, stats (source boxes, merged, doorway cuts, room
+    splits) and warnings, such as cuts skipped because the boxes are not aligned."""
+    args: dict[str, Any] = {"object_id": object_id or None, "rules": rules, "generator": generator or None, "params": params,
+                            "room_id": room_id or None}
+    return _json(_send("collision_rules_preview", {k: v for k, v in args.items() if v is not None}))
+
+
+@mcp.tool()
+def collision_rules_regenerate(object_id: str = "", room_id: str = "", premise_id: str = "") -> str:
+    """Rebuild generated colliders under the current rules. Scope: an object, a room or a premise (all when empty).
+    One undo step. Run it after room openings change so doorway cuts follow."""
+    args = {"object_id": object_id or None, "room_id": room_id or None, "premise_id": premise_id or None}
+    return _json(_send("collision_rules_regenerate", {k: v for k, v in args.items() if v is not None}))
+
+
+@mcp.tool()
+def collision_rules_report(premise_id: str = "") -> str:
+    """Generated colliders per room: count, enabled count, presets, roles (geometry/rail/glass) and how many block
+    the player or NPCs (the preset groups estimate)."""
+    return _json(_send("collision_rules_report", {"premise_id": premise_id or None}))
+
+
+@mcp.tool()
+def collision_rules_room_enabled(room_id: str, enabled: bool = True) -> str:
+    """Enable or disable all generated colliders of one room (they stay authored; disabled ones are despawned and
+    not exported). One undo step."""
+    return _json(_send("collision_rules_room_enabled", {"room_id": room_id, "enabled": enabled}))
 
 
 CSG_EXAMPLES = MOD_DIR / "csg" / "examples.json"

@@ -46,13 +46,16 @@ function BuildExport:_objects(args)
     elseif type(args.object_ids)=='table' then
         wanted={};for _,id in ipairs(args.object_ids) do wanted[id]=true end
     end
-    local out={};self.last_excluded_by_layer={};self.last_procedural={}
+    local out={};self.last_excluded_by_layer={};self.last_procedural={};self.last_disabled_collision={}
     for _,object in ipairs(model.data.objects or {}) do
         local in_scope=(wanted==nil or wanted[object.id]) and (args.premise_id==nil or object.premise_id==args.premise_id)
         -- Layers with export disabled (e.g. Debug) are left out on purpose;
         -- they are reported separately and never count as skipped.
         if in_scope and self.app.layers and not self.app.layers:export_enabled(object) then
             table.insert(self.last_excluded_by_layer,{id=object.id,name=object.name,layer=object.layer})
+        elseif in_scope and object.enabled==false and object.metadata and object.metadata.collision_gen then
+            -- Generated colliders of a room whose collision is switched off (collision_gen:set_room_enabled).
+            table.insert(self.last_disabled_collision,{id=object.id,name=object.name,room_id=object.room_id})
         elseif in_scope and object.metadata and object.metadata.procedural then
             -- Generated meshes are written by the Build Mod `procedural` stage, not by World Builder.
             table.insert(self.last_procedural,{id=object.id,name=object.name,mesh_path=object.metadata.procedural.mesh_path})
@@ -225,7 +228,7 @@ function BuildExport:export(args)
         name=name,group=group_name,
         world_builder_group_file='data/objects/'..group_name..'.json',
         world_builder_export_file='export/'..name..'_exported.json',
-        exported=#children,skipped=skipped,excluded_by_layer=Util.deepcopy(self.last_excluded_by_layer or {}),procedural=Util.deepcopy(self.last_procedural or {}),export_issues=issues,origin=origin,
+        exported=#children,skipped=skipped,excluded_by_layer=Util.deepcopy(self.last_excluded_by_layer or {}),disabled_collision=Util.deepcopy(self.last_disabled_collision or {}),procedural=Util.deepcopy(self.last_procedural or {}),export_issues=issues,origin=origin,
     }
     self.last_error=nil
     self:_log('info','exported',{name=name,exported=#children,skipped=#skipped})

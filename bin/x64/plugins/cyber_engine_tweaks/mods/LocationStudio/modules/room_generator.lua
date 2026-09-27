@@ -77,6 +77,12 @@ function RoomGen.normalize(spec)
     s.lighting={anchors=l.anchors or 'grid',spacing=num(l.spacing,3),drop=num(l.drop,0.05),create_lights=l.create_lights==true,light=type(l.light)=='table' and Util.deepcopy(l.light) or {}}
     if s.lighting.anchors~='grid' and s.lighting.anchors~='center' and s.lighting.anchors~='none' then return nil,'lighting.anchors must be grid, center or none' end
     if s.lighting.spacing<0.5 then return nil,'lighting.spacing must be at least 0.5 m' end
+    if spec.collision_rules~=nil then
+        local CG=package.loaded['modules/collision_gen']
+        if not CG then return nil,'collision rules are unavailable' end
+        local r,err=CG.normalize_rules(spec.collision_rules);if not r then return nil,'collision_rules: '..err end
+        s.collision_rules=r
+    end
     local mats=type(spec.materials)=='table' and spec.materials or {}
     s.materials={floor=material(mats.floor),walls=material(mats.walls or mats.wall),ceiling=material(mats.ceiling),trim=material(mats.trim or mats.walls or mats.wall),
         door_frames=material(mats.frames or mats.frame or mats.trim),windows=material(mats.frames or mats.frame or mats.trim,type(mats.glass)=='string' and mats.glass or nil)}
@@ -267,6 +273,9 @@ end
 -- Build pieces for a room record from a plan; fills rec.
 function RoomGen:_build(room,plan,rec)
     local s=plan.spec;local app=self.app
+    -- Room-scope collision rules apply to every piece (modules/collision_gen.lua).
+    local cr=app.model.data.collision_rules
+    if s.collision_rules~=nil and type(cr)=='table' and type(cr.rooms)=='table' then cr.rooms[room.id]=next(s.collision_rules) and Util.deepcopy(s.collision_rules) or nil end
     rec.piece_ids={};rec.collider_ids={};rec.light_ids={}
     local ids={}
     for _,role in ipairs(ROLES) do
