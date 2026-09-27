@@ -1,0 +1,16 @@
+{
+  "format": "locationstudio-asset-bounds/1",
+  "name": "replace-with-your-measured-bounds",
+  "source": "example-only-do-not-use-as-measured-game-data",
+  "assets": [
+    {
+      "asset_id": "REPLACE_WITH_PROJECT_ASSET_ID",
+      "resource": "REPLACE_WITH_RESOURCE_PATH",
+      "bounds": {
+        "min": {"x": -0.5, "y": -0.5, "z": 0.0},
+        "max": {"x": 0.5, "y": 0.5, "z": 1.0},
+        "units": "m"
+      }
+    }
+  ]
+}

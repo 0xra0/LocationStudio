@@ -1,0 +1,15 @@
+{
+  "format": "locationstudio-authoring-plan",
+  "version": 1,
+  "name": "Starter Workspace",
+  "origin": "player",
+  "steps": [
+    {"op":"create_premise","as":"place","name":"My First Location","kind":"interior"},
+    {"op":"create_room","as":"room","premise_id":"$place","name":"Main Room","width":6,"depth":5,"height":3,"spawn":true},
+    {"op":"place_asset","as":"chair","asset_id":"builtin_chair_poor","premise_id":"$place","room_id":"$room","offset":{"x":1,"y":0,"z":0},"yaw":180,"spawn":true},
+    {"op":"create_location","as":"entrance","name":"Entrance","type":"entrance","category":"Gameplay","offset":{"x":0,"y":-2,"z":0}},
+    {"op":"create_volume","as":"trigger","premise_id":"$place","room_id":"$room","name":"Entry Trigger","shape":"box","offset":{"x":0,"y":-1.5,"z":1},"size_x":2,"size_y":1,"size_z":2},
+    {"op":"create_camera","as":"camera","premise_id":"$place","room_id":"$room","name":"Entrance Camera","offset":{"x":-2,"y":-1.5,"z":1.7},"look_at_location_id":"$entrance","fov":55},
+    {"op":"create_scene","as":"scene","name":"First Scene","premise_id":"$place","room_ids":["$room"],"object_ids":["$chair"],"location_ids":["$entrance"],"volume_ids":["$trigger"],"camera_ids":["$camera"],"activate":true}
+  ]
+}

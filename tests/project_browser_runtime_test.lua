@@ -1,0 +1,55 @@
+local env=dofile(arg[2]..'/support/cet_mock.lua')
+local app=env.app
+assert(app.version=='0.56.0' and app.project_browser)
+local location=assert(app.model:add_location({id='loc-clinic',name='Clinic Door',tags={'clinic','entry'},notes='front entrance'}))
+local route=assert(app.model:add_route({id='route-clinic',name='Clinic Patrol',location_ids={location.id}}))
+local premise=assert(app.model:add_premise({id='prem-clinic',name='Clinic Premise'}))
+local room=assert(app.model:add_room({id='room-reception',premise_id=premise.id,name='Reception'}))
+local object=assert(app.model:add_object({id='obj-desk',premise_id=premise.id,room_id=room.id,name='Clinic Desk',template='base\\clinic\\desk.mesh',kind='mesh'}))
+local group=assert(app.model:create_object_group({id='group-reception',name='Reception Set',premise_id=premise.id,room_id=room.id,object_ids={object.id}}))
+local volume=assert(app.model:add_volume({id='vol-entry',premise_id=premise.id,room_id=room.id,name='Entry Trigger'}))
+local camera=assert(app.model:add_camera({id='camera-door',premise_id=premise.id,room_id=room.id,name='Door Shot',look_at={x=0,y=0,z=0,location_id=location.id}}))
+local scene=assert(app.model:add_scene({id='scene-clinic',premise_id=premise.id,name='Clinic Arrival',room_ids={room.id},object_ids={object.id},location_ids={location.id},volume_ids={volume.id},camera_ids={camera.id},route_ids={route.id}}))
+
+local fetched=assert(app.bridge:handle({id='browse-get',op='wb_get',args={item_id=object.id,item_type='object'}}))
+assert(fetched.item.id==object.id and fetched.item.type=='object' and fetched.data.template==object.template)
+local unknown,unknown_err=app.bridge:handle({id='browse-get-missing',op='wb_get',args={item_id='absent'}})
+assert(not unknown and unknown_err:find('item not found',1,true))
+
+local found=assert(app.bridge:handle({id='browse-find',op='wb_find',args={query='clinic',types={'premise','scene'},limit=1}}))
+assert(found.total==2 and #found.results==1 and found.results[1].score==10 and found.has_more)
+local next_page=assert(app.bridge:handle({id='browse-find-page',op='wb_find',args={query='clinic',types={'premise','scene'},limit=1,offset=1}}))
+assert(next_page.total==2 and #next_page.results==1 and not next_page.has_more)
+local resource=assert(app.bridge:handle({id='browse-find-template',op='wb_find',args={query='clinic\\desk.mesh',types={'object'}}}))
+assert(resource.total==1 and resource.results[1].id==object.id)
+local blank,blank_err=app.bridge:handle({id='browse-find-blank',op='wb_find',args={query='  '}})
+assert(not blank and blank_err:find('query must contain',1,true))
+
+local tree=assert(app.bridge:handle({id='browse-tree',op='wb_tree',args={root_id='collection:premise',max_depth=4,limit=20}}))
+assert(tree.node_count<=20 and tree.nodes[1].id=='collection:premise')
+local function contains(nodes,id)
+    for _,node in ipairs(nodes or {}) do if node.id==id or contains(node.children,id) then return true end end
+    return false
+end
+assert(contains(tree.nodes,premise.id) and contains(tree.nodes,room.id) and contains(tree.nodes,group.id) and contains(tree.nodes,object.id))
+local group_tree=assert(app.bridge:handle({id='browse-group-tree',op='wb_tree',args={root_id=group.id,max_depth=2}}))
+assert(contains(group_tree.nodes,object.id))
+local project_tree=assert(app.bridge:handle({id='browse-project-tree',op='wb_tree',args={max_depth=1,limit=5}}))
+assert(project_tree.node_count==5 and project_tree.truncated)
+local bad_root,bad_root_err=app.bridge:handle({id='browse-tree-bad',op='wb_tree',args={root_id='missing'}})
+assert(not bad_root and bad_root_err:find('not found',1,true))
+
+local refs=assert(app.bridge:handle({id='browse-refs',op='wb_refs',args={item_id=object.id,direction='both'}}))
+assert(refs.total>=4)
+local inbound=assert(app.bridge:handle({id='browse-refs-in',op='wb_refs',args={item_id=object.id,direction='inbound'}}))
+assert(inbound.total==2)
+local has_group,has_scene=false,false
+for _,edge in ipairs(inbound.edges) do if edge.from.id==group.id then has_group=true elseif edge.from.id==scene.id then has_scene=true end end
+assert(has_group and has_scene)
+local location_refs=assert(app.bridge:handle({id='browse-location-refs',op='wb_refs',args={item_id=location.id,direction='inbound',limit=2}}))
+assert(location_refs.total==3 and #location_refs.edges==2 and location_refs.truncated)
+local route_refs=assert(app.bridge:handle({id='browse-route-refs',op='wb_refs',args={item_id=route.id,direction='outbound'}}))
+assert(route_refs.total==1 and route_refs.edges[1].to.id==location.id)
+local invalid_dir,invalid_dir_err=app.bridge:handle({id='browse-ref-invalid',op='wb_refs',args={item_id=object.id,direction='sideways'}})
+assert(not invalid_dir and invalid_dir_err:find('direction must be',1,true))
+print('LocationStudio Project Browser: OK')

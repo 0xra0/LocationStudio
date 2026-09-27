@@ -1,0 +1,15 @@
+{
+  "format": "locationstudio-authoring-plan",
+  "version": 1,
+  "name": "Furnished Room",
+  "origin": "player",
+  "steps": [
+    {"op":"create_premise","as":"place","name":"Furnished Location","kind":"interior"},
+    {"op":"create_room","as":"room","premise_id":"$place","name":"Furniture Test","width":8,"depth":6,"height":3,"spawn":true},
+    {"op":"place_asset","as":"table","asset_id":"builtin_table_lab","premise_id":"$place","room_id":"$room","offset":{"x":0,"y":0,"z":0},"spawn":true},
+    {"op":"place_asset","as":"chair_a","asset_id":"builtin_chair_corpo","premise_id":"$place","room_id":"$room","offset":{"x":-1.2,"y":0,"z":0},"yaw":90,"spawn":true},
+    {"op":"place_asset","as":"chair_b","asset_id":"builtin_chair_corpo","premise_id":"$place","room_id":"$room","offset":{"x":1.2,"y":0,"z":0},"yaw":-90,"spawn":true},
+    {"op":"place_asset","as":"lamp","asset_id":"builtin_wall_lamp","premise_id":"$place","room_id":"$room","offset":{"x":0,"y":2.7,"z":1.8},"yaw":180,"spawn":true},
+    {"op":"create_scene","as":"scene","name":"Furnished Room Scene","premise_id":"$place","room_ids":["$room"],"object_ids":["$table","$chair_a","$chair_b","$lamp"],"activate":true}
+  ]
+}

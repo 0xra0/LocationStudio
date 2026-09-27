@@ -1,0 +1,14 @@
+{
+  "format": "locationstudio-authoring-plan",
+  "version": 1,
+  "name": "Captured Location Scene",
+  "origin": "player",
+  "steps": [
+    {"op":"create_premise","as":"place","name":"Captured Scene Location","kind":"interior"},
+    {"op":"create_room","as":"room","premise_id":"$place","name":"Scene Stage","width":7,"depth":5,"height":3,"spawn":true},
+    {"op":"place_asset","as":"table","asset_id":"builtin_table_lab","premise_id":"$place","room_id":"$room","offset":{"x":0,"y":0,"z":0},"spawn":true},
+    {"op":"place_asset","as":"chair","asset_id":"builtin_chair_corpo","premise_id":"$place","room_id":"$room","offset":{"x":0,"y":-1.2,"z":0},"yaw":0,"spawn":true},
+    {"op":"create_volume","as":"trigger","premise_id":"$place","room_id":"$room","name":"Scene Trigger","shape":"box","offset":{"x":0,"y":-2,"z":1},"size_x":2,"size_y":1,"size_z":2},
+    {"op":"capture_scene","as":"scene","name":"Captured Stage Scene","premise_id":"$place","activate":true}
+  ]
+}
