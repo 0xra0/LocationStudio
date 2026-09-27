@@ -2,7 +2,7 @@ local env=dofile(arg[2]..'/support/cet_mock.lua')
 local app=env.app
 local S=assert(app.splines,'spline editor must be constructed')
 local model=app.model
-assert(model.data.schema_version==21 and type(model.data.splines)=='table')
+assert(model.data.schema_version==22 and type(model.data.splines)=='table')
 local function near(a,b,eps) return math.abs(a-b)<=(eps or 1e-6) end
 local function dist(a,b) return math.sqrt((a.x-b.x)^2+(a.y-b.y)^2+(a.z-b.z)^2) end
 

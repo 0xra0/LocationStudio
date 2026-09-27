@@ -12,14 +12,14 @@ local OP_KIND={
     edl_begin='edl',set_room_kit='settings',import_resource='asset',place_resource='object',create_light='object',create_collision='object',
     create_vfx='object',create_audio_emitter='object',create_reverb_zone='object',create_occluder='object',create_interactable='object',
     create_npc='object',create_workspot='location',create_npc_route='npc_route',add_route_waypoint='waypoint',create_device_graph='device_graph',
-    add_device_node='device_node',add_device_link='device_link',link_fact='volume',import_navigation='navigation_graph',create_spline='spline',create_procedural='object',
+    add_device_node='device_node',add_device_link='device_link',link_fact='volume',import_navigation='navigation_graph',create_spline='spline',create_procedural='object',create_parametric_room='room',
 }
 local V2_ONLY={}
 for _,op in ipairs({'edl_begin','set_room_kit','import_resource','place_resource','create_light','create_collision','create_vfx','create_audio_emitter',
     'create_reverb_zone','create_occluder','create_interactable','create_npc','create_workspot','create_npc_route','add_route_waypoint','create_device_graph',
-    'add_device_node','add_device_link','link_fact','import_navigation','create_spline','create_procedural'}) do V2_ONLY[op]=true end
+    'add_device_node','add_device_link','link_fact','import_navigation','create_spline','create_procedural','create_parametric_room'}) do V2_ONLY[op]=true end
 local NEEDS_PREMISE={create_room=true,create_volume=true,create_camera=true,create_scene=true,capture_scene=true,place_asset=true,place_resource=true,
-    create_light=true,create_collision=true,create_vfx=true,create_audio_emitter=true,create_occluder=true,create_interactable=true,create_npc=true,create_procedural=true}
+    create_light=true,create_collision=true,create_vfx=true,create_audio_emitter=true,create_occluder=true,create_interactable=true,create_npc=true,create_procedural=true,create_parametric_room=true}
 -- Ops that do not need the World Builder runtime.
 local NO_RUNTIME={edl_begin=true,create_workspot=true,create_npc_route=true,add_route_waypoint=true,create_device_graph=true,add_device_node=true,
     add_device_link=true,link_fact=true,import_navigation=true,create_spline=true}
@@ -101,6 +101,7 @@ function Plans:schema()
             link_fact={'volume_id','fact_name','value?'},import_navigation={'as','name','nodes [{id,offset}]','edges'},
             create_spline={'as','premise_id','points [offset]','closed?'},
             create_procedural={'as','premise_id','generator','params','offset','yaw?','material?','collision?','layer?'},
+            create_parametric_room={'as','premise_id','spec {name,width,length,height,wall_thickness,doors,windows,floor,ceiling,trim,materials,lighting,collision}','offset','yaw?'},
         },
     }
 end
@@ -196,6 +197,11 @@ function Plans:validate(plan)
         if step.as and not aliases[step.as] then aliases[step.as]=OP_KIND[op] or 'unknown' end
         if op=='place_asset' and not is_ref(step.asset_id) then local _,err=self:resolve_asset(step.asset_id,step.asset_query);if err then table.insert(errors,string.format('step %d: %s',index,err)) end end
         if op=='create_room' then local ok,err=Builder.validate_size({width=step.width or 4,depth=step.depth or 4,height=step.height or 3},step.wall_thickness);if not ok then table.insert(errors,string.format('step %d: %s',index,err)) end end
+        if op=='create_parametric_room' then
+            local RG=package.loaded['modules/room_generator']
+            if RG then local ok,err=RG.normalize(step.spec);if not ok then table.insert(errors,string.format('step %d: %s',index,err)) end end
+            if type(step.offset)~='table' and type(step.transform)~='table' then table.insert(errors,string.format('step %d: create_parametric_room requires offset',index)) end
+        end
         if op=='move' and not step.kind then table.insert(errors,string.format('step %d: move requires kind',index)) end
         if NEEDS_PREMISE[op] and not step.premise_id then table.insert(errors,string.format('step %d: %s requires premise_id',index,op)) end
         if (op=='place_resource' or op=='create_interactable' or op=='create_npc') and not step.asset_id then table.insert(errors,string.format('step %d: %s requires asset_id',index,op)) end
@@ -445,6 +451,10 @@ function Plans:_run_step(step,aliases,origin)
         local r;r,warning=app.procedural:create({generator=a.generator,params=a.params,premise_id=a.premise_id,room_id=a.room_id,name=a.name,layer=a.layer,
             material=a.material,collision=a.collision,collision_preset=a.collision_preset,stream_range=a.stream_range,transform=self:_transform(origin,a),spawn=a.spawn})
         item=r and r.object;kind='object';if r and r.preview_error then warning=r.preview_error end
+    elseif op=='create_parametric_room' then
+        if not app.room_generator then return nil,'room generator is unavailable' end
+        local r;r,warning=app.room_generator:create({spec=a.spec,premise_id=a.premise_id,transform=self:_transform(origin,a)})
+        item=r and r.room;kind='room'
     elseif op=='activate_scene' then item,warning=app.scenes:activate(a.id,a.spawn~=false);kind='scene'
     elseif op=='deactivate_scene' then item,warning=app.scenes:deactivate(a.id);kind='scene'
     elseif op=='isolate_scene' then item,warning=app.scenes:isolate(a.id);kind='scene'

@@ -37,6 +37,7 @@ FACT_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
 RECORD_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z0-9_.-]+$")
 PARAM_RE = re.compile(r"\$\{([^}]+)\}")
 WALLS = {"north", "south", "east", "west"}
+PARAMETRIC_KEYS = ("floor", "ceiling", "trim", "materials", "lighting", "collision", "block_windows", "wall_thickness")
 EXTENSION_TYPES = {"mesh": "mesh_static", "ent": "entity_template", "mi": "decal", "particle": "particle", "effect": "effect"}
 RESOURCE_TYPES = {"mesh_static", "mesh_rotating", "mesh_cloth", "mesh_dynamic", "mesh_proxy", "entity_template", "entity_amm",
                   "entity_record", "device", "decal", "particle", "effect"}
@@ -541,6 +542,13 @@ class Compiler:
         z_room = elevation + at[2]
         self.rooms[rid] = {"frame": _Frame(at[0], at[1], z_room, yaw, rid), "size": size}
         wall = room.get("walls") or {}
+        build = room.get("build", "kit")
+        if build not in ("kit", "parametric"):
+            self.err(where + ".build", "must be kit or parametric")
+            return
+        if build == "parametric":
+            self.parametric_room(room, rid, where, size, at, z_room, yaw, wall)
+            return
         self.emit({"op": "create_room", "as": self.alias(rid), "premise_id": "$premise", "name": room.get("name") or rid,
                    "width": size[0], "depth": size[1], "height": size[2], "x": at[0], "y": at[1],
                    "z": round(z_room - level * self.floor_height, 5), "level": level, "yaw": yaw,
@@ -566,6 +574,54 @@ class Compiler:
         spawn = room.get("spawn", self.defaults.get("spawn", True))
         if spawn:
             self.emit({"op": "spawn", "kind": "room", "id": "$" + self.alias(rid)})
+        frame = self.rooms[rid]["frame"]
+        for kind in ELEMENT_LISTS:
+            for element in _expand_list(room.get(kind), self.templates, f"{where}.{kind}", self.errors):
+                self.element(kind, element, frame)
+        reverb = room.get("reverb")
+        if reverb:
+            self.reverb(dict(reverb, room=rid) if isinstance(reverb, dict) else {"room": rid}, f"{where}.reverb")
+        audio = room.get("audio")
+        if audio:
+            self.audio(audio, frame, f"{where}.audio")
+
+    def parametric_room(self, room: dict[str, Any], rid: str, where: str, size: list[float], at: list[float],
+                        z_room: float, yaw: float, wall: Any) -> None:
+        """A room built by the parametric room generator (geometry, collision, portals, anchors, sockets)."""
+        extra = room.get("parametric") or {}
+        if not isinstance(extra, dict):
+            self.err(where + ".parametric", "must be a mapping")
+            return
+        spec: dict[str, Any] = {k: v for k, v in extra.items() if k in PARAMETRIC_KEYS}
+        for key in extra:
+            if key not in PARAMETRIC_KEYS:
+                self.err(f"{where}.parametric.{key}", "is not a parametric room setting")
+        spec.update({"name": room.get("name") or rid, "width": size[0], "length": size[1], "height": size[2]})
+        if isinstance(wall, dict) and wall.get("thickness") is not None:
+            spec["wall_thickness"] = float(wall["thickness"])
+        for kind, default_h, sill in (("doors", 2.1, 0.0), ("windows", 1.2, 1.0)):
+            out = []
+            for oi, op in enumerate(room.get(kind) or []):
+                ow = f"{where}.{kind}[{oi}]"
+                if not isinstance(op, dict) or op.get("wall") not in WALLS:
+                    self.err(ow + ".wall", "must be north, south, east or west")
+                    continue
+                item = {k: op[k] for k in ("wall", "offset", "width", "height", "sill", "frame", "frame_width", "glass", "mullions_x", "mullions_y") if k in op}
+                item.setdefault("height", default_h)
+                if kind == "windows":
+                    item.setdefault("sill", sill)
+                wall_len = size[0] if op["wall"] in ("north", "south") else size[1]
+                width = float(item.get("width", 1.0 if kind == "doors" else 1.5))
+                if abs(float(item.get("offset", 0))) + width / 2 > wall_len / 2:
+                    self.err(ow, f"does not fit on the {op['wall']} wall ({wall_len} m)")
+                if float(item.get("sill", 0)) + float(item["height"]) > size[2]:
+                    self.err(ow, "is taller than the room")
+                self.counts[kind] = self.counts.get(kind, 0) + 1
+                out.append(item)
+            spec[kind] = out
+        self.counts["parametric_rooms"] = self.counts.get("parametric_rooms", 0) + 1
+        self.emit({"op": "create_parametric_room", "as": self.alias(rid), "premise_id": "$premise",
+                   "offset": {"x": at[0], "y": at[1], "z": z_room}, "yaw": yaw, "spec": spec}, rid)
         frame = self.rooms[rid]["frame"]
         for kind in ELEMENT_LISTS:
             for element in _expand_list(room.get(kind), self.templates, f"{where}.{kind}", self.errors):

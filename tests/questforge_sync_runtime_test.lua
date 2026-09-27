@@ -1,6 +1,6 @@
 local env=dofile(arg[2]..'/support/cet_mock.lua')
 local app=env.app
-assert(app.version=='0.73.0' and app.questforge_sync)
+assert(app.version=='0.74.0' and app.questforge_sync)
 local location=app.model:add_location({id='loc-linked',name='Local Entry',notes='Keep my note',transform={position={x=10,y=20,z=30},rotation={yaw=15}},metadata={custom='keep'}})
 local volume=app.model:add_volume({id='vol-linked',name='Entry Trigger',transform={position={x=1,y=2,z=3}},metadata={local_custom='keep'}})
 local sector={markers={{id='marker_entry',pos={100,200,300},_locationStudio={id=location.id,name='Entry'}}},

@@ -369,3 +369,14 @@ mesh JSON is configured, and check its layout with `mesh_resource_inspect`. If
 `layout_source` is `builtin-unverified`, say so and ask the user to verify the
 mesh in game. Never claim a generated mesh renders correctly until the user has
 seen it in game.
+
+## Parametric rooms
+
+Use `room_generator_create` (or EDL `build: parametric` / plan op
+`create_parametric_room`) to build a complete room; check the spec first with
+`room_generator_preview`. Take material paths from `asset_catalog_search`. Change
+the room with `room_generator_update`: never edit or delete its generated pieces
+by hand, because regeneration replaces them. Use `room_generator_snap` with the listed
+socket ids instead of computing wall positions. Portals are authoring data, not
+engine portals, and the preview is only an approximation: describe the meshes as
+real only after a successful Build Mod and an in-game check.

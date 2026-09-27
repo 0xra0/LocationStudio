@@ -109,6 +109,29 @@ class CompilerTests(unittest.TestCase):
         self.assertTrue(any("material.template" in w for w in r["warnings"]))
         self.assertFalse(edl.compile_document(doc(geometry=[{"id": "x", "generator": "dome"}]))["valid"])
 
+    def test_parametric_room(self):
+        room = {"id": "clinic", "at": [2, 3], "yaw": 90, "size": [6, 4], "build": "parametric", "walls": {"thickness": 0.25},
+                "doors": [{"wall": "south", "offset": -1}], "windows": [{"wall": "east", "width": 1.5, "mullions_x": 1}],
+                "parametric": {"ceiling": {"type": "beams"}, "materials": {"walls": "base\\plaster.mi"}, "lighting": {"anchors": "center"}},
+                "geometry": [{"id": "st", "generator": "box", "params": {"size": [1, 1, 1]}, "at": [1, 0, 0]}]}
+        r = edl.compile_document(doc(floors=[{"id": "g", "height": 3, "rooms": [room]}]))
+        self.assertTrue(r["valid"], r["errors"])
+        self.assertEqual(steps(r, "create_room"), [])
+        self.assertEqual(steps(r, "add_opening"), [])
+        (pr,) = steps(r, "create_parametric_room")
+        self.assertEqual(pr["offset"], {"x": 2, "y": 3, "z": 0})
+        self.assertEqual(pr["yaw"], 90)
+        spec = pr["spec"]
+        self.assertEqual((spec["width"], spec["length"], spec["height"], spec["wall_thickness"]), (6, 4, 3, 0.25))
+        self.assertEqual(spec["doors"], [{"wall": "south", "offset": -1, "height": 2.1}])
+        self.assertEqual(spec["windows"][0]["sill"], 1.0)
+        self.assertEqual(spec["ceiling"]["type"], "beams")
+        self.assertEqual(steps(r, "create_procedural")[0]["offset"]["x"], 2.0, msg="room elements use the room frame")
+        bad = dict(room, parametric={"roof": "flat"})
+        self.assertFalse(edl.compile_document(doc(floors=[{"id": "g", "height": 3, "rooms": [bad]}]))["valid"])
+        self.assertFalse(edl.compile_document(doc(floors=[{"id": "g", "height": 3, "rooms": [dict(room, build="csg")]}]))["valid"])
+        self.assertFalse(edl.compile_document(doc(floors=[{"id": "g", "height": 3, "rooms": [dict(room, doors=[{"wall": "south", "offset": 2.8}])]}]))["valid"])
+
     def test_errors(self):
         cases = {
             "duplicate id": doc(objects=[{"id": "r", "resource": "base\\a.mesh"}]),

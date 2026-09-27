@@ -10,6 +10,15 @@
 The upgrade archive does not contain project/config JSON, logs, exports,
 thumbnails, or bridge state.
 
+## v0.74 Parametric room smoke check
+
+1. Select a premise and open Spatial → Room gen. Keep the example spec and press **CHECK**: the part counts, portals, anchors and sockets appear.
+2. Press **CREATE AT V**. The floor, walls with a door and window gap, the beamed ceiling, skirting, door frame and window preview appear around V, in one undo step.
+3. Walk through the doorway, and confirm that the walls, floor and window opening block you (window blocker).
+4. Select a prop, then press **SNAP** next to `wall_north` and `corner_ne`. The prop moves to the wall face and to the corner, facing into the room.
+5. Change `width` in the spec, then press **REGENERATE FROM SPEC**. The room rebuilds at the same place and the prop stays. Undo restores the previous room.
+6. Build Mod with `.mi` materials set, and check that each role's mesh renders in game with its materials.
+
 ## v0.73 Native mesh resource smoke check
 
 1. Export any vanilla static wall mesh to JSON with WolvenKit and save it as `mod_sources/reference_static.mesh.json`. `mesh_resource_inspect` on it lists its chunk layout.

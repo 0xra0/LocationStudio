@@ -7,7 +7,7 @@ local function close(a,b) return math.abs(a-b)<1e-6 end
 
 -- Generators.
 local names={};for _,g in ipairs(P:generators().items) do names[#names+1]=g.id end
-assert(table.concat(names,',')=='box,ceiling,column,door_frame,duct,floor,pipe,railing,ramp,stairs,wall,window')
+assert(table.concat(names,',')=='box,ceiling,column,compound,door_frame,duct,floor,pipe,railing,ramp,stairs,wall,window')
 
 local wall=assert(G('wall',{length=6,height=3,thickness=0.2,openings={{offset=-1,width=1,height=2.1,sill=0},{offset=1.5,width=1.2,height=1.2,sill=1}}}))
 -- left solid, above door, right-of-door solid, above window, below window, right solid
@@ -49,6 +49,9 @@ local win=assert(G('window',{width=1.6,height=1.2,sill=1,mullions_x=1,mullions_y
 local glass=0;for _,p in ipairs(win.parts) do if p.material=='glass' then glass=glass+1 end end
 assert(#win.parts==7 and glass==1)
 assert(#assert(G('door_frame',{width=1,height=2.1,threshold=true})).parts==4)
+local comp=assert(G('compound',{parts={{shape='box',center={x=0,y=0,z=1},size={x=2,y=1,z=2}},{shape='cylinder',center={x=3,y=0,z=0},radius=0.2,length=1,material='glass'}}}))
+assert(#comp.parts==2 and comp.parts[1].material=='main' and comp.parts[2].material=='glass' and close(comp.bounds.max.z,2))
+assert(not G('compound',{parts={}}) and not G('compound',{parts={{shape='cone',center={x=0,y=0,z=0}}}}) and not G('compound',{parts={{shape='box',center={x=0,y=0,z=0},size={x=0,y=1,z=1}}}}))
 
 -- Rotation convention matches R = Rz(yaw) Rx(pitch) Ry(roll).
 local v=P.rotate({x=0,y=1,z=0},{roll=0,pitch=30,yaw=90})
@@ -128,7 +131,7 @@ assert(P:delete(o.id).colliders==#ids and not model:get_object(o.id) and not mod
 assert(model:undo() and model:get_object(o.id) and model:get_object(ids[1]))
 
 -- Bridge.
-assert(assert(app.bridge:handle({id='g1',op='procedural_generators',args={}})).count==12)
+assert(assert(app.bridge:handle({id='g1',op='procedural_generators',args={}})).count==13)
 assert(#assert(app.bridge:handle({id='g2',op='procedural_preview_parts',args={generator='door_frame',params={}}})).parts==3)
 local bc=assert(app.bridge:handle({id='g3',op='procedural_create',args={generator='column',params={height=3},transform=T,material={template='base\\a.mesh'}}}))
 assert(assert(app.bridge:handle({id='g4',op='procedural_update',args={id=bc.object.id,params={height=4}}})).bounds.max.z==4)

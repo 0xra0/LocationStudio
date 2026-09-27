@@ -230,6 +230,7 @@ end
 
 function Builder:rebuild_room_shell(room_id)
     local room=self.app.model:get_room(room_id); if not room then return nil,'room not found' end
+    if self:is_generated(room_id) then return nil,'this room is parametric; regenerate it with the room generator instead of rebuilding a kit shell' end
     local valid,validation_err=Builder.validate_size(room.size,room.wall_thickness)
     if not valid then return nil,validation_err end
     local kit=self:room_kit();local roles=kit.roles
@@ -321,10 +322,15 @@ function Builder:rebuild_room_shell(room_id)
     return {room=room,object_count=#room.shell_object_ids,object_ids=Util.deepcopy(room.shell_object_ids)}
 end
 
+function Builder:is_generated(room_id)
+    for _,rec in ipairs(self.app.model.data.generated_rooms or {}) do if rec.id==room_id then return true end end
+    return false
+end
+
 function Builder:rebuild_premise_shells(premise_id)
     local rooms,objects=0,0
     for _,room in ipairs(self.app.model.data.rooms or {}) do
-        if not premise_id or room.premise_id==premise_id then
+        if (not premise_id or room.premise_id==premise_id) and not self:is_generated(room.id) then
             local result,err=self:rebuild_room_shell(room.id);if not result then return nil,err end
             rooms=rooms+1;objects=objects+result.object_count
         end
