@@ -10,6 +10,12 @@
 The upgrade archive does not contain project/config JSON, logs, exports,
 thumbnails, or bridge state.
 
+## v0.62 Performance analyzer smoke check
+
+1. Open **Spatial → Performance** in a furnished premise and click **ANALYZE STREAMING COST**. The rooms are listed by cost, with distances from V.
+2. Stack eight large lights and several particles in one corner and re-analyze. A dense cluster appears there; **SELECT** selects those objects, and the lights are listed as overlapping.
+3. Compare a heavy cluster's in-game frame time against a quiet room to confirm that the ranking is useful for your hardware.
+
 ## v0.61 Sector inspector smoke check
 
 1. Export a small premise with `build_export_world_builder`, then run `sector_inspect("<name>")`. The sector count and bounds must match World Builder's Export tab.

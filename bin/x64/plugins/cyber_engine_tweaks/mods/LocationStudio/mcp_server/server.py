@@ -3755,7 +3755,7 @@ def status_resource() -> str:
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from mod_inventory import scan_mod_installation as _scan_mod_installation  # noqa: E402
-from lsbuild import build as _lsb, native as _lsn, worker as _lsw, wiring as _lswire, rng as _lsrng, interactables as _lsip, population as _lsp, vfx as _lsvfx, sectors as _lssec  # noqa: E402
+from lsbuild import build as _lsb, native as _lsn, worker as _lsw, wiring as _lswire, rng as _lsrng, interactables as _lsip, population as _lsp, vfx as _lsvfx, sectors as _lssec, performance as _lsperf  # noqa: E402
 
 WORLD_BUILDER_ROOT = MOD_DIR.parent / "entSpawner"
 BUILD_ROOT = MOD_DIR / "exports" / "build"
@@ -4252,6 +4252,49 @@ def environment_status() -> str:
 def environment_restore(blend_time: float = 0.0) -> str:
     """End the environment preview: restore the original game time, return weather to the game's normal cycle, remove the fog volume."""
     return _json(_send("environment_restore", {"blend_time": blend_time}))
+
+
+@mcp.tool()
+def performance_analyze(premise_id: str = "", include_meta: bool = True) -> str:
+    """Estimate streaming cost of the saved project per room and premise: node, light, audio, decal, VFX,
+    dynamic-entity and expensive-resource counts, a relative cost, budget overruns, distance from V,
+    dense clusters (grid cells far above the average) and heavily overlapping lights. Not measured frame time."""
+    return _json(_send("performance_analyze", {"premise_id": premise_id or None, "include_meta": include_meta}))
+
+
+@mcp.tool()
+def performance_set_budget(scope: str = "room", nodes: float | None = None, lights: float | None = None,
+                           audio: float | None = None, decals: float | None = None, vfx: float | None = None,
+                           dynamic: float | None = None, cost: float | None = None) -> str:
+    """Change the room or premise budgets used for performance warnings (saved in project settings)."""
+    if scope not in {"room", "premise"}:
+        raise ValueError("scope must be room or premise")
+    values = {k: v for k, v in (("nodes", nodes), ("lights", lights), ("audio", audio), ("decals", decals),
+                                ("vfx", vfx), ("dynamic", dynamic), ("cost", cost)) if v is not None}
+    if not values:
+        raise ValueError("give at least one budget value")
+    return _json(_send("performance_set_budget", {"scope": scope, "values": values}))
+
+
+@mcp.tool()
+def performance_select_cluster(index: int = 1) -> str:
+    """Select every project object in dense cluster #index from the last performance_analyze run."""
+    return _json(_send("performance_select_cluster", {"index": index}))
+
+
+@mcp.tool()
+def performance_export(export_file: str, use_player_position: bool = True) -> str:
+    """Estimate streaming cost per sector of a World Builder export: category counts, relative cost, expensive
+    resources, nodes with very long streaming ranges, sector budget overruns and dense clusters. With
+    use_player_position, distances from V are added when the game bridge is live."""
+    data = json.loads(_export_file(export_file).read_text(encoding="utf-8"))
+    player = None
+    if use_player_position:
+        try:
+            player = (_send("capture_player") or {}).get("position")
+        except Exception:
+            player = None
+    return _json(_lsperf.analyze_export(data, player=player))
 
 
 SECTOR_REPORT = MOD_DIR / "exports" / "sector-inspection.json"

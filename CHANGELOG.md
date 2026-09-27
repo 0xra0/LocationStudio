@@ -1,3 +1,10 @@
+## 0.62.0 - 2026-09-27
+
+- Added a streaming/performance analyzer (`modules/performance.lua`, Spatial → Performance). Per room and premise of the saved project it reports node, light, audio, decal, VFX, dynamic-entity, collision and expensive-resource counts, a weighted relative cost, budget overruns (editable room/premise budgets in project settings) and distance from V.
+- It finds dense clusters (5 m grid; median + 3 × MAD threshold, so one busy corner cannot hide itself) with their top contributors and a SELECT action, and lists lights that overlap too many others.
+- Added per-sector export analysis (`lsbuild/performance.py`) from native node types, light radius and particle emission, with long streaming ranges, sector budgets and clusters. It is included in the sector report, and the in-game tab shows it.
+- Added MCP tools `performance_analyze`, `performance_set_budget`, `performance_select_cluster` and `performance_export`, plus `PERFORMANCE-ANALYZER.md` and Lua/Python tests. Bumped to v0.62.0.
+
 ## 0.61.0 - 2026-09-27
 
 - Added a streaming-sector inspector (`lsbuild/sectors.py`) for World Builder exports. Per node it reports sector, variant range, NodeRef, position/streaming reference point, ranges, device/PSID and referenced NodeRefs, and maps nodes back to LocationStudio objects. Per sector it reports bounds, category, level, node types and NodeRef/device/persistent-entry counts.

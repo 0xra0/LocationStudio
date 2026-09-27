@@ -13,6 +13,8 @@ import math
 from pathlib import Path
 from typing import Any
 
+from .performance import analyze_export
+
 SCHEMA = "locationstudio-sector-inspection/1"
 BOUNDS_TOLERANCE = 0.5          # metres outside a sector box before it counts as outside
 DEVICE_MATCH_DISTANCE = 0.05    # device.nodePosition -> node.position
@@ -283,6 +285,7 @@ def inspect(export_file: str | Path, project_file: str | Path | None = None, *, 
         "thresholds": {"bounds_tolerance_m": BOUNDS_TOLERANCE, "outlier_min_distance_m": OUTLIER_MIN_DISTANCE,
                        "outlier_factor": OUTLIER_FACTOR},
         "note": "Heuristics flag likely mistakes; a cross-sector reference is valid when both sectors stream together.",
+        "performance": analyze_export(data),
     }
     if include_nodes:
         report["nodes"] = [n for n in nodes if sector is None or n["sector"] == sector]
