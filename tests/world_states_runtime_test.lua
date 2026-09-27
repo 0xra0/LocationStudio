@@ -1,6 +1,6 @@
 local env=dofile(arg[2]..'/support/cet_mock.lua')
 local app=env.app
-assert(app.version=='0.67.0' and app.world_states)
+assert(app.version=='0.68.0' and app.world_states)
 local facts={['quest.stage']=0}
 local quests={};function quests:GetFactStr(name)return facts[name] or 0 end
 Game={GetQuestsSystem=function()return quests end}

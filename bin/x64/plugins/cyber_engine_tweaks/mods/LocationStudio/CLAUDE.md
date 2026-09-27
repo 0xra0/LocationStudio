@@ -311,3 +311,12 @@ consent, then report that rotation/scale need aligning. Ask before
 `hide_originals`; hidden originals are reversible visibility toggles, not
 deletions. Device logic, spawner settings, lights and collision are not cloned;
 say so rather than implying a complete copy.
+
+## Reference areas
+
+Reference layers are read-only records of the vanilla world: never try to unlock,
+export or edit their items. Build with `reference_area_copy` and
+`reference_area_align`, and use `reference_area_compare` to report progress.
+Prefer `reference_capture_from_sector` for exact transforms, and describe live
+captures with approximate items as approximate. Uncloneable originals (lights,
+collision) are only markers; tell the user to recreate them with their tools.

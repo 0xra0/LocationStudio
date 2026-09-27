@@ -11,7 +11,7 @@ local function blank_project()
             id = 'default', name = 'Night City Location Project', description = '', author = '', tags = {},
             created_at = Util.now_iso(), updated_at = Util.now_iso(),
         },
-        locations = {}, routes = {}, npc_routes = {}, combat_encounters = {}, cover_nodes = {}, navigation_graphs = {}, device_logic_graphs = {}, world_state_variants = {}, environments = {}, splines = {}, timelines = {}, premises = {}, rooms = {}, objects = {}, object_groups = {}, object_prefabs = {}, volumes = {}, cameras = {}, scenes = {}, assets = {}, vanilla_removals = {}, room_frames = {},
+        locations = {}, routes = {}, npc_routes = {}, combat_encounters = {}, cover_nodes = {}, navigation_graphs = {}, device_logic_graphs = {}, world_state_variants = {}, environments = {}, splines = {}, timelines = {}, reference_areas = {}, premises = {}, rooms = {}, objects = {}, object_groups = {}, object_prefabs = {}, volumes = {}, cameras = {}, scenes = {}, assets = {}, vanilla_removals = {}, room_frames = {},
         -- Layer ids 'shell' and 'decoration' are kept for compatibility; they are
         -- shown as Architecture and Props.
         layers = {
@@ -310,6 +310,19 @@ local function normalize_spline(item)
         uses=type(item.uses)=='table' and item.uses or {},notes=tostring(item.notes or ''),created_at=item.created_at or now,updated_at=now}
 end
 
+local function normalize_reference_area(item)
+    item=item or {};local b=type(item.bounds)=='table' and item.bounds or {}
+    local function v3(p,f) p=type(p)=='table' and p or {};return {x=tonumber(p.x) or f,y=tonumber(p.y) or f,z=tonumber(p.z) or f} end
+    local lo,hi=v3(b.min,0),v3(b.max,0)
+    for _,k in ipairs({'x','y','z'}) do if lo[k]>hi[k] then lo[k],hi[k]=hi[k],lo[k] end end
+    return {id=item.id or Util.make_id('refarea'),name=Util.trim(item.name or '')~='' and Util.trim(item.name) or 'Reference area',premise_id=item.premise_id,
+        layer_id=item.layer_id,bounds={min=lo,max=hi},source=item.source or 'scan',captured_at=item.captured_at or Util.now_iso(),
+        item_count=math.floor(tonumber(item.item_count) or 0),approximate=math.floor(tonumber(item.approximate) or 0),
+        unsupported=type(item.unsupported)=='table' and item.unsupported or {},skipped=type(item.skipped)=='table' and item.skipped or {},
+        sectors=type(item.sectors)=='table' and item.sectors or {},notes=tostring(item.notes or '')}
+end
+Model.normalize_reference_area=normalize_reference_area
+
 local TIMELINE_TRACKS={camera=true,npc=true,look_at=true,dialogue=true,event=true,fact=true,marker=true}
 -- Cinematic timeline: typed tracks of time-ordered keys. Key payloads are kept
 -- as authored; references are validated by modules/timeline.lua.
@@ -335,8 +348,10 @@ end
 local function normalize_layer(item)
     item = item or {}
     local color=tostring(item.color or '#FFFFFF');if not color:match('^#%x%x%x%x%x%x$') then color='#FFFFFF' end
+    -- A reference layer (vanilla reference-area capture) is always locked and never exported.
+    local reference=type(item.reference)=='string' and item.reference~='' and item.reference or nil
     return {id=item.id or Util.make_id('layer'), name=Util.trim(item.name or '')~='' and Util.trim(item.name) or 'Layer', color=color,
-        visible=item.visible ~= false, locked=item.locked == true, export=item.export ~= false, description=tostring(item.description or '')}
+        visible=item.visible ~= false, locked=reference~=nil or item.locked == true, export=reference==nil and item.export ~= false, description=tostring(item.description or ''),reference=reference}
 end
 
 -- Older projects: add the newer default layers and rename untouched defaults.
@@ -392,7 +407,7 @@ function Model.blank() return blank_project() end
 
 function Model:normalize()
     if type(self.data) ~= 'table' then self.data=blank_project() end
-    local defaults=blank_project(); self.data.schema_version=19
+    local defaults=blank_project(); self.data.schema_version=20
     self.data.project=self.data.project or defaults.project; self.data.locations=self.data.locations or {}; self.data.routes=self.data.routes or {}
     self.data.npc_routes=type(self.data.npc_routes)=='table' and self.data.npc_routes or {}
     self.data.combat_encounters=type(self.data.combat_encounters)=='table' and self.data.combat_encounters or {}
@@ -403,6 +418,8 @@ function Model:normalize()
     for i,v in ipairs(self.data.world_state_variants) do self.data.world_state_variants[i]=normalize_world_state_variant(v) end
     self.data.environments=type(self.data.environments)=='table' and self.data.environments or {}
     self.data.splines=type(self.data.splines)=='table' and self.data.splines or {}
+    self.data.reference_areas=type(self.data.reference_areas)=='table' and self.data.reference_areas or {}
+    for i,v in ipairs(self.data.reference_areas) do self.data.reference_areas[i]=normalize_reference_area(v) end
     self.data.timelines=type(self.data.timelines)=='table' and self.data.timelines or {}
     for i,v in ipairs(self.data.timelines) do self.data.timelines[i]=normalize_timeline(v) end
     for i,v in ipairs(self.data.splines) do self.data.splines[i]=normalize_spline(v) end
@@ -555,6 +572,7 @@ function Model:get_world_state_variant(id) return get_by_id(self.data.world_stat
 function Model:get_environment(id) return get_by_id(self.data.environments,id) end
 function Model:get_spline(id) return get_by_id(self.data.splines,id) end
 function Model:get_timeline(id) return get_by_id(self.data.timelines,id) end
+function Model:get_reference_area(id) return get_by_id(self.data.reference_areas,id) end
 Model.normalize_timeline=normalize_timeline
 Model.normalize_spline=normalize_spline
 Model.normalize_environment=normalize_environment
@@ -755,6 +773,7 @@ function Model:delete_premise(id)
     -- Environments are reusable conditions; keep them and drop only the premise link.
     for _,environment in ipairs(self.data.environments or {}) do if environment.premise_id==id then environment.premise_id=nil end end
     for _,spline in ipairs(self.data.splines or {}) do if spline.premise_id==id then spline.premise_id=nil end end
+    for _,area in ipairs(self.data.reference_areas or {}) do if area.premise_id==id then area.premise_id=nil end end
     for _,timeline in ipairs(self.data.timelines or {}) do if timeline.premise_id==id then timeline.premise_id=nil end end
     self:touch(); return true
 end

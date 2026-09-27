@@ -367,7 +367,7 @@ function Visibility:hidden_meshes(args)
     local cameras={};for _,entry in ipairs(pvs.cameras) do cameras[#cameras+1]=self.app.model:get_camera(entry.camera_id) end
     local flagged,unknown={},0
     for _,o in ipairs(self.app.model.data.objects or {}) do
-        local wb=o.metadata and o.metadata.world_builder
+        local wb=o.metadata and not o.metadata.reference_area_id and o.metadata.world_builder
         local is_mesh=wb and (tostring(wb.definition_key):find('^mesh_') or wb.definition_key=='entity_template')
         if is_mesh and o.enabled~=false and (not premise_id or o.premise_id==premise_id) then
             local bounds=self.app.asset_bounds and self.app.asset_bounds:world_aabb(o.id)

@@ -1,6 +1,6 @@
 local env=dofile(arg[2]..'/support/cet_mock.lua')
 local app=env.app
-assert(app.version=='0.67.0' and app.quest_simulator)
+assert(app.version=='0.68.0' and app.quest_simulator)
 local saved_facts={['clinic.entry']=0}
 local quests={facts=saved_facts}
 function quests:GetFactStr(name) return self.facts[name] or 0 end

@@ -1,6 +1,6 @@
 local env=dofile(arg[2]..'/support/cet_mock.lua')
 local app=env.app
-assert(app.version=='0.67.0' and app.navigation)
+assert(app.version=='0.68.0' and app.navigation)
 
 local graph=assert(app.navigation:import_graph({name='Navigation test',source_format='test-json',source='test fixture',
     nodes={{id='a',name='Lobby',position={x=0,y=0,z=0}},{id='b',name='Landing',position={x=5,y=0,z=0}},{id='c',name='Upper floor',position={x=5,y=0,z=3}},{id='d',name='Disconnected',position={x=20,y=0,z=0}}},

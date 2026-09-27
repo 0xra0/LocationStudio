@@ -10,6 +10,14 @@
 The upgrade archive does not contain project/config JSON, logs, exports,
 thumbnails, or bridge state.
 
+## v0.68 Reference area smoke check
+
+1. In a vanilla clinic, open **Spatial → Reference**. Set **CORNER A AT V** in one corner of the room and **CORNER B AT AIM** at the opposite top corner, then **CAPTURE REFERENCE** with position-only nodes included. The toast lists captured items and uncloneable originals.
+2. Check **Spatial → Layers**: `Reference: <name>` is locked and marked no-export, and **UNLOCK** is refused.
+3. Hide the originals (vanilla removal or the clone importer), then **SHOW REFERENCE**: the room reappears from the reference items.
+4. **COPY ALL TO EDITABLE**, move a bed and delete a cabinet, then **COMPARE**: the bed is `moved`, the cabinet `missing`. Select the bed copy and its reference item and click **ALIGN**: it snaps back.
+5. Capture the same box from the exported sector JSON (`reference_capture_from_sector`): the items match the originals' rotation and scale exactly.
+
 ## v0.67 Vanilla clone smoke check
 
 1. With RedHotTools installed, stand in a vanilla interior (for example a clinic). In **Spatial → Vanilla clone**, aim at a bed and click **PICK CROSSHAIR**: it is staged as `worldMeshNode` with its mesh path and appearance, marked "position only".

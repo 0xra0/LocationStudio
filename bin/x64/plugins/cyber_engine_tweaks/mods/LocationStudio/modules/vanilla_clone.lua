@@ -66,7 +66,7 @@ function VanillaClone:_clone_index()
     local out={}
     for _,o in ipairs(self.app.model.data.objects or {}) do
         local src=o.metadata and o.metadata.vanilla_source
-        if src and src.key then out[src.key]=o.id end
+        if src and src.key and not o.metadata.reference_area_id then out[src.key]=o.id end
     end
     return out
 end
@@ -91,8 +91,9 @@ function VanillaClone:normalize(raw,source)
         if c.template_path then def={key='entity_template',field='template_path',app='appearance',warning='dynamic entity (not a sector node): the clone is a static copy'}
         elseif c.record_id then def={key='entity_record',field='record_id',app='appearance',warning='dynamic entity (not a sector node): the clone is a static copy'} end
     end
+    if raw.cloneable==false then def=nil;c.reason=raw.reason or ('node type '..tostring(c.node_type)..' is not cloneable from this source') end
     if not def then
-        c.reason=c.node_type and (UNSUPPORTED[c.node_type] or ('node type '..c.node_type..' is not cloneable yet')) or 'the pick has no node type or entity resource'
+        c.reason=c.reason or c.node_type and (UNSUPPORTED[c.node_type] or ('node type '..c.node_type..' is not cloneable yet')) or 'the pick has no node type or entity resource'
     else
         c.definition_key=def.key;c.resource_path=c[def.field];c.appearance_name=def.app and c[def.app] or nil
         if def.warning then c.warnings[#c.warnings+1]=def.warning end
@@ -220,6 +221,24 @@ function VanillaClone:_value(c,resolved,args)
     return value
 end
 
+-- Object values for normalized candidates; also used by reference-area capture.
+function VanillaClone:prepare(list,args)
+    args=args or {}
+    local values,from,skipped={}, {}, {}
+    for _,c in ipairs(list) do
+        local reason
+        if not c.supported then reason=c.reason
+        elseif c.already_cloned and args.allow_duplicate~=true then reason='already cloned as '..c.already_cloned..' (pass allow_duplicate to clone again)'
+        elseif c.confidence=='position_only' and args.allow_approximate~=true then reason='RedHotTools reported only the position of this node; pass allow_approximate (rotation 0, scale 1, adjust afterwards) or import it from the exported sector JSON for the exact transform' end
+        if not reason then
+            local resolved,err=self:_resolve(c)
+            if resolved then values[#values+1]=self:_value(c,resolved,args);from[#values]=c else reason=err end
+        end
+        if reason then skipped[#skipped+1]={name=c.name,node_type=c.node_type,resource_path=c.resource_path,position=c.position,node_ref=c.node_ref,supported=c.supported,reason=reason} end
+    end
+    return values,from,skipped
+end
+
 -- Import staged candidates (indices, or every selected one) or explicit candidates.
 function VanillaClone:import(args)
     args=args or {}
@@ -237,18 +256,7 @@ function VanillaClone:import(args)
         if l.locked then return nil,'layer '..l.name..' is locked' end
     end
 
-    local values,imported_from,skipped={}, {}, {}
-    for _,c in ipairs(list) do
-        local reason
-        if not c.supported then reason=c.reason
-        elseif c.already_cloned and args.allow_duplicate~=true then reason='already cloned as '..c.already_cloned..' (pass allow_duplicate to clone again)'
-        elseif c.confidence=='position_only' and args.allow_approximate~=true then reason='RedHotTools reported only the position of this node; pass allow_approximate (rotation 0, scale 1, adjust afterwards) or import it from the exported sector JSON for the exact transform' end
-        if not reason then
-            local resolved,err=self:_resolve(c)
-            if resolved then values[#values+1]=self:_value(c,resolved,args);imported_from[#values]=c else reason=err end
-        end
-        if reason then skipped[#skipped+1]={name=c.name,node_type=c.node_type,resource_path=c.resource_path,reason=reason} end
-    end
+    local values,imported_from,skipped=self:prepare(list,args)
     if #values==0 then return nil,'nothing was imported: '..tostring(skipped[1] and skipped[1].reason) end
 
     local model=self.app.model
@@ -296,7 +304,7 @@ function VanillaClone:list(args)
     local rows={}
     for _,o in ipairs(self.app.model.data.objects or {}) do
         local src=o.metadata and o.metadata.vanilla_source
-        if src and (not args.premise_id or args.premise_id=='' or o.premise_id==args.premise_id) then
+        if src and not o.metadata.reference_area_id and (not args.premise_id or args.premise_id=='' or o.premise_id==args.premise_id) then
             local ot=src.original_transform or {};local op=ot.position or {};local orr=ot.rotation or {};local p=o.transform.position;local r=o.transform.rotation
             local changes={}
             if differs(p.x,op.x,0.01) or differs(p.y,op.y,0.01) or differs(p.z,op.z,0.01) then changes[#changes+1]='position' end
