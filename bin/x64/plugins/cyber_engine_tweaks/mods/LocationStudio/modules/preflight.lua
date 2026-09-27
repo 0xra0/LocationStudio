@@ -63,6 +63,13 @@ function Preflight:_resource_paths(objects,args)
             local mat=proc.material or {};local tpl=Util.trim(tostring(mat.template or ''))
             local slots=type(mat.materials)=='table' and mat.materials or {}
             if tpl=='' and not slots.main then c.add('error','procedural geometry needs materials.main (a .mi for the native mesh) or material.template (a .mesh to import over) before Build Mod',obj(o)) end
+            for slot,ref in pairs(slots) do
+                if type(ref)=='string' and ref:sub(1,1)=='@' then
+                    local err='the material library is unavailable'
+                    if self.app.material_library then local _r;_r,err=self.app.material_library:resolve(ref) end
+                    if err then c.add('error','materials.'..slot..': '..tostring(err or 'the material library is unavailable'),obj(o)) end
+                end
+            end
             if slots.main then
                 local glass=false;for _,part in ipairs(proc.parts or {}) do if part.material=='glass' then glass=true end end
                 if glass and not slots.glass then c.add('error','the geometry has glass but materials.glass is not set',obj(o)) end

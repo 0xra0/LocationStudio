@@ -965,6 +965,40 @@ function SpatialUI:draw_procedural()
     end
 end
 
+local MAT_EXAMPLE='{"key":"clinic_tile","preset":"metal_base","params":{"roughness":0.6,"metallic":0,"tint":[0.9,0.95,1,1],"uv_scale":[2,2]},"textures":{"base_color":{"solid":[0.8,0.82,0.85,1]}},"variants":[{"name":"dirty","params":{"roughness":0.85,"tint":[0.7,0.68,0.62,1]}}]}'
+
+function SpatialUI:draw_materials()
+    local app=self.app;local M=app.material_library
+    ImGui.Text('MATERIAL LIBRARY')
+    if not M then ImGui.TextDisabled('Material library failed to load.');return end
+    ImGui.TextWrapped('Describe material instances in code: a base material (preset or any .mt/.remt/.mi), textures (depot .xbm, a local image or a solid colour), roughness, metallic, emissive, tint, tiling/UV scale, raw overrides and variants. Build Mod writes each as a real .mi (variants as chained .mi files and extra mesh appearances). Use them on generated geometry as @key.')
+    self.mat_def=self.mat_def or MAT_EXAMPLE
+    self.mat_def=select(1,ImGui.InputTextMultiline('Definition (JSON)',self.mat_def,4096))
+    local function def() local ok,v=pcall(json.decode,self.mat_def);if ok and type(v)=='table' then return v end;return nil end
+    if ImGui.Button('ADD MATERIAL##mat',140,28) then local d=def();if not d then self:toast('Definition must be a JSON object') else local r,err=M:create(d);if r then self.mat_selected=r.key end;self:toast(err or ('Added @'..r.key)) end end
+    for _,row in ipairs(M:list({premise_id=app.selected_premise_id}).items) do
+        local label=string.format('@%s  [%s]  %s  %d texture(s)%s  used by %d##matrow_%s',row.key,row.preset,row.path,row.textures,#row.variants>0 and ('  variants: '..table.concat(row.variants,', ')) or '',row.users,row.id)
+        if ImGui.Selectable(label,self.mat_selected==row.key) then
+            self.mat_selected=row.key;local d=M:get(row.key)
+            if d then local copy={};for _,k in ipairs({'key','name','preset','base','path','params','textures','overrides','variants','notes'}) do copy[k]=d[k] end;self.mat_def=json.encode(copy) end
+        end
+    end
+    local d=M:get(self.mat_selected or '')
+    if d then
+        if ImGui.Button('SAVE CHANGES##mat',150,26) then local p=def();if not p then self:toast('Definition must be a JSON object') else p.key=nil;local _,err=M:update(d.key,p);self:toast(err or 'Material updated') end end
+        ImGui.SameLine();if ImGui.Button('DELETE##mat',90,26) then local _,err=M:delete(d.key);self:toast(err or 'Material deleted');if not err then self.mat_selected=nil end end
+        local o=app.model:get_object(app.selected_object_id)
+        if o and o.metadata and o.metadata.procedural then
+            ImGui.Text('Selected geometry: '..tostring(o.name))
+            if ImGui.Button('ASSIGN TO MAIN##mat',170,26) then local _,err=M:assign(o.id,'main','@'..d.key);self:toast(err or ('main = @'..d.key)) end
+            ImGui.SameLine();if ImGui.Button('ASSIGN TO GLASS##mat',170,26) then local _,err=M:assign(o.id,'glass','@'..d.key);self:toast(err or ('glass = @'..d.key)) end
+            for _,v in ipairs(d.variants) do
+                ImGui.SameLine();if ImGui.SmallButton('@'..d.key..':'..v.name..'##matv_'..v.name) then local _,err=M:assign(o.id,'main','@'..d.key..':'..v.name);self:toast(err or ('main = @'..d.key..':'..v.name)) end
+            end
+        else ImGui.TextDisabled('Select a procedural object to assign this material.') end
+    end
+end
+
 local RG_EXAMPLE='{"name":"Clinic","width":6,"length":4,"height":3,"wall_thickness":0.2,"doors":[{"wall":"south","offset":-1,"width":1}],"windows":[{"wall":"east","offset":0,"width":1.5,"height":1.2,"sill":1}],"floor":{"type":"slab"},"ceiling":{"type":"beams"},"lighting":{"anchors":"grid","spacing":3}}'
 
 function SpatialUI:draw_room_generator()
@@ -1748,6 +1782,7 @@ function SpatialUI:draw()
         if ImGui.BeginTabItem('Preflight') then self:draw_preflight();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Geometry') then self:draw_procedural();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Room gen') then self:draw_room_generator();ImGui.EndTabItem() end
+        if ImGui.BeginTabItem('Materials') then self:draw_materials();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Layers') then self:draw_layers();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Splines') then self:draw_splines();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Timeline') then self:draw_timeline();ImGui.EndTabItem() end

@@ -356,7 +356,7 @@ local SLOTS={main=true,glass=true}
 
 -- Material setup: either `materials` (slot -> .mi/.mt, built as a native CMesh)
 -- or `template` (a .mesh the geometry is imported over with WolvenKit).
-local function clean_material(m,base)
+local function clean_material(m,base,library)
     m=type(m)=='table' and m or {};base=base or {}
     local out={template=m.template or base.template or '',appearance=m.appearance or base.appearance or 'default',uv_scale=num(m.uv_scale,base.uv_scale or 1),
         glass_template=m.glass_template or base.glass_template or '',materials=Util.deepcopy(type(m.materials)=='table' and m.materials or base.materials or {})}
@@ -366,6 +366,9 @@ local function clean_material(m,base)
         if not SLOTS[slot] then return nil,'material slot must be main or glass: '..tostring(slot) end
         local p=tostring(path):lower()
         if p=='' then out.materials[slot]=nil
+        elseif p:sub(1,1)=='@' then
+            if not library then return nil,'material library references (@key) need the material library' end
+            local _,err=library:resolve(tostring(path));if err then return nil,'materials.'..slot..': '..err end
         elseif not (p:match('%.mi$') or p:match('%.mt$') or p:match('%.remt$')) then return nil,'materials.'..slot..' must be a .mi/.mt depot path' end
     end
     if out.materials.glass and not out.materials.main then return nil,'materials.main is required when glass is set' end
@@ -416,7 +419,7 @@ function Procedural:create(args)
     args=args or {}
     local busy=self:_busy();if busy then return nil,busy end
     local info,err=Procedural.generate(args.generator,args.params);if not info then return nil,err end
-    local material;material,err=clean_material(args.material);if not material then return nil,err end
+    local material;material,err=clean_material(args.material,nil,self.app.material_library);if not material then return nil,err end
     local transform;transform,err=self:_transform(args);if not transform then return nil,err end
     local model=self.app.model
     local before=Util.deepcopy(model.data)
@@ -451,7 +454,7 @@ function Procedural:update(object_id,patch)
     local generator=patch.generator or cfg.generator
     local info,err=Procedural.generate(generator,params);if not info then return nil,err end
     local material=cfg.material
-    if patch.material~=nil then material,err=clean_material(patch.material,cfg.material);if not material then return nil,err end end
+    if patch.material~=nil then material,err=clean_material(patch.material,cfg.material,self.app.material_library);if not material then return nil,err end end
     local model=self.app.model
     local before=Util.deepcopy(model.data)
     local old_colliders={}

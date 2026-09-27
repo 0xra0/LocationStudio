@@ -385,7 +385,20 @@ def project_roots(project: dict[str, Any], *, premise_id: str | None = None) -> 
             add("path", material.get("template"), "procedural.material.template")
             add("path", material.get("glass_template"), "procedural.material.glass_template")
             for slot, mi in (material.get("materials") or {}).items() if isinstance(material.get("materials"), dict) else []:
-                add("path", mi, f"procedural.material.materials.{slot}")
+                if isinstance(mi, str) and mi.startswith("@"):
+                    # Material library reference: the generated .mi (and every variant) ships with the build.
+                    from .materials import definitions, ref_path
+                    defs = definitions(project)
+                    try:
+                        add("path", ref_path(defs, mi), f"procedural.material.materials.{slot}")
+                        key = mi[1:].partition(":")[0]
+                        if ":" not in mi:
+                            for v in defs[key].get("variants") or []:
+                                add("path", v.get("path"), f"procedural.material.materials.{slot} (variant {v.get('name')})")
+                    except (ValueError, KeyError):
+                        add("path", mi, f"procedural.material.materials.{slot}")
+                else:
+                    add("path", mi, f"procedural.material.materials.{slot}")
         if (md.get("npc_population") or {}).get("record"):
             add("record", md["npc_population"]["record"], "npc_population.record")
         for fld in ("event", "sound_event"):
@@ -417,8 +430,10 @@ def project_roots(project: dict[str, Any], *, premise_id: str | None = None) -> 
 def resolve(roots: list[dict[str, Any]], *, sources: Sources, vanilla: HashSet | None = None,
             mods: dict[int, str] | None = None, project_tweaks: dict[str, Path] | None = None,
             mod_tweaks: dict[str, Path] | None = None, sounds: dict[str, Path] | None = None,
-            max_depth: int = 32) -> dict[str, Any]:
+            max_depth: int = 32, generated: dict[str, list[str]] | None = None) -> dict[str, Any]:
+    """`generated`: depot paths the build itself writes (material library .mi and textures) -> their references."""
     mods = mods or {}
+    generated = generated or {}
     project_tweaks = project_tweaks or {}
     mod_tweaks = mod_tweaks or {}
     sounds = sounds or {}
@@ -491,6 +506,9 @@ def resolve(roots: list[dict[str, Any]], *, sources: Sources, vanilla: HashSet |
             h = path_hash(key)
             if is_dynamic(key):
                 n.update(status="dynamic", ship=False, reason="ArchiveXL dynamic path; resolved at runtime")
+            elif key in generated and key not in sources.files:
+                n.update(status="generated", ship=True, reason="written by the Build Mod materials stage")
+                children.extend(generated[key])
             elif key in sources.files:
                 file, fmt = sources.files[key]
                 n.update(status="project", ship=True, found_at=str(file), format=fmt)
@@ -583,6 +601,9 @@ def stage(report: dict[str, Any], workspace: str | Path) -> dict[str, Any]:
     copied, skipped = [], []
     archives_done: set[str] = set()
     for item in report.get("ship", []):
+        if item.get("status") == "generated":
+            skipped.append({"path": item["path"], "reason": "written by the Build Mod materials stage"})
+            continue
         src = Path(item["found_at"]) if item.get("found_at") else None
         if not src or not src.is_file():
             skipped.append({"path": item["path"], "reason": "source file not found"})

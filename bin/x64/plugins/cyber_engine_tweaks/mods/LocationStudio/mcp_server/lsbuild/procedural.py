@@ -79,17 +79,20 @@ def _norm(a):
 # --------------------------------------------------------------------------- mesh building
 
 class Mesh:
-    def __init__(self, uv_scale: float = 1.0):
+    def __init__(self, uv_scale: float = 1.0, slot_uv: dict[str, Any] | None = None):
         self.uv_scale = uv_scale if uv_scale > 0 else 1.0
+        # Per-slot extra UV divisor (u, v) from library materials: uv_scale / tiling.
+        self.slot_uv = {k: (float(v[0]), float(v[1])) for k, v in (slot_uv or {}).items() if v and float(v[0]) > 0 and float(v[1]) > 0}
         self.prims: dict[str, dict[str, list]] = {}
 
     def _prim(self, material: str) -> dict[str, list]:
         return self.prims.setdefault(material, {"pos": [], "nrm": [], "uv": [], "idx": []})
 
-    def _uv(self, p, n):
+    def _uv(self, p, n, material: str = "main"):
         ax = max(range(3), key=lambda i: abs(n[i]))
         u, v = [(1, 2), (0, 2), (0, 1)][ax]
-        return (p[u] / self.uv_scale, p[v] / self.uv_scale)
+        du, dv = self.slot_uv.get(material, (1.0, 1.0))
+        return (p[u] / (self.uv_scale * du), p[v] / (self.uv_scale * dv))
 
     def polygon(self, material: str, verts: list[tuple[float, float, float]], outward: tuple[float, float, float] | None = None,
                 normal: tuple[float, float, float] | None = None) -> None:
@@ -108,7 +111,7 @@ class Mesh:
         for v in verts:
             prim["pos"].append(v)
             prim["nrm"].append(n)
-            prim["uv"].append(self._uv(v, n))
+            prim["uv"].append(self._uv(v, n, material))
         for i in range(1, len(verts) - 1):
             prim["idx"].extend((base, base + i, base + i + 1))
 
@@ -120,7 +123,7 @@ class Mesh:
         for v, n in zip(verts, normals):
             prim["pos"].append(v)
             prim["nrm"].append(_norm(n))
-            prim["uv"].append(self._uv(v, face_n))
+            prim["uv"].append(self._uv(v, face_n, material))
         prim["idx"].extend((base, base + 1, base + 2, base, base + 2, base + 3))
 
     @property
@@ -261,8 +264,8 @@ def _prism(mesh: Mesh, part: dict[str, Any]) -> None:
 SHAPES: dict[str, Callable[[Mesh, dict[str, Any]], None]] = {"box": _box, "wedge": _wedge, "cylinder": _cylinder, "sphere": _sphere, "prism": _prism}
 
 
-def mesh_from_parts(parts: list[dict[str, Any]], *, uv_scale: float = 1.0) -> Mesh:
-    mesh = Mesh(uv_scale)
+def mesh_from_parts(parts: list[dict[str, Any]], *, uv_scale: float = 1.0, slot_uv: dict[str, Any] | None = None) -> Mesh:
+    mesh = Mesh(uv_scale, slot_uv)
     for i, part in enumerate(parts):
         fn = SHAPES.get(part.get("shape"))
         if fn is None:
@@ -348,7 +351,8 @@ def procedural_objects(project: dict[str, Any], premise_id: str | None = None) -
 
 def object_mesh(obj: dict[str, Any]) -> Mesh:
     cfg = obj["metadata"]["procedural"]
-    return mesh_from_parts(cfg.get("parts") or [], uv_scale=float((cfg.get("material") or {}).get("uv_scale") or 1.0))
+    material = cfg.get("material") or {}
+    return mesh_from_parts(cfg.get("parts") or [], uv_scale=float(material.get("uv_scale") or 1.0), slot_uv=material.get("slot_uv"))
 
 
 def _node(obj: dict[str, Any]) -> dict[str, Any]:
@@ -436,6 +440,11 @@ def native_mesh(obj: dict[str, Any], *, reference: dict[str, Any] | None = None)
 
     cfg = obj["metadata"]["procedural"]
     material = cfg.get("material") or {}
+    looks = material.get("appearances") if isinstance(material.get("appearances"), dict) else {}
+    if len(looks) > 1:
+        # Library variants: the default look plus one appearance per variant; the node picks material.appearance.
+        return build_mesh_resource(object_mesh(obj), dict(material.get("materials") or {}), reference=reference, appearance="default",
+                                   lod_distances=cfg.get("lod_distances"), appearances=looks)
     return build_mesh_resource(object_mesh(obj), dict(material.get("materials") or {}), reference=reference,
                                appearance=str(material.get("appearance") or "default"), lod_distances=cfg.get("lod_distances"))
 
@@ -463,12 +472,25 @@ def apply_to_workspace(project_file: str | Path, workspace: str | Path, *, premi
     report: dict[str, Any] = {"objects": len(objects), "generated": [], "issues": [], "nodes": [], "ready": True}
     if not objects:
         return report
+    from .materials import definitions, resolve_object
+
+    defs = definitions(project)
     root, manifest = load_manifest(workspace)
     raw_export = root / str(manifest["exportFile"])
     for obj in objects:
+        label = f"{obj.get('name')} ({obj.get('id')})"
+        try:
+            obj = resolve_object(obj, defs)  # material library references -> depot paths, variant appearances
+        except ValueError as exc:
+            report["issues"].append({"object_id": obj.get("id"), "error": f"{label}: {exc}"})
+            continue
         cfg = obj["metadata"]["procedural"]
         path = normalize(cfg.get("mesh_path") or "")
-        label = f"{obj.get('name')} ({obj.get('id')})"
+        looks = (cfg.get("material") or {}).get("appearances") or {}
+        wanted = str((cfg.get("material") or {}).get("appearance") or "default")
+        if len(looks) > 1 and wanted not in looks:
+            report["issues"].append({"object_id": obj.get("id"), "error": f"{label}: appearance {wanted!r} is not one of the material variants ({', '.join(looks)})"})
+            continue
         if not path.endswith(".mesh"):
             report["issues"].append({"object_id": obj.get("id"), "error": f"{label}: mesh_path is not a .mesh depot path"})
             continue

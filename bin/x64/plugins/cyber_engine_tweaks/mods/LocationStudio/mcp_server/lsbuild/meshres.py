@@ -264,8 +264,11 @@ def _reference(doc: dict[str, Any] | None) -> tuple[dict[str, Any] | None, dict[
 
 
 def build_mesh_resource(mesh: Any, materials: dict[str, str], *, reference: dict[str, Any] | None = None,
-                        appearance: str = "default", lod_distances: list[float] | None = None) -> dict[str, Any]:
-    """CMesh CR2W-JSON document plus statistics. `materials` maps each material slot to a .mi/.mt depot path."""
+                        appearance: str = "default", lod_distances: list[float] | None = None,
+                        appearances: dict[str, dict[str, str]] | None = None) -> dict[str, Any]:
+    """CMesh CR2W-JSON document plus statistics. `materials` maps each material slot to a .mi/.mt depot path.
+
+    `appearances` adds named appearances (name -> slot -> path) next to the default one, e.g. material variants."""
     ref_root, ref_blob, ref_chunk = _reference(reference)
     if ref_chunk is not None:
         layout = Layout.from_json((ref_chunk.get("chunkVertices") or {}).get("vertexLayout") or {}, "reference")
@@ -281,6 +284,26 @@ def build_mesh_resource(mesh: Any, materials: dict[str, str], *, reference: dict
         if not str(materials[s]).lower().endswith((".mi", ".mt", ".remt")):
             raise ValueError(f"material for slot {s} must be a .mi/.mt/.remt depot path, got {materials[s]!r}")
 
+    looks: list[tuple[str, dict[str, str]]] = [(appearance, {s: materials[s] for s in slots})]
+    for name, look in (appearances or {}).items():
+        if name in (appearance, "default"):
+            continue
+        for s in slots:
+            p = str(look.get(s) or materials[s])
+            if not p.lower().endswith((".mi", ".mt", ".remt")):
+                raise ValueError(f"appearance {name}: material for slot {s} must be a .mi/.mt/.remt depot path, got {p!r}")
+        looks.append((str(name), {s: str(look.get(s) or materials[s]) for s in slots}))
+    entries: list[tuple[str, str]] = []  # (entry name, path)
+    look_entries: list[dict[str, str]] = []
+    for li, (name, look) in enumerate(looks):
+        names = {}
+        for s in slots:
+            hit = next((en for en, ep in entries if ep == look[s] and (en == s or en.startswith(s + "@"))), None)
+            if hit is None:
+                hit = s if li == 0 else f"{s}@{name}"
+                entries.append((hit, look[s]))
+            names[s] = hit
+        look_entries.append(names)
     all_pos = [p for s in slots for p in mesh.prims[s]["pos"]]
     lo = [min(p[k] for p in all_pos) for k in range(3)]
     hi = [max(p[k] for p in all_pos) for k in range(3)]
@@ -387,10 +410,11 @@ def build_mesh_resource(mesh: Any, materials: dict[str, str], *, reference: dict
         "boundingBox": {"$type": "Box", "Max": vec4(*hi, 1), "Min": vec4(*lo, 1)},
         "surfaceAreaPerAxis": {"$type": "Vector3", "X": area[0], "Y": area[1], "Z": area[2]},
         "renderResourceBlob": h(blob),
-        "appearances": [h({"$type": "meshMeshAppearance", "name": cname(appearance),
-                           "chunkMaterials": [cname(slot) for _i, slot, _p in chunk_data], "tags": []})],
-        "materialEntries": [{"$type": "CMeshMaterialEntry", "name": cname(slot), "index": i, "isLocalInstance": 0} for i, slot in enumerate(slots)],
-        "externalMaterials": [depot(materials[slot], "Soft") for slot in slots],
+        "appearances": [h({"$type": "meshMeshAppearance", "name": cname(name),
+                           "chunkMaterials": [cname(look_entries[li][slot]) for _i, slot, _p in chunk_data], "tags": []})
+                        for li, (name, _look) in enumerate(looks)],
+        "materialEntries": [{"$type": "CMeshMaterialEntry", "name": cname(en), "index": i, "isLocalInstance": 0} for i, (en, _p) in enumerate(entries)],
+        "externalMaterials": [depot(ep, "Soft") for _en, ep in entries],
         "localMaterialBuffer": {"$type": "meshMeshMaterialBuffer", "rawData": {"BufferId": "2", "Flags": 0, "Bytes": None}, "rawDataHeaders": []},
         "localMaterialInstances": [], "preloadLocalMaterialInstances": [], "preloadExternalMaterials": [],
         "lodLevelInfo": lod_levels, "boneNames": [], "boneRigMatrices": [], "boneVertexEpsilons": [], "lodBoneMask": [],
@@ -402,7 +426,7 @@ def build_mesh_resource(mesh: Any, materials: dict[str, str], *, reference: dict
     stats = {"chunks": len(chunks_json), "slots": slots, "vertices": sum(c["numVertices"] for c in chunks_json),
              "indices": sum(c["numIndices"] for c in chunks_json), "vertex_buffer_bytes": vertex_size, "index_buffer_bytes": len(index),
              "bounds": {"min": lo, "max": hi}, "layout_source": layout.source, "lod_levels": lod_levels,
-             "materials": [materials[s] for s in slots]}
+             "materials": [materials[s] for s in slots], "appearances": [name for name, _l in looks]}
     if layout.source != "reference":
         stats["warning"] = ("built-in static-mesh vertex layout; give a WolvenKit JSON export of a vanilla static mesh as the "
                             "reference so the layout, vertex factory and header constants match the game, and verify in game")

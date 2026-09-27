@@ -3756,7 +3756,7 @@ def status_resource() -> str:
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from mod_inventory import scan_mod_installation as _scan_mod_installation  # noqa: E402
-from lsbuild import build as _lsb, native as _lsn, worker as _lsw, wiring as _lswire, rng as _lsrng, interactables as _lsip, population as _lsp, vfx as _lsvfx, sectors as _lssec, performance as _lsperf, vanilla as _lsvan, dependencies as _lsdep, preflight as _lspf, edl as _lsedl, procedural as _lsproc, meshres as _lsmesh  # noqa: E402
+from lsbuild import build as _lsb, native as _lsn, worker as _lsw, wiring as _lswire, rng as _lsrng, interactables as _lsip, population as _lsp, vfx as _lsvfx, sectors as _lssec, performance as _lsperf, vanilla as _lsvan, dependencies as _lsdep, preflight as _lspf, edl as _lsedl, procedural as _lsproc, meshres as _lsmesh, materials as _lsmat  # noqa: E402
 
 WORLD_BUILDER_ROOT = MOD_DIR.parent / "entSpawner"
 BUILD_ROOT = MOD_DIR / "exports" / "build"
@@ -4071,7 +4071,7 @@ def build_mod_from_project(
     streaming_y: float | None = None,
     streaming_z: float | None = None,
 ) -> str:
-    """Whole pipeline: WB export -> inspect -> workspace -> dependencies -> VFX scale -> worker CR2W -> status -> pack -> package -> verify.
+    """Whole pipeline: WB export -> inspect -> workspace -> materials -> procedural meshes -> dependencies -> VFX scale -> worker CR2W -> status -> pack -> package -> verify.
 
     category/level/streaming_x/y/z are passed to the World Builder export (sector category, level and streaming cell size).
 
@@ -4118,6 +4118,23 @@ def build_mod_from_project(
         wb_root = WORLD_BUILDER_ROOT if WORLD_BUILDER_ROOT.is_dir() else None
         stage("prepare", lambda: _lsb.prepare_build_workspace(_export_file(name), BUILD_ROOT, world_builder_root=wb_root,
                                                               description="Built with LocationStudio", force=True))
+        # Material library: CMaterialInstance .mi files and imported textures, before the meshes that use them.
+        def materials_stage():
+            sources = _lsdep.Sources(_dependency_sources(None, workspace))
+
+            def base_json(path: str):
+                hit = sources.files.get(_lsdep.normalize(path))
+                return hit[0] if hit and hit[1] == "json" else None
+
+            cli_path = cli or shutil.which("cp77tools") or shutil.which("WolvenKit.CLI")
+            pf = _lsw.worker_preflight(worker=worker)
+            return _lsmat.apply_to_workspace(PROJECT, workspace, premise_id=premise_id, worker=pf.get("worker") if pf.get("ready") else None,
+                                             cli=cli_path, base_json=base_json, reference=_reference_material(None),
+                                             output=workspace / "automation" / "materials-report.json")
+        mats = stage("materials", materials_stage)
+        if not mats.get("ready"):
+            stages["materials"]["error"] = f"{len(mats['issues'])} material issue(s)"
+            raise _StageFailed("materials")
         # Procedural geometry: glb -> .mesh (WolvenKit) and native nodes, before dependencies see the meshes.
         def procedural_stage():
             sources = _lsdep.Sources(_dependency_sources(None, workspace))
@@ -4755,6 +4772,159 @@ def _reference_mesh(path: str | None) -> dict[str, Any] | None:
     return _lsmesh.load_reference(candidate) if candidate else None
 
 
+MATERIAL_EXPORTS = MOD_DIR / "exports" / "materials"
+
+
+def _reference_material(path: str | None) -> dict[str, Any] | None:
+    """Reference vanilla .mi (WolvenKit JSON) for value shapes: argument, env, or mod_sources default."""
+    candidate = path or os.environ.get("LOCATION_STUDIO_REFERENCE_MI_JSON") or ""
+    if not candidate:
+        default = MOD_SOURCES / "reference.mi.json"
+        candidate = str(default) if default.is_file() else ""
+    if not candidate:
+        return None
+    return json.loads(Path(candidate).expanduser().read_text(encoding="utf-8"))
+
+
+@mcp.tool()
+def material_presets() -> str:
+    """Base-material presets of the material library (metal_base, glass, multilayered, custom) with the textures and
+    parameters each accepts, and the build-side parameter names they map to (unverified unless the base material's
+    WolvenKit JSON export is in mod_sources)."""
+    live = _send("material_presets")
+    names = {k: {"base": v["base"], "params": {p: n for p, (n, _t) in v["params"].items()},
+                 "textures": {t: n for t, (n, _k) in v["textures"].items()}} for k, v in _lsmat.PROFILES.items()}
+    return _json({"presets": live.get("items"), "parameter_names": names})
+
+
+@mcp.tool()
+def material_create(definition: dict[str, Any]) -> str:
+    """Add a material instance definition to the library (one undo step). Assign it to generated geometry as
+    '@key' (procedural materials.main/glass, room generator materials, EDL); Build Mod writes it as a real .mi (and
+    imports its textures). See material_presets for the preset parameters.
+    Definition: {key (identifier, referenced as @key / @key:variant), name, preset metal_base|glass|multilayered|custom,
+    base (.mt/.remt/.mi; defaults to the preset's), path (output .mi; default <root>\\<key>.mi), premise_id,
+    params: {roughness, metallic, roughness_scale, metallic_scale, normal_strength, tint [r,g,b,a], emissive_color [r,g,b],
+             emissive_ev, alpha_threshold, ior, opacity, tiling [u,v], uv_scale [u,v] (metres per repeat)},
+    textures: {base_color|normal|roughness|metalness|emissive|mask: .xbm depot path | {file: local .png/.tga/.dds/.jpg, path?} |
+               {solid: [r,g,b,a], size?}, mlsetup: .mlsetup, mlmask: .mlmask},
+    overrides: {ParamName: {type Float|Int32|Bool|Color|Vector4|texture|mlsetup|mlmask|CName, value}},
+    variants: [{name, params, textures, overrides}] (each becomes <path>_<name>.mi chained on the parent)}."""
+    return _json(_send("material_create", {"definition": definition}))
+
+
+@mcp.tool()
+def material_update(key: str, patch: dict[str, Any]) -> str:
+    """Change a library material: patch keys replace the saved ones (params/textures/overrides/variants as whole
+    tables). Variants still used by geometry cannot be removed. One undo step."""
+    return _json(_send("material_update", {"key": key, "patch": patch}))
+
+
+@mcp.tool()
+def material_delete(key: str) -> str:
+    """Delete a library material; refused while geometry uses it."""
+    return _json(_send("material_delete", {"key": key}))
+
+
+@mcp.tool()
+def material_list(premise_id: str = "") -> str:
+    """Library materials: key, preset, base, output path, texture count, variants and how many objects use each."""
+    return _json(_send("material_list", {"premise_id": premise_id or None}))
+
+
+@mcp.tool()
+def material_get(key: str) -> str:
+    """Full saved definition of a library material and the objects that use it."""
+    return _json(_send("material_get", {"key": key}))
+
+
+@mcp.tool()
+def material_assign(object_id: str, material: str, slot: str = "main") -> str:
+    """Set a procedural object's material slot (main or glass) to a library material ('@key' or '@key:variant'), or
+    clear it with an empty string. The object's mesh gets one appearance per variant of an unqualified '@key'."""
+    return _json(_send("material_assign", {"object_id": object_id, "slot": slot, "material": material}))
+
+
+@mcp.tool()
+def material_settings(root: str = "") -> str:
+    """Depot folder for generated .mi files (default mod\\locationstudio\\materials)."""
+    return _json(_send("material_settings", {"root": root or None}))
+
+
+@mcp.tool()
+def material_build(key: str = "", premise_id: str = "", output_dir: str = "", reference_json: str = "",
+                   write_cr2w: bool = False, worker: str | None = None, cli: str | None = None) -> str:
+    """Offline: generate the material resources from the saved library. It writes a CMaterialInstance CR2W-JSON
+    document per definition and variant. Variants are chained on the parent .mi and store only the values that
+    differ. It also writes solid-colour PNGs and copies texture images, and reports the parameter verification:
+    profile_source is base-json when <base>.json (a WolvenKit export of the base material) is in the mod sources,
+    reference-mi when a reference .mi confirms the names, and builtin-unverified otherwise. write_cr2w=true writes
+    binary .mi files with the WolvenKit worker, and imports textures to .xbm with the WolvenKit CLI."""
+    project = json.loads(PROJECT.read_text(encoding="utf-8")) if PROJECT.is_file() else {}
+    defs = _lsmat.definitions(project)
+    chosen = [d for k, d in sorted(defs.items()) if (not key or k == key.lstrip("@")) and (not premise_id or d.get("premise_id") in (None, premise_id))]
+    if not chosen:
+        raise ValueError("no saved library materials match; save the project first")
+    out_dir = Path(output_dir).expanduser() if output_dir else MATERIAL_EXPORTS
+    sources = _lsdep.Sources(_dependency_sources(None, None))
+
+    def base_json(path: str):
+        hit = sources.files.get(_lsdep.normalize(path))
+        return hit[0] if hit and hit[1] == "json" else None
+
+    reference = _reference_material(reference_json or None)
+    pf = _lsw.worker_preflight(worker=worker) if write_cr2w else None
+    if write_cr2w and not pf.get("ready"):
+        raise RuntimeError("the WolvenKit worker is not ready; run build_worker_preflight (or pass write_cr2w=false)")
+    cli_path = (cli or shutil.which("cp77tools") or shutil.which("WolvenKit.CLI")) if write_cr2w else None
+    cache: dict[str, Any] = {}
+    results = []
+    for d in chosen:
+        built = _lsmat.build_material(d, base_parameters=_lsmat.base_parameters_for(d["base"], base_json, cache), reference=reference)
+        row: dict[str, Any] = {"key": d["key"], "profile_source": built["profile_source"], "errors": built["errors"],
+                               "warnings": built["warnings"], "files": [], "textures": []}
+        for doc in built["documents"]:
+            rel = Path(*_lsdep.normalize(doc["path"]).split("\\"))
+            doc_path = out_dir / "raw" / Path(str(rel) + ".json")
+            doc_path.parent.mkdir(parents=True, exist_ok=True)
+            doc_path.write_text(json.dumps(doc["document"], ensure_ascii=False, indent=1), encoding="utf-8")
+            f = {"path": doc["path"], "variant": doc["variant"], "base": doc["base"], "json": str(doc_path), "values": doc["values"]}
+            if write_cr2w and not built["errors"]:
+                target = out_dir / "archive" / rel
+                ok, output = _lsmat._run_worker(pf["worker"], doc_path, target, 300)
+                f.update(cr2w=str(target) if ok else None, cr2w_ok=ok, worker_output=None if ok else output)
+            row["files"].append(f)
+        for job in built["textures"]:
+            t: dict[str, Any] = {"path": job["path"], "source": "solid" if job.get("solid") is not None else job.get("file")}
+            try:
+                t["image"] = str(_lsmat.write_texture_source(job, out_dir / "raw"))
+            except OSError as exc:
+                t["error"] = str(exc)
+            if write_cr2w and "image" in t:
+                if not cli_path:
+                    t["error"] = "WolvenKit CLI not found"
+                else:
+                    xbm, output = _lsmat.import_texture(cli_path, Path(t["image"]), out_dir / "archive", out_dir / "raw", 300)
+                    t.update(xbm=str(xbm) if xbm else None, import_output=None if xbm else output)
+            row["textures"].append(t)
+        results.append(row)
+    return _json({"count": len(results), "output_dir": str(out_dir), "materials": results})
+
+
+@mcp.tool()
+def material_inspect(path: str) -> str:
+    """Decode a CMaterialInstance WolvenKit JSON (.mi.json, ours or exported from the game): base material and every
+    value; or, for a base material export (.mt/.remt JSON), its parameter names and types."""
+    doc = json.loads(Path(path).expanduser().read_text(encoding="utf-8"))
+    root = ((doc.get("Data") or {}).get("RootChunk") or {})
+    if root.get("$type") == "CMaterialInstance":
+        return _json(_lsmat.decode_instance(doc))
+    params = _lsmat.template_parameters(doc)
+    if not params:
+        raise ValueError(f"{path} is neither a CMaterialInstance nor a material template with parameters")
+    return _json({"type": root.get("$type"), "parameters": params, "count": len(params)})
+
+
 @mcp.tool()
 def procedural_generators() -> str:
     """Procedural geometry generators (wall, floor, ceiling, column, stairs, ramp, door_frame, window, railing, pipe,
@@ -4872,6 +5042,7 @@ def mesh_resource_build(object_id: str = "", premise_id: str = "", materials: di
             obj["metadata"]["procedural"].setdefault("material", {})["materials"] = materials
         if lod_distances is not None:
             obj["metadata"]["procedural"]["lod_distances"] = lod_distances
+        obj = _lsmat.resolve_object(obj, _lsmat.definitions(project))
         built = _lsproc.native_mesh(obj, reference=reference)
         rel = Path(*_lsdep.normalize(cfg.get("mesh_path") or f"{o.get('id')}.mesh").split("\\"))
         doc_path = out_dir / Path(str(rel) + ".json")
@@ -5587,10 +5758,10 @@ def _dependency_run(*, premise_id: str | None = None, sources: list[str] | None 
     sound_dirs = list(source_roots) + ([workspace / "source" / "customSounds"] if workspace is not None else [])
     game = _optional_game_root(game_root)
     vanilla = _lsdep.HashSet.load(VANILLA_INDEX) if VANILLA_INDEX.is_file() else None
+    project = json.loads(PROJECT.read_text(encoding="utf-8")) if PROJECT.is_file() else {"objects": []}
     if roots is None:
-        project = json.loads(PROJECT.read_text(encoding="utf-8")) if PROJECT.is_file() else {"objects": []}
         roots = _lsdep.project_roots(project, premise_id=premise_id)
-    report = _lsdep.resolve(roots, sources=src, vanilla=vanilla, mods=_lsdep.mod_archives(game),
+    report = _lsdep.resolve(roots, sources=src, vanilla=vanilla, mods=_lsdep.mod_archives(game), generated=_lsmat.generated_paths(project),
                             project_tweaks=_lsdep.tweak_records(tweak_dirs),
                             mod_tweaks=_lsdep.tweak_records([game / "r6" / "tweaks"]) if game else {},
                             sounds=_lsdep.custom_sounds(sound_dirs))

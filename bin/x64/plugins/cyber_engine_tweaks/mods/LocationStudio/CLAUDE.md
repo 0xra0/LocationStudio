@@ -380,3 +380,13 @@ by hand, because regeneration replaces them. Use `room_generator_snap` with the 
 socket ids instead of computing wall positions. Portals are authoring data, not
 engine portals, and the preview is only an approximation: describe the meshes as
 real only after a successful Build Mod and an in-game check.
+
+## Material resources
+
+Describe new materials in the library (`material_create`, EDL `materials.library`)
+and use them on generated geometry as `@key` or `@key:variant`. Never invent
+`.mi` paths. Take base materials and `.xbm` textures from
+`asset_catalog_search`. Run `material_build` before Build Mod and report its
+`profile_source`. If it is `builtin-unverified`, say that the parameter names are
+unchecked and suggest exporting the base material to JSON into mod_sources. Do not
+describe a material as correct until the user has seen it in game.

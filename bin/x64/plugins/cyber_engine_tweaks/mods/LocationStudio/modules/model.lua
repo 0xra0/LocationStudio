@@ -11,7 +11,7 @@ local function blank_project()
             id = 'default', name = 'Night City Location Project', description = '', author = '', tags = {},
             created_at = Util.now_iso(), updated_at = Util.now_iso(),
         },
-        locations = {}, routes = {}, npc_routes = {}, combat_encounters = {}, cover_nodes = {}, navigation_graphs = {}, device_logic_graphs = {}, world_state_variants = {}, environments = {}, splines = {}, timelines = {}, reference_areas = {}, edl_builds = {}, generated_rooms = {}, premises = {}, rooms = {}, objects = {}, object_groups = {}, object_prefabs = {}, volumes = {}, cameras = {}, scenes = {}, assets = {}, vanilla_removals = {}, room_frames = {},
+        locations = {}, routes = {}, npc_routes = {}, combat_encounters = {}, cover_nodes = {}, navigation_graphs = {}, device_logic_graphs = {}, world_state_variants = {}, environments = {}, splines = {}, timelines = {}, reference_areas = {}, edl_builds = {}, generated_rooms = {}, material_defs = {}, premises = {}, rooms = {}, objects = {}, object_groups = {}, object_prefabs = {}, volumes = {}, cameras = {}, scenes = {}, assets = {}, vanilla_removals = {}, room_frames = {},
         -- Layer ids 'shell' and 'decoration' are kept for compatibility; they are
         -- shown as Architecture and Props.
         layers = {
@@ -407,7 +407,7 @@ function Model.blank() return blank_project() end
 
 function Model:normalize()
     if type(self.data) ~= 'table' then self.data=blank_project() end
-    local defaults=blank_project(); self.data.schema_version=22
+    local defaults=blank_project(); self.data.schema_version=23
     self.data.project=self.data.project or defaults.project; self.data.locations=self.data.locations or {}; self.data.routes=self.data.routes or {}
     self.data.npc_routes=type(self.data.npc_routes)=='table' and self.data.npc_routes or {}
     self.data.combat_encounters=type(self.data.combat_encounters)=='table' and self.data.combat_encounters or {}
@@ -420,6 +420,7 @@ function Model:normalize()
     self.data.splines=type(self.data.splines)=='table' and self.data.splines or {}
     self.data.edl_builds=type(self.data.edl_builds)=='table' and self.data.edl_builds or {}
     self.data.generated_rooms=type(self.data.generated_rooms)=='table' and self.data.generated_rooms or {}
+    self.data.material_defs=type(self.data.material_defs)=='table' and self.data.material_defs or {}
     self.data.reference_areas=type(self.data.reference_areas)=='table' and self.data.reference_areas or {}
     for i,v in ipairs(self.data.reference_areas) do self.data.reference_areas[i]=normalize_reference_area(v) end
     self.data.timelines=type(self.data.timelines)=='table' and self.data.timelines or {}
