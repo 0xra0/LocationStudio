@@ -1,6 +1,6 @@
 local env=dofile(arg[2]..'/support/cet_mock.lua')
 local app=env.app
-assert(app.version=='0.59.0')
+assert(app.version=='0.60.0')
 Vector4.Distance=function(a,b) return math.sqrt((a.x-b.x)^2+(a.y-b.y)^2+(a.z-b.z)^2) end
 local premise=assert(app.actions:create_premise_from_player('Cover Test Premise','interior'))
 Game.GetSpatialQueriesSystem=function()

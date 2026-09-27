@@ -21,6 +21,8 @@ function SpatialUI.new(app,notify)
         questsim_filter='',questsim_fact='',questsim_value=1,questsim_trigger_id='',questsim_pending=nil,questsim_catalog=nil,
         world_variant_id='',world_variant_name='before_quest',world_variant_fact='',world_variant_value=1,world_variant_operator='==',world_variant_priority=0,world_variant_object_visible=true,world_variant_auto=false,
         cover_name='Cover Node',cover_type='crouch',cover_exposure='medium',cover_spacing=1.5,cover_radius=8,cover_samples=24,cover_nodes_scan=nil,cover_selected_id='',cover_position={0,0,0},cover_yaw=0,
+        col_shape='box',col_size={2,0.3,3},col_radius=0.5,col_height=1.8,col_preset=33,col_material='',col_visualize=true,col_name='Blocker',col_mesh_query='',col_mesh_results=nil,col_mesh_path='',col_edit_id=nil,col_edit=nil,
+        pass_actor='both',pass_step=0.5,pass_half=8,pass_goal=nil,pass_live=false,pass_result=nil,
         env_selected_id='',env_new_name='Golden hour rain',env_edit_id=nil,env_edit=nil,env_force=true,
         vfx_query='',vfx_category='all',vfx_backend='all',vfx_results=nil,vfx_selected=nil,vfx_name='',vfx_scale={1,1,1},vfx_rotation={0,0,0},vfx_emission=1,vfx_respawn_on_move=false,vfx_align=false,vfx_follow=true,vfx_distance=10,vfx_edit_id=nil,vfx_edit=nil,
         lighting_name='New Static Light',lighting_preset='warm',lighting_search='',lighting_hour=20,lighting_minute=0,
@@ -853,6 +855,91 @@ function SpatialUI:_vfx_args(extra)
     return args
 end
 
+function SpatialUI:_collision_args(extra)
+    local args={shape=self.col_shape,preset=self.col_preset,material=self.col_material~='' and self.col_material or nil,visualize=self.col_visualize,name=self.col_name,
+        premise_id=self.app.selected_premise_id,room_id=self.app.selected_room_id}
+    if self.col_shape=='box' then args.size={x=self.col_size[1],y=self.col_size[2],z=self.col_size[3]} else args.radius=self.col_radius;args.height=self.col_height end
+    for k,v in pairs(extra or {}) do args[k]=v end
+    return args
+end
+
+function SpatialUI:draw_collision()
+    local app=self.app;local col=app.collision
+    ImGui.Text('COLLISION AUTHORING')
+    if not col then ImGui.TextDisabled('The collision module failed to load. Check the debug log.');return end
+    ImGui.TextWrapped('Creates real World Builder worldCollisionNode colliders. The preset is the collision layer; its physics groups decide what it blocks. Visualization draws World Builder’s collider wireframe. Passability is an estimate from saved colliders; cross-check with live rays.')
+    local presets=col:presets();local preset=presets[self.col_preset+1] or presets[34]
+    ImGui.Separator();ImGui.Text('NEW PRIMITIVE')
+    if ImGui.BeginCombo('Shape##col',self.col_shape) then for _,shape in ipairs({'box','capsule','sphere'}) do if ImGui.Selectable(shape..'##colshape_'..shape,self.col_shape==shape) then self.col_shape=shape end end;ImGui.EndCombo() end
+    if self.col_shape=='box' then
+        self.col_size[1]=select(1,ImGui.InputFloat('Width X (m)',self.col_size[1],0.05,0.5,'%.2f'))
+        self.col_size[2]=select(1,ImGui.InputFloat('Depth Y (m)',self.col_size[2],0.05,0.5,'%.2f'))
+        self.col_size[3]=select(1,ImGui.InputFloat('Height Z (m)',self.col_size[3],0.05,0.5,'%.2f'))
+    else
+        self.col_radius=select(1,ImGui.InputFloat('Radius (m)',self.col_radius,0.05,0.5,'%.2f'))
+        if self.col_shape=='capsule' then self.col_height=select(1,ImGui.InputFloat('Capsule height (m)',self.col_height,0.05,0.5,'%.2f')) end
+    end
+    if ImGui.BeginCombo('Collision preset / layer',preset.name) then
+        for _,p in ipairs(presets) do if ImGui.Selectable(p.name..(p.blocks_player and ' [P]' or '')..(p.blocks_npc and ' [N]' or '')..'##colpreset_'..p.index,self.col_preset==p.index) then self.col_preset=p.index end end
+        ImGui.EndCombo()
+    end
+    ImGui.TextDisabled('Groups: '..table.concat(preset.groups,' + ')..(preset.blocks_player and ' · blocks player' or '')..(preset.blocks_npc and ' · blocks NPC' or ''))
+    self.col_material=select(1,ImGui.InputText('Physics material (blank = WB default)',self.col_material,64))
+    self.col_name=select(1,ImGui.InputText('Name##col',self.col_name,96))
+    self.col_visualize=select(1,ImGui.Checkbox('Visualize collider',self.col_visualize))
+    if ImGui.Button('PLACE COLLIDER AT AIM',200,28) then local r,err=col:create_primitive(self:_collision_args({source='aim'}));self:toast(err or r.warning or (r.spawned and 'Collider placed' or ('Collider saved; spawn failed: '..tostring(r.spawn_error)))) end
+    ImGui.SameLine();if ImGui.Button('PLACE AT PLAYER##col',170,28) then local r,err=col:create_primitive(self:_collision_args({source='player'}));self:toast(err or (r.spawned and 'Collider placed' or ('Collider saved; spawn failed: '..tostring(r.spawn_error)))) end
+    ImGui.SameLine();if ImGui.Button('FIT TO SELECTED OBJECT',210,28) then local r,err=col:fit_to_object(self:_collision_args({object_id=app.selected_object_id,padding=0.02}));self:toast(err or 'Box collider fitted to the object bounds') end
+    ImGui.Separator();ImGui.Text('IMPORTED COLLISION MESH')
+    self.col_mesh_query=select(1,ImGui.InputText('Search collision meshes',self.col_mesh_query,128))
+    if ImGui.Button('SEARCH COLLISION CATALOG',220,28) then local r,err=col:search_meshes({query=self.col_mesh_query});self.col_mesh_results=r and r.items or {};self:toast(err or ('Found '..#self.col_mesh_results..' collision meshes')) end
+    ImGui.BeginChild('##col_mesh_list',0,90,true)
+    for i,item in ipairs(self.col_mesh_results or {}) do if ImGui.Selectable(item.name..'##colmesh_'..i,self.col_mesh_path==item.path) then self.col_mesh_path=item.path end end
+    ImGui.EndChild()
+    if ImGui.Button('IMPORT MESH AT AIM',180,28) then local r,err=col:import_mesh(self:_collision_args({resource_path=self.col_mesh_path,source='aim'}));self:toast(err or 'Collision mesh placed') end
+    ImGui.Separator();ImGui.Text('LAYERS & VISUALIZATION')
+    local layers=col:layers({premise_id=app.selected_premise_id}).layers
+    for _,l in ipairs(layers) do ImGui.BulletText(l.preset..': '..l.count..' collider(s), '..l.visualized..' visualized'..(l.blocks_player and ' · P' or '')..(l.blocks_npc and ' · N' or '')) end
+    if #layers==0 then ImGui.TextDisabled('No collision objects in the selected premise.') end
+    if ImGui.Button('SHOW ALL COLLISION',180,28) then local r,err=col:set_visualization({premise_id=app.selected_premise_id,visible=true});self:toast(err or ('Visualization on for '..r.changed..' collider(s)')) end
+    ImGui.SameLine();if ImGui.Button('HIDE ALL COLLISION',180,28) then local r,err=col:set_visualization({premise_id=app.selected_premise_id,visible=false});self:toast(err or ('Visualization off for '..r.changed..' collider(s)')) end
+    local obj=app.selected_object_id and app.model:get_object(app.selected_object_id)
+    if obj and col:is_collision(obj) then
+        ImGui.Separator();ImGui.Text('SELECTED COLLIDER: '..obj.name)
+        local data=obj.metadata.world_builder.entry.data
+        if self.col_edit_id~=obj.id then self.col_edit_id=obj.id;self.col_edit={preset=tonumber(data.preset) or 33,visualize=data.previewed~=false} end
+        local e=self.col_edit;local ep=presets[e.preset+1] or preset
+        if ImGui.BeginCombo('Layer##coledit',ep.name) then for _,p in ipairs(presets) do if ImGui.Selectable(p.name..'##coleditp_'..p.index,e.preset==p.index) then e.preset=p.index end end;ImGui.EndCombo() end
+        e.visualize=select(1,ImGui.Checkbox('Visualize##coledit',e.visualize))
+        if ImGui.Button('APPLY TO COLLIDER',180,28) then local r,err=col:update(obj.id,{preset=e.preset,visualize=e.visualize});if r then self.col_edit_id=nil end;self:toast(err or r.warning or 'Collider updated') end
+        ImGui.TextDisabled('Resize and move with the normal transform tools; collider dimensions follow the object scale.')
+    end
+    ImGui.Separator();ImGui.Text('PASSABILITY PREVIEW')
+    if ImGui.BeginCombo('Actor##pass',self.pass_actor) then for _,a in ipairs({'both','player','npc'}) do if ImGui.Selectable(a..'##passactor_'..a,self.pass_actor==a) then self.pass_actor=a end end;ImGui.EndCombo() end
+    self.pass_step=select(1,ImGui.InputFloat('Grid step (m)',self.pass_step,0.1,0.5,'%.2f'))
+    self.pass_half=select(1,ImGui.InputFloat('Half size around V (m)',self.pass_half,1,5,'%.0f'))
+    self.pass_live=select(1,ImGui.Checkbox('Cross-check with live collision rays',self.pass_live))
+    if ImGui.Button('SET GOAL FROM AIM##pass',190,28) then local hit,err=app.game:aim_point(20);if hit then self.pass_goal={x=hit.position.x,y=hit.position.y,z=hit.position.z} end;self:toast(err or 'Goal set') end
+    ImGui.SameLine();if ImGui.Button('PREVIEW PASSABILITY',190,28) then
+        local args={actor=self.pass_actor,grid_step=self.pass_step,live=self.pass_live,goal=self.pass_goal}
+        local room=app.model:get_room(app.selected_room_id)
+        if room then args.room_id=room.id else args.half_width=self.pass_half;args.premise_id=app.selected_premise_id end
+        if self.pass_goal then local t=app.game:capture_transform();if t then args.start={x=t.position.x,y=t.position.y,z=t.position.z} end end
+        local r,err=col:passability(args);self.pass_result=r
+        local summary=r and (r.routes.player or r.routes.npc) or nil
+        self:toast(err or ('Passability: '..r.colliders_considered..' collider(s)'..(summary and summary.status and (' · '..summary.status) or '')))
+    end
+    local r=self.pass_result
+    if r then
+        for name,route in pairs(r.routes) do ImGui.TextDisabled(name..': '..route.free_cells..' free / '..route.blocked_cells..' blocked'..(route.status and (' · '..route.status) or '')) end
+        if r.live then ImGui.TextDisabled('Live rays: '..tostring(r.live.status or r.live.error)) end
+        ImGui.BeginChild('##pass_map',0,180,true)
+        for _,line in ipairs(r.map) do ImGui.Text(line) end
+        ImGui.EndChild()
+        ImGui.TextDisabled('# both  p player  n NPC  . free  * route  S start  G goal · top row = far edge')
+    end
+end
+
 function SpatialUI:draw_environment()
     local app=self.app;local envs=app.environment
     ImGui.Text('ENVIRONMENT & WEATHER PREVIEW')
@@ -1096,6 +1183,7 @@ function SpatialUI:draw()
         if ImGui.BeginTabItem('Lighting') then self:draw_lighting();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('VFX') then self:draw_vfx();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Environment') then self:draw_environment();ImGui.EndTabItem() end
+        if ImGui.BeginTabItem('Collision') then self:draw_collision();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Ambient Audio') then self:draw_ambient_audio();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Meshes + Decals') then self:draw_mesh_appearance();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Interactables') then self:draw_interactables();ImGui.EndTabItem() end

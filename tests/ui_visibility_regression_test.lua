@@ -37,7 +37,7 @@ function ImGui.GetContentRegionAvail() return 1200,700 end
 function ImGui.GetWindowDrawList() error('raw draw list must not be used') end
 
 local app=dofile(mod..'/init.lua')
-events.onInit();assert(app.ready);assert(app.version=='0.59.0')
+events.onInit();assert(app.ready);assert(app.version=='0.60.0')
 
 -- Reproduce the v0.9.0 failure state: config persisted false before opening CET.
 app.config.window_open=false;app.editor_visible=false
