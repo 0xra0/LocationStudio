@@ -12,12 +12,17 @@ local function blank_project()
             created_at = Util.now_iso(), updated_at = Util.now_iso(),
         },
         locations = {}, routes = {}, npc_routes = {}, combat_encounters = {}, cover_nodes = {}, navigation_graphs = {}, device_logic_graphs = {}, world_state_variants = {}, environments = {}, premises = {}, rooms = {}, objects = {}, object_groups = {}, object_prefabs = {}, volumes = {}, cameras = {}, scenes = {}, assets = {}, vanilla_removals = {}, room_frames = {},
+        -- Layer ids 'shell' and 'decoration' are kept for compatibility; they are
+        -- shown as Architecture and Props.
         layers = {
-            {id='shell', name='Shell', color='#5BC0EB', visible=true, locked=false},
-            {id='gameplay', name='Gameplay', color='#FDE74C', visible=true, locked=false},
-            {id='decoration', name='Decoration', color='#9BC53D', visible=true, locked=false},
-            {id='lighting', name='Lighting', color='#E55934', visible=true, locked=false},
-            {id='quest', name='Quest', color='#FA7921', visible=true, locked=false},
+            {id='shell', name='Architecture', color='#5BC0EB', visible=true, locked=false, export=true},
+            {id='decoration', name='Props', color='#9BC53D', visible=true, locked=false, export=true},
+            {id='gameplay', name='Gameplay', color='#FDE74C', visible=true, locked=false, export=true},
+            {id='npc', name='NPC', color='#C77DFF', visible=true, locked=false, export=true},
+            {id='lighting', name='Lighting', color='#E55934', visible=true, locked=false, export=true},
+            {id='audio', name='Audio', color='#4ECDC4', visible=true, locked=false, export=true},
+            {id='quest', name='Quest', color='#FA7921', visible=true, locked=false, export=true},
+            {id='debug', name='Debug', color='#9E9E9E', visible=true, locked=false, export=false},
         },
         settings = {
             grid_step=0.25, angle_step=5.0, duplicate_distance=0.35, autosave=true,
@@ -288,7 +293,17 @@ end
 
 local function normalize_layer(item)
     item = item or {}
-    return {id=item.id or Util.make_id('layer'), name=item.name or 'Layer', color=item.color or '#FFFFFF', visible=item.visible ~= false, locked=item.locked == true}
+    local color=tostring(item.color or '#FFFFFF');if not color:match('^#%x%x%x%x%x%x$') then color='#FFFFFF' end
+    return {id=item.id or Util.make_id('layer'), name=Util.trim(item.name or '')~='' and Util.trim(item.name) or 'Layer', color=color,
+        visible=item.visible ~= false, locked=item.locked == true, export=item.export ~= false, description=tostring(item.description or '')}
+end
+
+-- Older projects: add the newer default layers and rename untouched defaults.
+local LEGACY_LAYER_NAMES={shell={Shell='Architecture'},decoration={Decoration='Props'}}
+local function migrate_layers(layers,defaults)
+    local by_id={};for _,layer in ipairs(layers) do by_id[layer.id]=layer end
+    for id,renames in pairs(LEGACY_LAYER_NAMES) do local layer=by_id[id];if layer and renames[layer.name] then layer.name=renames[layer.name] end end
+    for _,default in ipairs(defaults) do if not by_id[default.id] then table.insert(layers,Util.deepcopy(default)) end end
 end
 
 local function normalize_asset(item)
@@ -391,6 +406,7 @@ function Model:normalize()
     for i,v in ipairs(self.data.assets) do self.data.assets[i]=normalize_asset(v) end
     self.data.vanilla_removals=self.data.vanilla_removals or {}
     seed_builtin_assets(self)
+    migrate_layers(self.data.layers,defaults.layers)
     for i,v in ipairs(self.data.layers) do self.data.layers[i]=normalize_layer(v) end
 end
 

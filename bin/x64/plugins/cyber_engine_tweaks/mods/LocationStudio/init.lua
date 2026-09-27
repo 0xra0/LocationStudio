@@ -49,6 +49,7 @@ local Collision=safe_require('modules/collision')
 local SectorInspector=safe_require('modules/sector_inspector')
 local Performance=safe_require('modules/performance')
 local Visibility=safe_require('modules/visibility')
+local Layers=safe_require('modules/layers')
 local BuildExport=safe_require('modules/build_export')
 local WbImport=safe_require('modules/wb_import')
 local AssetBounds=safe_require('modules/asset_bounds')
@@ -60,7 +61,7 @@ local Checkpoints=safe_require('modules/checkpoints')
 local Editor=safe_require('ui/editor')
 
 local LocationStudio={
-    version='0.63.0',ready=false,diagnostic_ready=true,init_failed=nil,ui_failed=nil,
+    version='0.64.0',ready=false,diagnostic_ready=true,init_failed=nil,ui_failed=nil,
     overlay_open=false,editor_visible=true,dirty=false,dirty_since=0,last_autosave=0,last_bridge_poll=0,
     selected_location_id=nil,selected_route_id=nil,selected_premise_id=nil,selected_room_id=nil,
     selected_object_id=nil,selected_volume_id=nil,selected_camera_id=nil,selected_scene_id=nil,editing_scene_id=nil,live_scene_id=nil,selected_asset_id=nil,last_asset_id=nil,selected_item_kind=nil,
@@ -204,6 +205,7 @@ function LocationStudio:initialize()
     self.sector_inspector=SectorInspector and construct('sector_inspector',function() return SectorInspector.new(self) end) or nil
     self.performance=Performance and construct('performance',function() return Performance.new(self) end) or nil
     self.visibility=Visibility and construct('visibility',function() return Visibility.new(self) end) or nil
+    self.layers=Layers and construct('layers',function() return Layers.new(self) end) or nil
     self.build_export=BuildExport and construct('build_export',function() return BuildExport.new(self) end) or nil
     self.wb_import=WbImport and construct('wb_import',function() return WbImport.new(self) end) or nil
     self.asset_bounds=AssetBounds and construct('asset_bounds',function() return AssetBounds.new(self) end) or nil

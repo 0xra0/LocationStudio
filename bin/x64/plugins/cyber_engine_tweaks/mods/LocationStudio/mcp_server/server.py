@@ -4254,6 +4254,74 @@ def environment_restore(blend_time: float = 0.0) -> str:
     return _json(_send("environment_restore", {"blend_time": blend_time}))
 
 
+@mcp.tool()
+def layer_list() -> str:
+    """List layers (Architecture, Props, Gameplay, NPC, Lighting, Audio, Quest, Debug and custom) with colour, visibility, lock, export flag, object/live/room counts, isolation state and unknown layer ids in use."""
+    return _json(_send("layer_list"))
+
+
+@mcp.tool()
+def layer_create(name: str, color: str = "#FFFFFF", export: bool = True, description: str = "") -> str:
+    """Create a layer with a #RRGGBB colour label; export=false keeps its objects out of World Builder builds."""
+    return _json(_send("layer_create", {"name": name, "color": color, "export": export, "description": description}))
+
+
+@mcp.tool()
+def layer_update(layer_id: str, name: str | None = None, color: str | None = None, export: bool | None = None,
+                 description: str | None = None) -> str:
+    """Rename a layer, change its colour label or description, or enable/disable it for export."""
+    patch = {k: v for k, v in (("name", name), ("color", color), ("export", export), ("description", description)) if v is not None}
+    if not patch:
+        raise ValueError("give at least one field to change")
+    return _json(_send("layer_update", {"id": layer_id, "patch": patch}))
+
+
+@mcp.tool()
+def layer_set_visible(layer_id: str, visible: bool) -> str:
+    """Hide (despawn live objects) or show (respawn what was live when hidden) a layer."""
+    return _json(_send("layer_set_visible", {"id": layer_id, "visible": visible}))
+
+
+@mcp.tool()
+def layer_set_locked(layer_id: str, locked: bool) -> str:
+    """Lock or unlock every object on a layer; unlocking only releases objects the layer lock set."""
+    return _json(_send("layer_set_locked", {"id": layer_id, "locked": locked}))
+
+
+@mcp.tool()
+def layer_isolate(layer_id: str = "") -> str:
+    """Show only one layer (remembering previous visibility); call with an empty layer_id to restore."""
+    return _json(_send("layer_isolate", {"id": layer_id or None}))
+
+
+@mcp.tool()
+def layer_select_all(layer_id: str, premise_id: str = "") -> str:
+    """Select every object on a layer (optionally in one premise) as a multi-selection."""
+    return _json(_send("layer_select_all", {"id": layer_id, "premise_id": premise_id or None}))
+
+
+@mcp.tool()
+def layer_assign(layer_id: str, object_ids: list[str] | None = None, use_selection: bool = False) -> str:
+    """Move objects (or the current selection) to a layer. Locked objects and locked target layers are refused."""
+    if not object_ids and not use_selection:
+        raise ValueError("give object_ids or use_selection=true")
+    return _json(_send("layer_assign", {"id": layer_id, "object_ids": object_ids or [], "use_selection": use_selection}))
+
+
+@mcp.tool()
+def layer_auto_assign(premise_id: str = "", apply: bool = False, all_objects: bool = False) -> str:
+    """Suggest layers from what each object is (room kit -> Architecture, NPC records -> NPC, lights -> Lighting,
+    audio -> Audio, markers -> Debug, devices/areas/collision -> Gameplay). Only Props/Gameplay objects move unless
+    all_objects=true. apply=false previews; apply=true is one undoable change."""
+    return _json(_send("layer_auto_assign", {"premise_id": premise_id or None, "apply": apply, "all": all_objects}))
+
+
+@mcp.tool()
+def layer_delete(layer_id: str, move_to: str = "decoration") -> str:
+    """Delete a layer and move its objects, rooms, volumes and cameras to another layer (undoable)."""
+    return _json(_send("layer_delete", {"id": layer_id, "move_to": move_to}))
+
+
 _OCCLUDER_MESHES = {"box", "plane_one_sided", "plane_two_sided"}
 
 

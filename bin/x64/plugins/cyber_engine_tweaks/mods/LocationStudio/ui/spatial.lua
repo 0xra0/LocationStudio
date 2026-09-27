@@ -21,6 +21,7 @@ function SpatialUI.new(app,notify)
         questsim_filter='',questsim_fact='',questsim_value=1,questsim_trigger_id='',questsim_pending=nil,questsim_catalog=nil,
         world_variant_id='',world_variant_name='before_quest',world_variant_fact='',world_variant_value=1,world_variant_operator='==',world_variant_priority=0,world_variant_object_visible=true,world_variant_auto=false,
         cover_name='Cover Node',cover_type='crouch',cover_exposure='medium',cover_spacing=1.5,cover_radius=8,cover_samples=24,cover_nodes_scan=nil,cover_selected_id='',cover_position={0,0,0},cover_yaw=0,
+        layer_new_name='Set Dressing',layer_edit_id='',layer_auto=nil,
         vis_mesh='plane_two_sided',vis_size={4,1,3},vis_pvs=nil,vis_hidden=nil,vis_live=false,
         perf_report=nil,perf_scope='premise',
         sector_filter='',sector_severity='',
@@ -858,6 +859,49 @@ function SpatialUI:_vfx_args(extra)
     return args
 end
 
+function SpatialUI:draw_layers()
+    local app=self.app;local L=app.layers
+    ImGui.Text('LAYERS')
+    if not L then ImGui.TextDisabled('The layer manager failed to load.');return end
+    ImGui.TextWrapped('Hide/show despawns and respawns a layer’s live objects. Lock protects every object on the layer from edits. Isolate shows one layer only. Export-disabled layers (Debug by default) are left out of World Builder builds.')
+    local data=L:list()
+    if data.isolation then ImGui.TextColored(1,0.8,0.2,1,'Isolating '..tostring(data.isolation.layer_id));ImGui.SameLine();if ImGui.SmallButton('SHOW ALL LAYERS AGAIN') then local _,err=L:unisolate();self:toast(err or 'Layer visibility restored') end end
+    for _,layer in ipairs(data.layers) do
+        local r,g,b=L:color_rgb(layer.id);local c=layer.counts
+        ImGui.TextColored(r,g,b,1,'■');ImGui.SameLine()
+        ImGui.Text(layer.name..' ('..c.objects..' obj, '..c.live..' live'..(c.rooms>0 and (', '..c.rooms..' rooms') or '')..')'..(layer.visible and '' or ' [hidden]')..(layer.locked and ' [locked]' or '')..(layer.export and '' or ' [no export]'))
+        ImGui.SameLine();if ImGui.SmallButton((layer.visible and 'HIDE' or 'SHOW')..'##layervis_'..layer.id) then local res,err=L:set_visible(layer.id,not layer.visible);self:toast(err or (layer.name..(res.visible and ' shown' or ' hidden')..' ('..(res.respawned+res.despawned)..' object(s))')) end
+        ImGui.SameLine();if ImGui.SmallButton((layer.locked and 'UNLOCK' or 'LOCK')..'##layerlock_'..layer.id) then local res,err=L:set_locked(layer.id,not layer.locked);self:toast(err or (layer.name..(res.locked and ' locked' or ' unlocked'))) end
+        ImGui.SameLine();if ImGui.SmallButton('ISOLATE##layeriso_'..layer.id) then local _,err=L:isolate(layer.id);self:toast(err or ('Showing only '..layer.name)) end
+        ImGui.SameLine();if ImGui.SmallButton('SELECT##layersel_'..layer.id) then local res,err=L:select_all(layer.id,{premise_id=app.selected_premise_id});self:toast(err or ('Selected '..res.selected..' object(s)')) end
+        ImGui.SameLine();if ImGui.SmallButton((layer.export and 'NO EXPORT' or 'EXPORT')..'##layerexp_'..layer.id) then local _,err=L:update(layer.id,{export=not layer.export});self:toast(err or 'Export flag changed') end
+        ImGui.SameLine();if ImGui.SmallButton('MOVE SELECTION HERE##layermove_'..layer.id) then
+            local ids={};for _,o in ipairs(app.selection:selected_objects()) do ids[#ids+1]=o.id end
+            local res,err=L:assign(ids,layer.id);self:toast(err or ('Moved '..res.moved..' object(s) to '..layer.name))
+        end
+        ImGui.SameLine();if ImGui.SmallButton('EDIT##layeredit_'..layer.id) then self.layer_edit_id=layer.id end
+    end
+    for _,u in ipairs(data.unknown_layers) do ImGui.TextDisabled('! '..u.objects..' object(s) use unknown layer "'..tostring(u.id)..'"') end
+    local edit=L:get(self.layer_edit_id)
+    if edit then
+        ImGui.Separator();ImGui.Text('EDIT LAYER: '..edit.id)
+        local name,changed=ImGui.InputText('Layer name',edit.name,64);if changed then local _,err=L:update(edit.id,{name=name});if err then self:toast(err) end end
+        local r,g,b=L:color_rgb(edit.id);local nr,ng,nb,cchanged=ImGui.ColorEdit3('Layer colour',r,g,b)
+        if cchanged then local _,err=L:update(edit.id,{color=string.format('#%02X%02X%02X',math.floor(nr*255+0.5),math.floor(ng*255+0.5),math.floor(nb*255+0.5))});if err then self:toast(err) end end
+        if ImGui.Button('DELETE LAYER (move objects to Props)',300,26) then local res,err=L:delete(edit.id,'decoration');if res then self.layer_edit_id='' end;self:toast(err or ('Deleted; moved '..res.moved..' item(s)')) end
+    end
+    ImGui.Separator()
+    self.layer_new_name=select(1,ImGui.InputText('New layer name',self.layer_new_name,64))
+    if ImGui.Button('CREATE LAYER',150,28) then local layer,err=L:create({name=self.layer_new_name});self:toast(err or ('Created '..layer.name)) end
+    ImGui.SameLine();if ImGui.Button('PREVIEW AUTO-ASSIGN',190,28) then self.layer_auto=L:auto_assign({premise_id=app.selected_premise_id});self:toast(self.layer_auto.count..' object(s) would move to a more specific layer') end
+    if self.layer_auto and self.layer_auto.count>0 then
+        ImGui.SameLine();if ImGui.Button('APPLY AUTO-ASSIGN',180,28) then local res,err=L:auto_assign({premise_id=app.selected_premise_id,apply=true});self.layer_auto=nil;self:toast(err or ('Moved '..res.count..' object(s)')) end
+        ImGui.BeginChild('##layer_auto',0,110,true)
+        for _,m in ipairs(self.layer_auto.moves) do ImGui.TextDisabled(m.name..': '..m.from..' → '..m.to) end
+        ImGui.EndChild()
+    end
+end
+
 function SpatialUI:draw_visibility()
     local app=self.app;local vis=app.visibility
     ImGui.Text('OCCLUSION & VISIBILITY')
@@ -1311,6 +1355,7 @@ end
 function SpatialUI:draw()
     local premise=self.app.model:get_premise(self.app.selected_premise_id)
     if ImGui.BeginTabBar('##spatial_tabs') then
+        if ImGui.BeginTabItem('Layers') then self:draw_layers();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Volumes') then if premise then self:draw_volumes(premise) else ImGui.TextDisabled('Select a premise in Premises Builder first.') end;ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Cameras') then if premise then self:draw_cameras(premise) else ImGui.TextDisabled('Select a premise in Premises Builder first.') end;ImGui.EndTabItem() end
         if ImGui.BeginTabItem('NPC workspots') then if premise then self:draw_workspots(premise) else ImGui.TextDisabled('Select a premise in Premises Builder first.') end;ImGui.EndTabItem() end

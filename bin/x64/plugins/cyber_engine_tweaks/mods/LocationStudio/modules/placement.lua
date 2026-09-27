@@ -264,6 +264,9 @@ function Placement:spawn(object)
     local logger=self.app.logger
     if not object then return self:_error('placement:spawn','object not found') end
     if object.enabled==false or object.visible==false then return self:_error('placement:spawn','object is disabled or hidden',{id=object.id}) end
+    for _,layer in ipairs(self.app.model.data.layers or {}) do
+        if layer.id==object.layer and layer.visible==false then return nil,'layer '..tostring(layer.name)..' is hidden; show the layer to spawn its objects' end
+    end
     if self:is_opening_placeholder(object) then return nil,'Empty opening; no door/window asset is assigned.' end
     if object.runtime and object.runtime.spawned then
         if object.runtime.backend=='world_builder_primitive' or object.runtime.backend=='world_builder' then self.expected_live[object.id]=true;return object.runtime.entity_id end

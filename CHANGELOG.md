@@ -1,3 +1,11 @@
+## 0.64.0 - 2026-09-27
+
+- Added a layer manager (`modules/layers.lua`, Spatial → Layers) with default Architecture, Props, Gameplay, NPC, Lighting, Audio, Quest and Debug layers. The ids `shell`/`decoration` are kept; older projects gain the new layers and have their untouched default names renamed.
+- Layer operations: hide/show despawns and later respawns exactly the live objects; hidden layers now also refuse new spawns. Lock marks objects locked, so all existing lock checks apply, and unlock only releases what the layer locked. Also added isolate/restore, select all, `#RRGGBB` colour labels shown in the hierarchy, and create/rename/delete (moving members).
+- Layers with export disabled (Debug by default) are left out of World Builder export, reported as `excluded_by_layer` rather than as skipped objects.
+- Added move-to-layer for objects or the selection, and an undoable auto-assign preview/apply by object type.
+- Added ten MCP tools, `LAYERS.md` and Lua/Python tests; updated the static contract test for the new default layers. Bumped to v0.64.0.
+
 ## 0.63.0 - 2026-09-27
 
 - Added occlusion and visibility helpers (`modules/visibility.lua`, Spatial → Visibility). They author World Builder Static Occluders (`worldStaticOccluderMeshNode`: box, one-sided plane, two-sided plane) with size, type and visualization, and add one-click two-sided plane occluders over a room's solid wall spans that leave door/window openings clear. Occluders are editable and undoable, and respawn when live.
