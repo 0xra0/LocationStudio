@@ -74,10 +74,12 @@ def _root(data: dict[str, Any]) -> dict[str, Any]:
 
 def read_sector(path: str | Path, *, center: dict[str, float] | None = None, radius: float | None = None,
                 term: str = "", node_indices: list[int] | None = None, match: list[dict[str, Any]] | None = None,
-                cloneable_only: bool = False, limit: int = 500) -> dict[str, Any]:
+                cloneable_only: bool = False, limit: int = 500,
+                box: dict[str, dict[str, float]] | None = None) -> dict[str, Any]:
     """List node instances with exact transforms and resources.
 
     match: [{node_index, instance_index?}] from staged live picks of this sector.
+    box: {min: {x,y,z}, max: {x,y,z}} keeps node instances inside an axis-aligned box.
     """
     file = Path(path)
     root = _root(json.loads(file.read_text(encoding="utf-8")))
@@ -119,6 +121,8 @@ def read_sector(path: str | Path, *, center: dict[str, float] | None = None, rad
         if center is not None and radius is not None:
             if math.dist((pos["x"], pos["y"], pos["z"]), (float(center["x"]), float(center["y"]), float(center["z"]))) > radius:
                 continue
+        if box is not None and not all(float(box["min"][a]) <= pos[a] <= float(box["max"][a]) for a in "xyz"):
+            continue
         q_raw = nd.get("Orientation") or {}
         quat = {k: _num(q_raw.get(k), 1.0 if k == "r" else 0.0) for k in ("i", "j", "k", "r")}
         s_raw = nd.get("Scale") or {}

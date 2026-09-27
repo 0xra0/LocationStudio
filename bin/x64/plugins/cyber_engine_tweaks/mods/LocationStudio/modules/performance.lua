@@ -155,7 +155,8 @@ function Performance:analyze(args)
     local player=args.player_position or self:_player()
     local rows={}
     for _,o in ipairs(model.data.objects or {}) do
-        if o.enabled~=false and (not args.premise_id or args.premise_id=='' or o.premise_id==args.premise_id) and o.transform and o.transform.position then
+        -- Reference-area items are read-only vanilla copies, not part of the build.
+        if o.enabled~=false and not (o.metadata and o.metadata.reference_area_id) and (not args.premise_id or args.premise_id=='' or o.premise_id==args.premise_id) and o.transform and o.transform.position then
             local info=classify(o)
             if not (args.include_meta==false and info.category=='meta') then
                 rows[#rows+1]={id=o.id,name=o.name,premise_id=o.premise_id,room_id=o.room_id,position=o.transform.position,info=info,
@@ -236,7 +237,7 @@ function Performance:select_cluster(index)
     local ids={}
     for _,o in ipairs(self.app.model.data.objects or {}) do
         local p=o.transform and o.transform.position
-        if p and math.sqrt((p.x-cluster.center.x)^2+(p.y-cluster.center.y)^2)<=cluster.radius+size*0.5 and o.enabled~=false then ids[#ids+1]=o.id end
+        if p and math.sqrt((p.x-cluster.center.x)^2+(p.y-cluster.center.y)^2)<=cluster.radius+size*0.5 and o.enabled~=false and not (o.metadata and o.metadata.reference_area_id) then ids[#ids+1]=o.id end
     end
     if #ids==0 then return nil,'no objects remain in that cluster' end
     local ok,err=self.app.selection:set_object_group(ids,ids[1],'performance_cluster')

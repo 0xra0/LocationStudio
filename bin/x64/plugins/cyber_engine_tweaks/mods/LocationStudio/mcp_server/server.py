@@ -4526,6 +4526,113 @@ def vanilla_clone_from_sector(sector_json: str, node_indices: list[int] | None =
     return _json({"sector": report["sector"], "matched": report["matched"], "truncated": report["truncated"], "result": result})
 
 
+@mcp.tool()
+def reference_area_list(premise_id: str = "") -> str:
+    """List captured reference areas (bounds, items, uncloneable originals, shown/live) and the current box selection."""
+    return _json(_send("reference_area_list", {"premise_id": premise_id or None}))
+
+
+@mcp.tool()
+def reference_area_get(area_id: str) -> str:
+    """One reference area with every captured item (resource, appearance, node ref, sector, transform, confidence)
+    and the originals that could not be cloned (lights, collision...) with their positions."""
+    return _json(_send("reference_area_get", {"id": area_id}))
+
+
+@mcp.tool()
+def reference_area_box(corner: str = "", source: str = "player", position: list[float] | None = None,
+                       room_id: str = "", margin: float = 0.5) -> str:
+    """Box-select the area to capture: set corner 'a' or 'b' at V (source='player'), the crosshair (source='aim') or
+    an explicit position, or fit the box to a room (room_id, margin). With no arguments, returns the box."""
+    args: dict[str, Any] = {}
+    if room_id:
+        args = {"room_id": room_id, "margin": margin}
+    elif corner:
+        if corner not in {"a", "b"}:
+            raise ValueError("corner must be a or b")
+        if source not in {"player", "aim"}:
+            raise ValueError("source must be player or aim")
+        args = {"corner": corner, "source": source}
+        if position is not None:
+            args["position"] = _xyz(position, "position")
+    return _json(_send("reference_area_box", args))
+
+
+@mcp.tool()
+def reference_area_capture(name: str, min_corner: list[float] | None = None, max_corner: list[float] | None = None,
+                           padding_horizontal: float = 0.0, padding_below: float = 0.0, padding_above: float = 0.0,
+                           allow_approximate: bool = False, entities: bool = False, show: bool = False,
+                           premise_id: str = "", notes: str = "") -> str:
+    """Capture the vanilla world inside the box (min/max or the box set with reference_area_box) into a read-only
+    reference layer (locked, never exported) using a live RedHotTools scan. Live nodes carry position only: they are
+    skipped unless allow_approximate; prefer reference_capture_from_sector for exact transforms. Face the area first."""
+    args: dict[str, Any] = {"name": name, "allow_approximate": allow_approximate, "entities": entities, "show": show,
+                            "premise_id": premise_id or None, "notes": notes,
+                            "padding": {"horizontal": padding_horizontal, "below": padding_below, "above": padding_above}}
+    if (min_corner is None) != (max_corner is None):
+        raise ValueError("give both min_corner and max_corner, or neither")
+    if min_corner is not None:
+        args["min"], args["max"] = _xyz(min_corner, "min_corner"), _xyz(max_corner, "max_corner")
+    return _json(_send("reference_area_capture", args))
+
+
+@mcp.tool()
+def reference_capture_from_sector(name: str, sector_jsons: list[str], min_corner: list[float], max_corner: list[float],
+                                  show: bool = False, premise_id: str = "", notes: str = "") -> str:
+    """Capture a reference area with exact transforms from one or more WolvenKit-exported .streamingsector JSON files
+    (every node instance inside the box). Uncloneable nodes are recorded as markers."""
+    lo, hi = _xyz(min_corner, "min_corner"), _xyz(max_corner, "max_corner")
+    box = {"min": {k: min(lo[k], hi[k]) for k in "xyz"}, "max": {k: max(lo[k], hi[k]) for k in "xyz"}}
+    candidates: list[dict[str, Any]] = []
+    sectors = []
+    for path in sector_jsons:
+        report = _lsvan.read_sector(_sector_json(path), box=box, limit=100000)
+        sectors.append({"sector": report["sector"], "matched": report["matched"]})
+        candidates.extend(report["items"])
+    if not candidates:
+        raise ValueError("no node instances of these sectors lie inside the box")
+    result = _send("reference_area_capture", {"name": name, "min": box["min"], "max": box["max"], "candidates": candidates,
+                                             "show": show, "premise_id": premise_id or None, "notes": notes})
+    return _json({"sectors": sectors, "candidates": len(candidates), "result": result})
+
+
+@mcp.tool()
+def reference_area_show(area_id: str, visible: bool = True) -> str:
+    """Show (spawn) or hide the reference layer's items. Show them after hiding the vanilla originals, or when
+    rebuilding elsewhere; showing them over the untouched originals overlaps identical geometry."""
+    return _json(_send("reference_area_show", {"id": area_id, "visible": visible}))
+
+
+@mcp.tool()
+def reference_area_compare(area_id: str, move_radius: float = 5.0, position_tolerance: float = 0.05,
+                           rotation_tolerance: float = 1.0) -> str:
+    """Compare the authored location against the reference: unchanged, moved, changed (resource/appearance), missing
+    (original with no counterpart), added (new objects in the box) and not_captured originals."""
+    return _json(_send("reference_area_compare", {"id": area_id, "move_radius": move_radius,
+                                                  "position_tolerance": position_tolerance, "rotation_tolerance": rotation_tolerance}))
+
+
+@mcp.tool()
+def reference_area_copy(area_id: str, object_ids: list[str] | None = None, layer: str = "", premise_id: str = "",
+                        spawn: bool = True) -> str:
+    """Make editable copies of reference items (all, or object_ids) to reconstruct from. One undo step."""
+    return _json(_send("reference_area_copy", {"id": area_id, "object_ids": object_ids or None, "layer": layer or None,
+                                               "premise_id": premise_id or None, "spawn": spawn}))
+
+
+@mcp.tool()
+def reference_area_align(object_id: str, reference_id: str, rotation: bool = True, scale: bool = True) -> str:
+    """Snap an editable object onto a reference item's position (and rotation/scale). Undoable."""
+    return _json(_send("reference_area_align", {"object_id": object_id, "reference_id": reference_id,
+                                                "rotation": rotation, "scale": scale}))
+
+
+@mcp.tool()
+def reference_area_delete(area_id: str) -> str:
+    """Delete a reference area with its read-only layer and items (the vanilla world is untouched). Undoable."""
+    return _json(_send("reference_area_delete", {"id": area_id}))
+
+
 _TIMELINE_TRACKS = {"camera", "npc", "look_at", "dialogue", "event", "fact", "marker"}
 
 

@@ -1,3 +1,14 @@
+## 0.68.0 - 2026-09-27
+
+- Added reference-area capture (project schema 20, `reference_areas`; `modules/reference_areas.lua`, Spatial → Reference).
+  - **Box selection:** corners at V, the crosshair or explicit points, or fitted to a room, with padding.
+  - **Capture sources:** a live RedHotTools scan of the box, or exact capture from WolvenKit sector JSON through `reference_capture_from_sector`.
+  - **Result:** a read-only reference layer of vanilla clones. Uncloneable originals (lights, collision...) are recorded as positioned markers. Position-only nodes are included only when you opt in.
+- Reference layers are always locked and export-disabled. The layer manager refuses to unlock them, enable their export, delete them or move objects onto them. Reference items are excluded from exports, performance estimates, hidden-mesh checks and the clone list.
+- Added show/hide, and a compare of the authored location against the reference (unchanged, moved, changed, missing, added, not captured). Added copy-to-editable (one undo step, keeps `vanilla_source`), align-to-reference, and undoable delete.
+- `vanilla_clone` now exposes `prepare()` for shared candidate resolution and honours `cloneable=false` from sector JSON. `lsbuild/vanilla.py` gained a box filter.
+- Added ten MCP tools, `REFERENCE-AREAS.md`, and Lua/Python tests. Bumped to v0.68.0.
+
 ## 0.67.0 - 2026-09-27
 
 - Added vanilla-world clone/import (`modules/vanilla_clone.lua`, Spatial → Vanilla clone). It stages nodes from the RedHotTools crosshair or an area scan, showing cloneability, reasons, warnings and transform confidence. It imports meshes (including bent, destructible and single instances), decals, effects, particles, entity/device templates and population records as editable objects that keep their real resource path, appearance and transform. Provenance (node id, NodeRef, sector, node/instance index, original transform) is kept in `metadata.vanilla_source`.

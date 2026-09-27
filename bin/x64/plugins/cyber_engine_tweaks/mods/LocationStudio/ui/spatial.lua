@@ -22,6 +22,7 @@ function SpatialUI.new(app,notify)
         world_variant_id='',world_variant_name='before_quest',world_variant_fact='',world_variant_value=1,world_variant_operator='==',world_variant_priority=0,world_variant_object_visible=true,world_variant_auto=false,
         cover_name='Cover Node',cover_type='crouch',cover_exposure='medium',cover_spacing=1.5,cover_radius=8,cover_samples=24,cover_nodes_scan=nil,cover_selected_id='',cover_position={0,0,0},cover_yaw=0,
         spline_id='',spline_name='New Spline',spline_point=1,spline_handle={2,0,0},spline_use_kind='distribute',spline_asset_id='',spline_spacing=2,spline_npc_id='',spline_sample=nil,
+        ref_name='Original',ref_pad=0.5,ref_approx=false,ref_show=false,ref_area_id='',ref_compare=nil,
         vc_radius=8,vc_term='',vc_hide=true,vc_approx=false,vc_group='',
         tl_id='',tl_name='New Timeline',tl_duration=30,tl_time=0,tl_track_id='',tl_speaker='V',tl_line='',tl_line_dur=3,tl_fact='',tl_fact_value=1,tl_marker='Beat',tl_move=2,tl_npc_key='',tl_validation=nil,
         layer_new_name='Set Dressing',layer_edit_id='',layer_auto=nil,
@@ -913,6 +914,63 @@ function SpatialUI:draw_splines()
     end
 end
 
+function SpatialUI:draw_reference_areas()
+    local app=self.app;local R=app.reference_areas
+    ImGui.Text('REFERENCE AREAS')
+    if not R then ImGui.TextDisabled('Reference areas failed to load.');return end
+    ImGui.TextWrapped('Box-select part of the vanilla world and capture it into a read-only reference layer (locked, never exported). Show it while you rebuild or modify the location to see exactly what was there, compare your build against it, and copy or snap to its items. Live captures know positions only; capture from a WolvenKit sector JSON (MCP reference_capture_from_sector) for exact rotation and scale.')
+    local data=R:list({})
+    local box=data.box
+    if ImGui.Button('CORNER A AT V',130,26) then local _,err=R:set_corner('a',{source='player'});self:toast(err or 'Corner A set') end
+    ImGui.SameLine();if ImGui.Button('CORNER A AT AIM',140,26) then local _,err=R:set_corner('a',{source='aim'});self:toast(err or 'Corner A set') end
+    ImGui.SameLine();if ImGui.Button('CORNER B AT V',130,26) then local _,err=R:set_corner('b',{source='player'});self:toast(err or 'Corner B set') end
+    ImGui.SameLine();if ImGui.Button('CORNER B AT AIM',140,26) then local _,err=R:set_corner('b',{source='aim'});self:toast(err or 'Corner B set') end
+    if ImGui.Button('BOX = SELECTED ROOM',180,26) then local _,err=R:box_from_room(app.selected_room_id,0.5);self:toast(err or 'Box fitted to the room') end
+    if box.ready then ImGui.TextDisabled(string.format('Box %.1f x %.1f x %.1f m',box.size.x,box.size.y,box.size.z)) else ImGui.TextDisabled('Set both corners (or a room) to define the box.') end
+    self.ref_name=select(1,ImGui.InputText('Reference name',self.ref_name,64))
+    self.ref_pad=select(1,ImGui.InputFloat('Padding (m)',self.ref_pad,0.25,1,'%.2f'))
+    self.ref_approx=select(1,ImGui.Checkbox('Include position-only nodes (rotation 0, scale 1)',self.ref_approx))
+    self.ref_show=select(1,ImGui.Checkbox('Show after capture',self.ref_show))
+    if ImGui.Button('CAPTURE REFERENCE',190,30) then
+        local pad=math.max(0,tonumber(self.ref_pad) or 0)
+        local r,err=R:capture({name=self.ref_name,allow_approximate=self.ref_approx,show=self.ref_show,padding={horizontal=pad,below=pad,above=pad}})
+        if r then self.ref_area_id=r.area.id end
+        self:toast(err or string.format('Captured %d item(s); %d original(s) not cloneable, %d skipped',r.captured,r.unsupported,r.skipped))
+    end
+    ImGui.Separator()
+    for _,row in ipairs(data.items) do
+        if ImGui.Selectable(string.format('%s · %d item(s)%s · %d marker(s)%s##refarea_%s',row.name,row.items,row.approximate>0 and (' ('..row.approximate..' approx.)') or '',row.unsupported,row.shown and ' · shown' or '',row.id),self.ref_area_id==row.id) then self.ref_area_id=row.id;self.ref_compare=nil end
+    end
+    local area=R:get(self.ref_area_id)
+    if not area then return end
+    local shown=false;for _,row in ipairs(data.items) do if row.id==area.id then shown=row.shown end end
+    if ImGui.Button((shown and 'HIDE' or 'SHOW')..' REFERENCE##ref',160,28) then local r,err=R:show(area.id,not shown);self:toast(err or (shown and 'Reference hidden' or ('Reference shown ('..r.spawned..' spawned)'))) end
+    ImGui.SameLine();if ImGui.Button('COMPARE##ref',110,28) then self.ref_compare=R:compare(area.id,{}) end
+    ImGui.SameLine();if ImGui.Button('COPY ALL TO EDITABLE##ref',200,28) then local r,err=R:copy_to_editable(area.id,{});self:toast(err or ('Copied '..r.copied..' item(s)')) end
+    ImGui.SameLine();if ImGui.Button('DELETE##ref',90,28) then local _,err=R:delete(area.id);self:toast(err or 'Reference area deleted');self.ref_area_id='';return end
+    local sel=app.selection:selected_objects() or {}
+    if #sel==2 then
+        if ImGui.Button('ALIGN SELECTED OBJECT TO SELECTED REFERENCE ITEM',380,26) then
+            local o1,o2=sel[1],sel[2]
+            local obj,ref=o1,o2;if o1 and o1.metadata and o1.metadata.reference_area_id then obj,ref=o2,o1 end
+            local _,err=R:align(obj and obj.id,ref and ref.id,{});self:toast(err or 'Aligned to the reference')
+        end
+    end
+    for _,u in ipairs(area.unsupported) do ImGui.TextDisabled(string.format('  not captured: %s at (%.1f, %.1f, %.1f)',tostring(u.node_type),u.position and u.position.x or 0,u.position and u.position.y or 0,u.position and u.position.z or 0)) end
+    local cmp=self.ref_compare
+    if cmp and cmp.area_id==area.id then
+        local c=cmp.counts
+        ImGui.Text(string.format('Unchanged %d · moved %d · changed %d · missing %d · added %d · not captured %d',c.unchanged,c.moved,c.changed,c.missing,c.added,c.not_captured))
+        for i,row in ipairs(cmp.items) do
+            if row.status~='unchanged' then
+                ImGui.BulletText(row.status..': '..tostring(row.name)..(row.distance and string.format(' (%.2f m, %.1f deg)',row.distance,row.rotation_delta) or ''))
+                local target=row.object_id or row.reference_id
+                if target then ImGui.SameLine();if ImGui.SmallButton('SELECT##refcmp_'..i) then app.selection:set('object',target) end end
+            end
+        end
+    end
+end
+
 function SpatialUI:draw_vanilla_clone()
     local app=self.app;local V=app.vanilla_clone
     ImGui.Text('VANILLA CLONE / IMPORT')
@@ -1553,6 +1611,7 @@ function SpatialUI:draw()
         if ImGui.BeginTabItem('Splines') then self:draw_splines();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Timeline') then self:draw_timeline();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Vanilla clone') then self:draw_vanilla_clone();ImGui.EndTabItem() end
+        if ImGui.BeginTabItem('Reference') then self:draw_reference_areas();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Volumes') then if premise then self:draw_volumes(premise) else ImGui.TextDisabled('Select a premise in Premises Builder first.') end;ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Cameras') then if premise then self:draw_cameras(premise) else ImGui.TextDisabled('Select a premise in Premises Builder first.') end;ImGui.EndTabItem() end
         if ImGui.BeginTabItem('NPC workspots') then if premise then self:draw_workspots(premise) else ImGui.TextDisabled('Select a premise in Premises Builder first.') end;ImGui.EndTabItem() end

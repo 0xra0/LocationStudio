@@ -1,6 +1,6 @@
 local env=dofile(arg[2]..'/support/cet_mock.lua')
 local app=env.app
-assert(app.version=='0.67.0')
+assert(app.version=='0.68.0')
 
 local created,err=app.quickstart:create_first_room({location_name='Construction Editor',width=5,depth=4,height=3})
 assert(created,err)

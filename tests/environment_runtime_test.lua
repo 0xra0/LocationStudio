@@ -1,7 +1,7 @@
 local env=dofile(arg[2]..'/support/cet_mock.lua')
 local app=env.app
 local envs=assert(app.environment,'environment module must be constructed')
-assert(app.model.data.schema_version==19 and type(app.model.data.environments)=='table')
+assert(app.model.data.schema_version==20 and type(app.model.data.environments)=='table')
 
 -- Fake WeatherSystem with the CET method shapes used by weather mods.
 local weather={state='24h_weather_sunny',calls={},resets=0,rain=0}

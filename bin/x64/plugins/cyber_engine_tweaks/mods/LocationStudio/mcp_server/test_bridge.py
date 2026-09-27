@@ -10,8 +10,8 @@ def test_project_shape() -> None:
     # of requiring mutable runtime data in the source tree.
     mod = Path(__file__).resolve().parents[1]
     model = (mod / 'modules' / 'model.lua').read_text(encoding='utf-8')
-    assert 'schema_version=19' in model
-    for collection in ('locations', 'routes', 'premises', 'rooms', 'objects', 'object_groups', 'object_prefabs', 'volumes', 'cameras', 'assets', 'room_frames', 'environments', 'splines', 'timelines'):
+    assert 'schema_version=20' in model
+    for collection in ('locations', 'routes', 'premises', 'rooms', 'objects', 'object_groups', 'object_prefabs', 'volumes', 'cameras', 'assets', 'room_frames', 'environments', 'splines', 'timelines', 'reference_areas'):
         assert re.search(rf'\b{collection}\s*=\s*\{{\}}', model), collection
     for layer in ('shell', 'gameplay', 'decoration', 'lighting', 'quest', 'npc', 'audio', 'debug'):
         assert layer in model
@@ -28,7 +28,7 @@ def test_mcp_operations_are_handled() -> None:
     handled.update(re.findall(r"or op == '([a-z_]+)'", bridge))
     handled.update(re.findall(r"'((?:wb_)?(?:clipcheck|fixturecheck|fitcheck))'", bridge))
     assert sent <= handled, f'MCP operations missing in CET bridge: {sorted(sent - handled)}'
-    assert len(re.findall(r'@mcp\.tool\(\)', server)) == 445
+    assert len(re.findall(r'@mcp\.tool\(\)', server)) == 455
     for operation in ('register_asset', 'update_asset', 'delete_asset', 'place_asset', 'clear_debug_log', 'run_diagnostics',
                       'capture_camera', 'copy_transform', 'paste_transform', 'move_item_to_aim',
                       'drop_item_to_ground', 'aim_item_at_target', 'scatter_at_aim',
@@ -83,7 +83,9 @@ def test_mcp_operations_are_handled() -> None:
                       'timeline_evaluate', 'timeline_validate', 'timeline_play', 'timeline_seek', 'timeline_pause', 'timeline_stop',
                       'timeline_status', 'timeline_export',
                       'vanilla_clone_status', 'vanilla_clone_pick', 'vanilla_clone_scan', 'vanilla_clone_stage', 'vanilla_clone_candidates',
-                      'vanilla_clone_select', 'vanilla_clone_clear', 'vanilla_clone_import', 'vanilla_clone_list', 'vanilla_clone_revert'):
+                      'vanilla_clone_select', 'vanilla_clone_clear', 'vanilla_clone_import', 'vanilla_clone_list', 'vanilla_clone_revert',
+                      'reference_area_list', 'reference_area_get', 'reference_area_box', 'reference_area_capture', 'reference_area_show',
+                      'reference_area_compare', 'reference_area_copy', 'reference_area_align', 'reference_area_delete'):
         assert operation in sent
     for operation in ('sector_report_load', 'sector_report_flags', 'sector_report_select'):
         assert operation in handled, operation
@@ -144,6 +146,10 @@ def test_v6_modules_are_packaged() -> None:
     assert (mod / 'modules' / 'splines.lua').is_file()
     assert (mod / 'modules' / 'timeline.lua').is_file()
     assert (mod / 'modules' / 'vanilla_clone.lua').is_file()
+    assert (mod / 'modules' / 'reference_areas.lua').is_file()
+    assert (mod / 'mcp_server' / 'test_reference_areas.py').is_file()
+    assert (mod.parents[5] / 'REFERENCE-AREAS.md').is_file()
+    assert (mod.parents[5] / 'tests' / 'reference_areas_runtime_test.lua').is_file()
     assert (mod / 'mcp_server' / 'lsbuild' / 'vanilla.py').is_file()
     assert (mod / 'mcp_server' / 'test_vanilla_clone.py').is_file()
     assert (mod.parents[5] / 'VANILLA-CLONE.md').is_file()

@@ -81,6 +81,7 @@ function Layers:update(id,patch)
     patch=patch or {}
     local layer=self:get(id);if not layer then return nil,'layer not found' end
     if patch.color~=nil and not color_ok(patch.color) then return nil,'color must be #RRGGBB' end
+    if layer.reference and patch.export==true then return nil,'reference layers are read-only; delete the reference area to remove it' end
     if patch.name~=nil then
         local name=Util.trim(patch.name);if name=='' then return nil,'layer name is required' end
         for _,other in ipairs(self.app.model.data.layers) do if other.id~=id and string.lower(other.name)==string.lower(name) then return nil,'a layer with this name already exists' end end
@@ -153,6 +154,7 @@ function Layers:set_locked(id,locked)
     local busy=self:_busy();if busy then return nil,busy end
     local layer=self:get(id);if not layer then return nil,'layer not found' end
     locked=locked==true
+    if layer.reference and not locked then return nil,'reference layers are read-only; delete the reference area to remove it' end
     self.app.model:snapshot(locked and 'Lock layer' or 'Unlock layer')
     local changed=0
     for _,o in ipairs(self:objects(id)) do
@@ -241,6 +243,8 @@ function Layers:delete(id,move_to)
     if move_to==id then return nil,'choose a different layer to receive the objects' end
     local target=self:get(move_to);if not target then return nil,'target layer not found: '..tostring(move_to) end
     if #self.app.model.data.layers<=1 then return nil,'cannot delete the last layer' end
+    if layer.reference then return nil,'reference layers are read-only; delete the reference area to remove it' end
+    if target.reference then return nil,'objects cannot be moved onto a reference layer' end
     if layer.locked then return nil,'unlock the layer before deleting it' end
     self.app.model:snapshot('Delete layer')
     local moved=0

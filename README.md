@@ -1,4 +1,4 @@
-# LocationStudio v0.67.0 — Vanilla Clone
+# LocationStudio v0.68.0 — Reference Areas
 
 LocationStudio is an in-game Cyber Engine Tweaks editor for building locations,
 placing the full World Builder game-resource catalog, moving live objects, and
@@ -11,6 +11,8 @@ v0.53.0 adds persistent Device Logic graphs for terminals, doors, elevators, swi
 v0.54.0 adds a conflict-aware Quest Forge round-trip. Preview/import matches exact LocationStudio IDs (or previously linked NodeRefs), displays linked facts beside selected objects, preserves local notes and placement by default, and only applies changed coordinates when explicitly enabled. See [QUEST-FORGE-ROUNDTRIP.md](QUEST-FORGE-ROUNDTRIP.md).
 
 v0.55.0 adds a quest simulation/debug panel with live fact reads, writer/consumer mapping, and staged fact writes. Each write/reset/manual trigger requires a second confirmation after a persistent-save warning. Manual trigger simulation sets the configured fact; it does not dispatch a native volume event. See [QUEST-SIMULATION.md](QUEST-SIMULATION.md).
+
+v0.68.0 adds reference-area capture. Box-select part of the vanilla world and capture it into a read-only reference layer (locked, never exported, exact transforms from a WolvenKit sector JSON). Show it while you rebuild the location, compare your build against it (unchanged/moved/changed/missing/added), and copy or snap to the original pieces. See [REFERENCE-AREAS.md](REFERENCE-AREAS.md).
 
 v0.67.0 adds vanilla-world clone/import. Point at existing vanilla nodes (RedHotTools crosshair or area scan) and import them as editable project objects. The clones keep their real mesh/decal/effect/template resources, appearances and transforms, and the originals can optionally be hidden (reversibly) so the clones replace them. For exact rotation and scale, the importer reads a WolvenKit-exported sector JSON. See [VANILLA-CLONE.md](VANILLA-CLONE.md).
 
@@ -113,7 +115,7 @@ can be imported as a validated manifest, tuned through MCP, used to calculate
 fit scales, transformed into world AABBs, and checked for pairwise overlap.
 This is authoring math; it does not create or modify the game's collision mesh.
 
-Start with [FIRST-RUN.md](FIRST-RUN.md), then the guides for [device logic](DEVICE-LOGIC.md), [navigation graphs](NAVIGATION.md), [cover nodes](COVER-NODES.md), [combat encounters](COMBAT-ENCOUNTERS.md), [NPC patrol routes](NPC-AI-ROUTES.md), [NPC population](NPC-POPULATION.md), [mesh appearances and decals](MESH-APPEARANCES-AND-DECALS.md), [lighting](LIGHTING.md), [VFX / particles](VFX.md), [environment & weather preview](ENVIRONMENT-PREVIEW.md), [collision authoring](COLLISION-AUTHORING.md), [sector inspector](SECTOR-INSPECTOR.md), [performance analyzer](PERFORMANCE-ANALYZER.md), [occlusion & visibility](OCCLUSION-VISIBILITY.md), [layers](LAYERS.md), [splines](SPLINES.md), [cinematic timeline](TIMELINE.md), [vanilla clone/import](VANILLA-CLONE.md), [interactables](INTERACTABLES.md), [walkability checks](WALKABILITY.md), and [NPC workspots](NPC-WORKSPOTS.md). Read [WB-ASSET-BOUNDS.md](WB-ASSET-BOUNDS.md)
+Start with [FIRST-RUN.md](FIRST-RUN.md), then the guides for [device logic](DEVICE-LOGIC.md), [navigation graphs](NAVIGATION.md), [cover nodes](COVER-NODES.md), [combat encounters](COMBAT-ENCOUNTERS.md), [NPC patrol routes](NPC-AI-ROUTES.md), [NPC population](NPC-POPULATION.md), [mesh appearances and decals](MESH-APPEARANCES-AND-DECALS.md), [lighting](LIGHTING.md), [VFX / particles](VFX.md), [environment & weather preview](ENVIRONMENT-PREVIEW.md), [collision authoring](COLLISION-AUTHORING.md), [sector inspector](SECTOR-INSPECTOR.md), [performance analyzer](PERFORMANCE-ANALYZER.md), [occlusion & visibility](OCCLUSION-VISIBILITY.md), [layers](LAYERS.md), [splines](SPLINES.md), [cinematic timeline](TIMELINE.md), [vanilla clone/import](VANILLA-CLONE.md), [reference areas](REFERENCE-AREAS.md), [interactables](INTERACTABLES.md), [walkability checks](WALKABILITY.md), and [NPC workspots](NPC-WORKSPOTS.md). Read [WB-ASSET-BOUNDS.md](WB-ASSET-BOUNDS.md)
 for bounds manifests and calculations, [WB-FAVORITES.md](WB-FAVORITES.md) for
 native favorite workflows, [WB-PREFAB-THUMBNAILS.md](WB-PREFAB-THUMBNAILS.md)
 for capture requirements, [WB-ARRAYS.md](WB-ARRAYS.md) for arrays and layout,
