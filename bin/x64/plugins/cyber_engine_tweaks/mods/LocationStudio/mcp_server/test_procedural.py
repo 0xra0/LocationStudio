@@ -185,7 +185,7 @@ class StageTests(unittest.TestCase):
         self.assertEqual(again[0]["sector"], "near")
 
     def test_blocking_issues(self):
-        for obj, cli, needle in ((wall_object(template=""), fake_cli(self.root / "c1"), "no material.template"),
+        for obj, cli, needle in ((wall_object(template=""), fake_cli(self.root / "c1"), "no materials"),
                                  (wall_object(template="base\\other.mesh"), fake_cli(self.root / "c2"), "not available locally"),
                                  (wall_object(), None, "CLI not found"),
                                  (wall_object(), fake_cli(self.root / "c3", fail=True), "did not import")):

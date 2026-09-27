@@ -636,12 +636,22 @@ class Compiler:
         if isinstance(material, str):
             material = {"template": material}
         template = str(material.get("template") or "")
+        slots = material.get("materials") or {}
+        if not isinstance(slots, dict):
+            self.err(where + ".material.materials", "must map slots (main, glass) to .mi paths")
+            slots = {}
+        for slot, mi in slots.items():
+            if slot not in ("main", "glass") or not str(mi).lower().endswith((".mi", ".mt", ".remt")):
+                self.err(f"{where}.material.materials.{slot}", "slots are main/glass and values .mi/.mt depot paths")
         if template and not template.lower().endswith(".mesh"):
             self.err(where + ".material.template", "must be a .mesh depot path")
-        if not template:
-            self.warnings.append(f"{where}: no material.template; the geometry previews but Build Mod needs one to create the .mesh")
+        if not template and not slots.get("main"):
+            self.warnings.append(f"{where}: no material.materials.main or material.template; the geometry previews but Build Mod needs one to create the .mesh")
+        mat_out = {"template": template, "appearance": material.get("appearance", "default"), "uv_scale": material.get("uv_scale", 1)}
+        if slots:
+            mat_out["materials"] = slots
         self.emit({"op": "create_procedural", "as": self.alias(eid), **step, "generator": gen, "params": params,
-                   "material": {"template": template, "appearance": material.get("appearance", "default"), "uv_scale": material.get("uv_scale", 1)},
+                   "material": mat_out,
                    "collision": e.get("collision", True), "collision_preset": e.get("collision_preset"), "layer": e.get("layer"),
                    "stream_range": e.get("stream_range", self.defaults.get("stream_range"))}, eid)
 

@@ -1,3 +1,17 @@
+## 0.73.0 - 2026-09-27
+
+- Added native mesh resource generation (`mcp_server/lsbuild/meshres.py`). Generated geometry becomes a complete CMesh CR2W-JSON document:
+  - render chunks per material slot, split at 65 535 vertices;
+  - a vertex buffer encoded in the chunk's vertex layout: quantized positions, packed normals and tangents with UV handedness, UVs and vertex colour; supported types include Float, Float16, Short/UShort N, Dec4, Color, UByte4(N) and Byte4N;
+  - a 16-bit index buffer at an aligned offset;
+  - bounding box, per-axis surface area, `lodLevelInfo` and chunk LOD masks, material entries, external `.mi`/`.mt` references and an appearance.
+
+  The WolvenKit worker writes the document as a binary `.mesh`.
+- The vertex layout, vertex factory, render masks and header constants come from a reference static mesh exported to JSON with WolvenKit (`reference_static.mesh.json` in mod_sources, `LOCATION_STUDIO_REFERENCE_MESH_JSON`, or `reference_json`). Without one, a built-in layout is used and flagged `builtin-unverified`. Skinned layouts are refused.
+- Procedural objects accept `materials` (slot → `.mi`). The Build Mod `procedural` stage builds those with the native backend (worker) and keeps the template-import backend for template-only objects. Preflight and the dependency resolver understand material slots, and so do EDL `geometry` elements.
+- Added MCP tools `mesh_resource_build` (offline documents and optional CR2W) and `mesh_resource_inspect` (decode any CMesh JSON, including references). `procedural_create` and `procedural_update` accept `materials`.
+- Added `MESH-RESOURCES.md` and Lua/Python tests: encoder round-trips, decoded buffers matching the source geometry, reference-layout adoption with padded strides, chunk splitting, the native build stage with a fake worker, and the tools. Bumped to v0.73.0.
+
 ## 0.72.0 - 2026-09-27
 
 - Added procedural geometry (`modules/procedural.lua`, Spatial → Geometry). Twelve generators turn dimensions into solid parts: wall with door/window openings, floor/ceiling (rectangle or any simple polygon), column (box/round with base and cap), straight stairs (solid or floating, landing, stringers), ramp, door frame, window (frame, mullions, glass slot), railing along a 3D polyline, pipe and duct along 3D polylines, and box.

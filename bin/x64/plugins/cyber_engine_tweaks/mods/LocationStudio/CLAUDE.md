@@ -360,3 +360,12 @@ path, and tell the user that Build Mod needs a local copy of it (extracted with
 WolvenKit into mod_sources) plus the WolvenKit CLI. The preview is an
 approximation made of boxes. Describe the real mesh as existing only after a
 successful build, and verify it in game.
+
+## Native mesh resources
+
+Prefer `materials` (slot -> .mi from the catalog) on procedural objects so Build
+Mod writes native meshes. Before relying on them, make sure a reference static
+mesh JSON is configured, and check its layout with `mesh_resource_inspect`. If
+`layout_source` is `builtin-unverified`, say so and ask the user to verify the
+mesh in game. Never claim a generated mesh renders correctly until the user has
+seen it in game.

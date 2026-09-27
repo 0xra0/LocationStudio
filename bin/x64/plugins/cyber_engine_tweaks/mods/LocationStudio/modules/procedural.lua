@@ -332,12 +332,23 @@ function Procedural:_transform(args)
     return t
 end
 
+local SLOTS={main=true,glass=true}
+
+-- Material setup: either `materials` (slot -> .mi/.mt, built as a native CMesh)
+-- or `template` (a .mesh the geometry is imported over with WolvenKit).
 local function clean_material(m,base)
     m=type(m)=='table' and m or {};base=base or {}
     local out={template=m.template or base.template or '',appearance=m.appearance or base.appearance or 'default',uv_scale=num(m.uv_scale,base.uv_scale or 1),
-        glass_template=m.glass_template or base.glass_template or ''}
+        glass_template=m.glass_template or base.glass_template or '',materials=Util.deepcopy(type(m.materials)=='table' and m.materials or base.materials or {})}
     if out.uv_scale<=0 then return nil,'uv_scale must be positive' end
     if out.template~='' and not tostring(out.template):lower():match('%.mesh$') then return nil,'material.template must be a .mesh depot path whose materials the generated mesh uses' end
+    for slot,path in pairs(out.materials) do
+        if not SLOTS[slot] then return nil,'material slot must be main or glass: '..tostring(slot) end
+        local p=tostring(path):lower()
+        if p=='' then out.materials[slot]=nil
+        elseif not (p:match('%.mi$') or p:match('%.mt$') or p:match('%.remt$')) then return nil,'materials.'..slot..' must be a .mi/.mt depot path' end
+    end
+    if out.materials.glass and not out.materials.main then return nil,'materials.main is required when glass is set' end
     return out
 end
 

@@ -34,6 +34,8 @@ Creating is **one undo step**, and so is editing the parameters (`procedural_upd
 
 ## Materials and the real mesh
 
+**Since 0.73 the preferred path is a native mesh.** Give `materials: {main: <.mi>, glass: <.mi>}`, and Build Mod writes a complete CMesh resource without any template; see [MESH-RESOURCES.md](MESH-RESOURCES.md). The template import described below remains for objects that only name a template mesh.
+
 Each object names a **material template**: an existing `.mesh` whose materials and appearances the generated mesh reuses. Use `asset_catalog_search`, or pick one of your own modded meshes. Set `appearance` to one of its appearances, and `uv_scale` to the metres per texture repeat; UVs are box-projected in world metres, so textures tile evenly at any size. Window glass uses the `glass` material slot.
 
 Build Mod runs a **`procedural`** stage after preparing the workspace and before the dependency check. For every procedural object in scope it:

@@ -106,6 +106,17 @@ local found=false;for _,i in ipairs(rp.issues) do if i.object_id==plain.object.i
 assert(found)
 for _,c in ipairs(app.preflight:run({}).checks) do if c.id=='cet_entities' then for _,i in ipairs(c.issues) do assert(i.object_id~=o.id) end end end
 
+-- Native mesh materials: slot -> .mi, validated; preflight wants glass mapped when the geometry has glass.
+assert(not P:create({generator='box',params={size={1,1,1}},transform=T,material={materials={main='base\\a.png'}}}))
+assert(not P:create({generator='box',params={size={1,1,1}},transform=T,material={materials={roof='base\\a.mi'}}}))
+assert(not P:create({generator='box',params={size={1,1,1}},transform=T,material={materials={glass='base\\g.mi'}}}))
+local native=assert(P:create({generator='window',params={},transform=T,material={materials={main='base\\frame.mi'}}}))
+local rp2;for _,c in ipairs(app.preflight:run({}).checks) do if c.id=='resource_paths' then rp2=c end end
+local glass_issue=false;for _,i in ipairs(rp2.issues) do if i.object_id==native.object.id then assert(i.message:find('materials.glass',1,true));glass_issue=true end end
+assert(glass_issue)
+assert(P:update(native.object.id,{material={materials={main='base\\frame.mi',glass='base\\glass.mi'}}}))
+for _,c in ipairs(app.preflight:run({}).checks) do if c.id=='resource_paths' then for _,i in ipairs(c.issues) do assert(i.object_id~=native.object.id) end end end
+
 -- Settings.
 assert(not P:set_settings({proxy='fog'}) and not P:set_settings({mesh_root='bad root!'}))
 assert(P:set_settings({mesh_root='mod/mymod/geo/'}).mesh_root=='mod\\mymod\\geo')

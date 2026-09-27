@@ -929,18 +929,19 @@ function SpatialUI:draw_procedural()
     for _,g in ipairs(gens.items) do if g.id==self.pg_gen then for k,v in pairs(g.params) do ImGui.TextDisabled('  '..k..': '..v) end end end
     self.pg_params=select(1,ImGui.InputTextMultiline('Parameters (JSON)',self.pg_params,2048))
     self.pg_name=select(1,ImGui.InputText('Name##pg',self.pg_name,64))
-    self.pg_template=select(1,ImGui.InputText('Material template .mesh',self.pg_template,256))
+    self.pg_mi=select(1,ImGui.InputText('Material .mi (native mesh)',self.pg_mi or '',256))
+    self.pg_template=select(1,ImGui.InputText('or template .mesh (import)',self.pg_template,256))
     self.pg_collision=select(1,ImGui.Checkbox('Generate collision',self.pg_collision))
     local function params() local ok,v=pcall(json.decode,self.pg_params);if ok and type(v)=='table' then return v end;return nil end
     if ImGui.Button('CREATE AT V##pg',140,28) then
         local p=params();if not p then self:toast('Parameters must be a JSON object') else
-            local r,err=P:create({generator=self.pg_gen,params=p,name=self.pg_name,premise_id=app.selected_premise_id,material={template=self.pg_template},collision=self.pg_collision,source='player'})
+            local r,err=P:create({generator=self.pg_gen,params=p,name=self.pg_name,premise_id=app.selected_premise_id,material={template=self.pg_template,materials={main=(self.pg_mi or '')}},collision=self.pg_collision,source='player'})
             if r then self.pg_selected=r.object.id end;self:toast(err or (r.parts..' part(s) generated'))
         end
     end
     ImGui.SameLine();if ImGui.Button('CREATE AT AIM##pg',150,28) then
         local p=params();if not p then self:toast('Parameters must be a JSON object') else
-            local r,err=P:create({generator=self.pg_gen,params=p,name=self.pg_name,premise_id=app.selected_premise_id,material={template=self.pg_template},collision=self.pg_collision,source='aim'})
+            local r,err=P:create({generator=self.pg_gen,params=p,name=self.pg_name,premise_id=app.selected_premise_id,material={template=self.pg_template,materials={main=(self.pg_mi or '')}},collision=self.pg_collision,source='aim'})
             if r then self.pg_selected=r.object.id end;self:toast(err or (r.parts..' part(s) generated'))
         end
     end
@@ -949,14 +950,14 @@ function SpatialUI:draw_procedural()
         local b=row.bounds or {min={x=0,y=0,z=0},max={x=0,y=0,z=0}}
         if ImGui.Selectable(string.format('%s [%s] %d part(s) %.1fx%.1fx%.1f m%s##pgrow_%s',row.name,row.generator,row.parts,b.max.x-b.min.x,b.max.y-b.min.y,b.max.z-b.min.z,row.collision and ' +collision' or '',row.id),self.pg_selected==row.id) then
             self.pg_selected=row.id;local o=app.model:get_object(row.id);self.pg_gen=row.generator
-            self.pg_params=json.encode(o.metadata.procedural.params);self.pg_template=row.material and row.material.template or ''
+            self.pg_params=json.encode(o.metadata.procedural.params);self.pg_template=row.material and row.material.template or '';self.pg_mi=row.material and row.material.materials and row.material.materials.main or ''
         end
     end
     local sel=app.model:get_object(self.pg_selected)
     if sel and sel.metadata and sel.metadata.procedural then
         if ImGui.Button('APPLY PARAMETERS##pg',180,26) then
             local p=params();if not p then self:toast('Parameters must be a JSON object') else
-                local _,err=P:update(sel.id,{params=p,replace_params=true,generator=self.pg_gen,material={template=self.pg_template},collision=self.pg_collision});self:toast(err or 'Geometry regenerated') end
+                local _,err=P:update(sel.id,{params=p,replace_params=true,generator=self.pg_gen,material={template=self.pg_template,materials={main=(self.pg_mi or '')}},collision=self.pg_collision});self:toast(err or 'Geometry regenerated') end
         end
         ImGui.SameLine();if ImGui.Button((P:is_shown(sel) and 'HIDE' or 'SHOW')..' PREVIEW##pg',150,26) then if P:is_shown(sel) then P:hide(sel) else local _,err=P:show(sel);if err then self:toast(err) end end end
         ImGui.SameLine();if ImGui.Button('DELETE##pg',90,26) then local _,err=P:delete(sel.id);self:toast(err or 'Deleted');self.pg_selected='' end

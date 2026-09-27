@@ -2639,6 +2639,17 @@
                                 "type": "string",
                                 "pattern": "\\.mesh$"
                               },
+                              "materials": {
+                                "type": "object",
+                                "properties": {
+                                  "main": {
+                                    "type": "string"
+                                  },
+                                  "glass": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
                               "appearance": {
                                 "type": "string"
                               },
@@ -4911,6 +4922,17 @@
                   "template": {
                     "type": "string",
                     "pattern": "\\.mesh$"
+                  },
+                  "materials": {
+                    "type": "object",
+                    "properties": {
+                      "main": {
+                        "type": "string"
+                      },
+                      "glass": {
+                        "type": "string"
+                      }
+                    }
                   },
                   "appearance": {
                     "type": "string"

@@ -1,6 +1,6 @@
 local env=dofile(arg[2]..'/support/cet_mock.lua')
 local app=env.app
-assert(app.version=='0.72.0')
+assert(app.version=='0.73.0')
 
 local premise=assert(app.actions:create_premise_from_player('Grab Test','exterior'))
 local function wb_metadata(path,name)

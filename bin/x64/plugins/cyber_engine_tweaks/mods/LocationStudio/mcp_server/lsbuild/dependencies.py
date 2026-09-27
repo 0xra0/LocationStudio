@@ -384,6 +384,8 @@ def project_roots(project: dict[str, Any], *, premise_id: str | None = None) -> 
             material = proc.get("material") or {}
             add("path", material.get("template"), "procedural.material.template")
             add("path", material.get("glass_template"), "procedural.material.glass_template")
+            for slot, mi in (material.get("materials") or {}).items() if isinstance(material.get("materials"), dict) else []:
+                add("path", mi, f"procedural.material.materials.{slot}")
         if (md.get("npc_population") or {}).get("record"):
             add("record", md["npc_population"]["record"], "npc_population.record")
         for fld in ("event", "sound_event"):

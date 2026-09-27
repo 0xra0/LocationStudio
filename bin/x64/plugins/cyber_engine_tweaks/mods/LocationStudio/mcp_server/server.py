@@ -3756,7 +3756,7 @@ def status_resource() -> str:
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from mod_inventory import scan_mod_installation as _scan_mod_installation  # noqa: E402
-from lsbuild import build as _lsb, native as _lsn, worker as _lsw, wiring as _lswire, rng as _lsrng, interactables as _lsip, population as _lsp, vfx as _lsvfx, sectors as _lssec, performance as _lsperf, vanilla as _lsvan, dependencies as _lsdep, preflight as _lspf, edl as _lsedl, procedural as _lsproc  # noqa: E402
+from lsbuild import build as _lsb, native as _lsn, worker as _lsw, wiring as _lswire, rng as _lsrng, interactables as _lsip, population as _lsp, vfx as _lsvfx, sectors as _lssec, performance as _lsperf, vanilla as _lsvan, dependencies as _lsdep, preflight as _lspf, edl as _lsedl, procedural as _lsproc, meshres as _lsmesh  # noqa: E402
 
 WORLD_BUILDER_ROOT = MOD_DIR.parent / "entSpawner"
 BUILD_ROOT = MOD_DIR / "exports" / "build"
@@ -4127,7 +4127,9 @@ def build_mod_from_project(
                 return hit[0] if hit and hit[1] == "binary" else None
 
             cli_path = cli or shutil.which("cp77tools") or shutil.which("WolvenKit.CLI")
+            pf = _lsw.worker_preflight(worker=worker)
             return _lsproc.apply_to_workspace(PROJECT, workspace, premise_id=premise_id, cli=cli_path, template_file=template_file,
+                                              worker=pf.get("worker") if pf.get("ready") else None, reference=_reference_mesh(None),
                                               output=workspace / "automation" / "procedural-report.json")
         proc = stage("procedural", procedural_stage)
         if not proc.get("ready"):
@@ -4744,6 +4746,15 @@ def dependency_stage(workspace_name: str, premise_id: str = "", sources: list[st
 PROCEDURAL_EXPORTS = MOD_DIR / "exports" / "procedural"
 
 
+def _reference_mesh(path: str | None) -> dict[str, Any] | None:
+    """Reference static mesh (WolvenKit JSON) for native mesh layouts: argument, env, or mod_sources default."""
+    candidate = path or os.environ.get("LOCATION_STUDIO_REFERENCE_MESH_JSON") or ""
+    if not candidate:
+        default = MOD_SOURCES / "reference_static.mesh.json"
+        candidate = str(default) if default.is_file() else ""
+    return _lsmesh.load_reference(candidate) if candidate else None
+
+
 @mcp.tool()
 def procedural_generators() -> str:
     """Procedural geometry generators (wall, floor, ceiling, column, stairs, ramp, door_frame, window, railing, pipe,
@@ -4762,16 +4773,18 @@ def procedural_create(generator: str, params: dict[str, Any] | None = None, name
                       yaw: float = 0.0, source: str = "player", premise_id: str = "", room_id: str = "",
                       material_template: str = "", appearance: str = "default", uv_scale: float = 1.0, glass_template: str = "",
                       collision: bool = True, collision_preset: str = "", layer: str = "", stream_range: float | None = None,
-                      mesh_path: str = "", spawn: bool = True) -> str:
+                      mesh_path: str = "", spawn: bool = True, materials: dict[str, str] | None = None) -> str:
     """Generate structural geometry from dimensions (one undo step). The object keeps its parameters and parts, shows
     a World Builder shape preview, optionally gets real collision boxes, and becomes a real .mesh at Build Mod:
     material_template must be an existing .mesh (catalog path) whose materials the generated mesh reuses, and a
-    local copy of it must be in a mod source folder for the WolvenKit import. Place at position [x,y,z] + yaw, or at
-    source=player|aim."""
+    local copy of it must be in a mod source folder for the WolvenKit import. Alternatively give materials
+    {main: .mi, glass: .mi} to build a native CMesh resource directly (mesh_resource_build) with the WolvenKit worker.
+    Place at position [x,y,z] + yaw, or at source=player|aim."""
     args: dict[str, Any] = {"generator": generator, "params": params or {}, "name": name or None, "premise_id": premise_id or None,
                             "room_id": room_id or None, "layer": layer or None, "collision": collision, "collision_preset": collision_preset or None,
                             "stream_range": stream_range, "mesh_path": mesh_path or None, "spawn": spawn,
-                            "material": {"template": material_template, "appearance": appearance, "uv_scale": uv_scale, "glass_template": glass_template}}
+                            "material": {"template": material_template, "appearance": appearance, "uv_scale": uv_scale, "glass_template": glass_template,
+                                         "materials": materials or {}}}
     if position is not None:
         p = _xyz(position, "position")
         args["transform"] = {"position": {**p, "w": 1}, "rotation": {"roll": 0, "pitch": 0, "yaw": yaw}}
@@ -4785,10 +4798,11 @@ def procedural_create(generator: str, params: dict[str, Any] | None = None, name
 @mcp.tool()
 def procedural_update(object_id: str, params: dict[str, Any] | None = None, replace_params: bool = False, generator: str = "",
                       material_template: str | None = None, appearance: str | None = None, uv_scale: float | None = None,
-                      collision: bool | None = None, name: str | None = None, stream_range: float | None = None) -> str:
+                      collision: bool | None = None, name: str | None = None, stream_range: float | None = None,
+                      materials: dict[str, str] | None = None) -> str:
     """Change a procedural object's parameters (merged unless replace_params), generator, material or collision and
     regenerate it, replacing its collision boxes and preview. One undo step; invalid parameters change nothing."""
-    material = {k: v for k, v in (("template", material_template), ("appearance", appearance), ("uv_scale", uv_scale)) if v is not None}
+    material = {k: v for k, v in (("template", material_template), ("appearance", appearance), ("uv_scale", uv_scale), ("materials", materials)) if v is not None}
     args: dict[str, Any] = {"id": object_id, "params": params or {}, "replace_params": replace_params, "generator": generator or None,
                             "material": material or None, "collision": collision, "name": name, "stream_range": stream_range}
     return _json(_send("procedural_update", {k: v for k, v in args.items() if v is not None}))
@@ -4828,6 +4842,63 @@ def procedural_settings(proxy: str = "", proxy_asset_id: str | None = None, prox
     if mesh_root:
         args["mesh_root"] = mesh_root
     return _json(_send("procedural_settings", args))
+
+
+@mcp.tool()
+def mesh_resource_build(object_id: str = "", premise_id: str = "", materials: dict[str, str] | None = None,
+                        reference_json: str = "", lod_distances: list[float] | None = None, output_dir: str = "",
+                        write_cr2w: bool = False, worker: str | None = None) -> str:
+    """Offline: turn saved procedural geometry into native Cyberpunk mesh resources: a CMesh CR2W-JSON document with a
+    quantized vertex buffer and 16-bit index buffer, one render chunk per material slot (split at 65535 vertices),
+    bounds, surface area, LOD metadata (lodLevelInfo, chunk LOD masks), material entries, external .mi references
+    and an appearance. materials overrides the objects' slot -> .mi map. reference_json (a WolvenKit JSON export of a
+    vanilla static mesh; default LOCATION_STUDIO_REFERENCE_MESH_JSON or mod_sources/reference_static.mesh.json)
+    supplies the exact vertex layout and header constants; without it the built-in layout is used and flagged
+    unverified. write_cr2w=true also writes the binary .mesh with the WolvenKit worker."""
+    project = json.loads(PROJECT.read_text(encoding="utf-8")) if PROJECT.is_file() else {"objects": []}
+    objects = [o for o in _lsproc.procedural_objects(project, premise_id or None) if not object_id or o.get("id") == object_id]
+    if not objects:
+        raise ValueError("no saved procedural objects match; save the project first")
+    reference = _reference_mesh(reference_json or None)
+    pf = _lsw.worker_preflight(worker=worker) if write_cr2w else None
+    if write_cr2w and not pf.get("ready"):
+        raise RuntimeError("the WolvenKit worker is not ready; run build_worker_preflight (or pass write_cr2w=false)")
+    out_dir = Path(output_dir).expanduser() if output_dir else PROCEDURAL_EXPORTS
+    results = []
+    for o in objects:
+        cfg = o["metadata"]["procedural"]
+        obj = json.loads(json.dumps(o))
+        if materials:
+            obj["metadata"]["procedural"].setdefault("material", {})["materials"] = materials
+        if lod_distances is not None:
+            obj["metadata"]["procedural"]["lod_distances"] = lod_distances
+        built = _lsproc.native_mesh(obj, reference=reference)
+        rel = Path(*_lsdep.normalize(cfg.get("mesh_path") or f"{o.get('id')}.mesh").split("\\"))
+        doc_path = out_dir / Path(str(rel) + ".json")
+        doc_path.parent.mkdir(parents=True, exist_ok=True)
+        doc_path.write_text(json.dumps(built["document"], ensure_ascii=False), encoding="utf-8")
+        row = {"object_id": o.get("id"), "mesh_path": cfg.get("mesh_path"), "json": str(doc_path), **built["stats"]}
+        if write_cr2w:
+            target = out_dir / rel
+            ok, output = _lsproc._run_worker(pf["worker"], doc_path, target, 300)
+            row.update(cr2w=str(target) if ok else None, cr2w_ok=ok, worker_output=None if ok else output)
+        results.append(row)
+    return _json({"count": len(results), "meshes": results})
+
+
+@mcp.tool()
+def mesh_resource_inspect(path: str, vertices: bool = False) -> str:
+    """Offline: summarize a CMesh CR2W-JSON document (one generated by mesh_resource_build or a WolvenKit export):
+    chunks with vertex/index counts, vertex layouts (use this to check a reference mesh), LOD masks, materials,
+    appearances, bounds and buffer sizes. vertices=true decodes positions, normals, tangents, UVs and indices."""
+    p = Path(path).expanduser()
+    if not p.is_file():
+        raise ValueError(f"file not found: {p}")
+    summary = _lsmesh.decode(json.loads(p.read_text(encoding="utf-8")), vertices=vertices)
+    if vertices:
+        for c in summary["chunks"]:
+            c["attributes"] = {k: [list(map(lambda x: round(x, 5), v)) for v in vals[:2000]] for k, vals in c.get("attributes", {}).items()}
+    return _json(summary)
 
 
 @mcp.tool()
