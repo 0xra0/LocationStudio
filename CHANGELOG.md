@@ -1,3 +1,18 @@
+## 0.69.0 - 2026-09-27
+
+- Added an asset dependency resolver (`mcp_server/lsbuild/dependencies.py`). Starting from every exported object's depot paths, TweakDB records and audio events, it recursively follows:
+  - WolvenKit raw JSON (`DepotPath`, including hashed ones);
+  - cooked CR2W import strings;
+  - prebuilt `.archive` dependency tables;
+  - TweakXL record blocks (`$base` and paths).
+- Each reference is classified as project/ship, vanilla (FNV-1a64 hashes from an RDAR index of the game's content archives, cached by `dependency_index_build`), other installed mod (an external requirement), dynamic ArchiveXL path, unverified record/event, or missing, with the chain from the object that needs it. Without the vanilla index, unresolved files are `unknown` rather than falsely `missing`.
+- Mod sources can be folders laid out by depot path, WolvenKit projects (`source/archive`, `source/raw`, `resources/r6/tweaks`, `customSounds`) or prebuilt archives: `mod_sources/`, `LOCATION_STUDIO_MOD_SOURCES`, explicit paths, or the build workspace.
+- Build Mod now has a `dependencies` stage. It stages shippable files into the workspace and stops on missing or raw-JSON-only dependencies unless `allow_missing_dependencies`.
+- Added an in-game Spatial → Dependencies tab (`modules/dependencies.lua`) that loads the report and selects objects with missing dependencies.
+- Added five MCP tools (`dependency_index_build`, `dependency_index_info`, `dependency_scan`, `dependency_check`, `dependency_stage`), `ASSET-DEPENDENCIES.md`, and Lua/Python tests.
+- Fixed the headless-build test sandbox, which read the source tree's `data/project.json`; the two long-failing pipeline tests now pass.
+- Bumped to v0.69.0.
+
 ## 0.68.0 - 2026-09-27
 
 - Added reference-area capture (project schema 20, `reference_areas`; `modules/reference_areas.lua`, Spatial → Reference).

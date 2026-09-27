@@ -89,6 +89,9 @@ def write_fake_cli(path: Path) -> Path:
     return path
 
 
+from lsbuild import dependencies as _lsdep  # noqa: E402
+
+
 class Sandbox:
     """Point server paths at a temp tree and fake the live CET export."""
 
@@ -98,10 +101,18 @@ class Sandbox:
         self.sent: list[tuple[str, dict]] = []
 
     def __enter__(self):
-        self.saved = (server.WORLD_BUILDER_ROOT, server.BUILD_ROOT, server._send, server.SECTOR_REPORT)
+        self.saved = (server.WORLD_BUILDER_ROOT, server.BUILD_ROOT, server._send, server.SECTOR_REPORT, server.PROJECT,
+                      server.DEPENDENCY_REPORT, server.VANILLA_INDEX, server.MOD_SOURCES)
+        server.DEPENDENCY_REPORT = self.root / "exports" / "dependency-report.json"
+        server.VANILLA_INDEX = self.root / "data" / "vanilla-archive-index.bin"
+        server.MOD_SOURCES = self.root / "mod_sources"
         server.WORLD_BUILDER_ROOT = self.root / "entSpawner"
         server.BUILD_ROOT = self.root / "build"
         server.SECTOR_REPORT = self.root / "exports" / "sector-inspection.json"
+        # Stages that read the saved project must never see the source tree's runtime data.
+        server.PROJECT = self.root / "data" / "project.json"
+        server.PROJECT.parent.mkdir(parents=True, exist_ok=True)
+        server.PROJECT.write_text(json.dumps({"schema_version": 20, "objects": []}), encoding="utf-8")
 
         def fake_send(op, args=None, timeout=None):
             self.sent.append((op, args or {}))
@@ -124,7 +135,8 @@ class Sandbox:
         return self
 
     def __exit__(self, *exc):
-        server.WORLD_BUILDER_ROOT, server.BUILD_ROOT, server._send, server.SECTOR_REPORT = self.saved
+        (server.WORLD_BUILDER_ROOT, server.BUILD_ROOT, server._send, server.SECTOR_REPORT, server.PROJECT,
+         server.DEPENDENCY_REPORT, server.VANILLA_INDEX, server.MOD_SOURCES) = self.saved
 
 
 class HeadlessBuildTests(unittest.TestCase):
@@ -175,6 +187,23 @@ class HeadlessBuildTests(unittest.TestCase):
             self.assertTrue(Path(result["zip"]).is_file())
             self.assertTrue(result["stages"]["status"]["importComplete"])
             self.assertTrue(result["stages"]["verify"]["valid"])
+
+    def test_pipeline_blocks_on_missing_dependencies(self):
+        with tempfile.TemporaryDirectory() as td, Sandbox(Path(td)):
+            root = Path(td)
+            server.PROJECT.write_text(json.dumps({"objects": [{"id": "o1", "name": "Chair", "template": "mymod\\props\\missing.ent", "metadata": {}}]}), encoding="utf-8")
+            from test_dependencies import write_archive
+            write_archive(root / "game/archive/pc/content/basegame.archive", {"base\\x.mesh": []})
+            _lsdep.build_index(root / "game", server.VANILLA_INDEX)
+            worker = write_fake_worker(root / "worker")
+            cli = write_fake_cli(root / "cp77tools")
+            blocked = json.loads(server.build_mod_from_project("demo_world", worker=str(worker), cli=str(cli), run=True))
+            self.assertEqual(blocked["failed_stage"], "dependencies")
+            self.assertEqual(blocked["stages"]["dependencies"]["missing"][0]["path"], "mymod\\props\\missing.ent")
+            allowed = json.loads(server.build_mod_from_project("demo_world", worker=str(worker), cli=str(cli), run=True,
+                                                               allow_missing_dependencies=True))
+            self.assertTrue(allowed["ok"], json.dumps(allowed.get("stages"), indent=1)[:2000])
+            self.assertTrue((root / "build/demo_world/automation/dependency-report.json").is_file())
 
     def test_pipeline_reports_failing_stage(self):
         with tempfile.TemporaryDirectory() as td, Sandbox(Path(td), send_error="bridge offline"):

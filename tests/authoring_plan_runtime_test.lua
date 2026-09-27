@@ -1,6 +1,6 @@
 local env=dofile(arg[2]..'/support/cet_mock.lua')
 local app=env.app
-assert(app.version=='0.68.0')
+assert(app.version=='0.69.0')
 assert(app.model.data.schema_version==20 and type(app.model.data.scenes)=='table')
 
 local examples=app.authoring_plans:examples()

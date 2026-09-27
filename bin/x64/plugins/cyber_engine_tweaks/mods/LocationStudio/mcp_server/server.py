@@ -3755,7 +3755,7 @@ def status_resource() -> str:
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from mod_inventory import scan_mod_installation as _scan_mod_installation  # noqa: E402
-from lsbuild import build as _lsb, native as _lsn, worker as _lsw, wiring as _lswire, rng as _lsrng, interactables as _lsip, population as _lsp, vfx as _lsvfx, sectors as _lssec, performance as _lsperf, vanilla as _lsvan  # noqa: E402
+from lsbuild import build as _lsb, native as _lsn, worker as _lsw, wiring as _lswire, rng as _lsrng, interactables as _lsip, population as _lsp, vfx as _lsvfx, sectors as _lssec, performance as _lsperf, vanilla as _lsvan, dependencies as _lsdep  # noqa: E402
 
 WORLD_BUILDER_ROOT = MOD_DIR.parent / "entSpawner"
 BUILD_ROOT = MOD_DIR / "exports" / "build"
@@ -4063,8 +4063,12 @@ def build_mod_from_project(
     worker: str | None = None,
     cli: str | None = None,
     run: bool = False,
+    allow_missing_dependencies: bool = False,
 ) -> str:
-    """Whole pipeline: WB export -> inspect -> workspace -> VFX scale -> worker CR2W -> status -> pack -> package -> verify.
+    """Whole pipeline: WB export -> inspect -> workspace -> dependencies -> VFX scale -> worker CR2W -> status -> pack -> package -> verify.
+
+    The dependencies stage resolves every resource the exported objects use, stages modded files into the
+    workspace and stops the build on missing ones unless allow_missing_dependencies (tell the user which).
 
     run=false only reports readiness (live WB exporter, worker, CLI) and the
     planned paths; nothing is written. run=true executes every stage and stops at
@@ -4104,6 +4108,19 @@ def build_mod_from_project(
         wb_root = WORLD_BUILDER_ROOT if WORLD_BUILDER_ROOT.is_dir() else None
         stage("prepare", lambda: _lsb.prepare_build_workspace(_export_file(name), BUILD_ROOT, world_builder_root=wb_root,
                                                               description="Built with LocationStudio", force=True))
+        def dependencies():
+            out = _dependency_run(premise_id=premise_id, workspace=workspace,
+                                  report_file=workspace / "automation" / "dependency-report.json")
+            result = {k: out["slim"][k] for k in ("ready", "counts", "missing", "external_requirements", "raw_json_only")}
+            result["staged"] = _lsdep.stage(out["full"], workspace)
+            if out["slim"].get("warning"):
+                result["warning"] = out["slim"]["warning"]
+            return result
+        deps = stage("dependencies", dependencies)
+        if (not deps["ready"] or deps["raw_json_only"]) and not allow_missing_dependencies:
+            stages["dependencies"]["error"] = (f"{len(deps['missing'])} missing dependenc(ies)" if not deps["ready"] else
+                                               f"{len(deps['raw_json_only'])} dependency file(s) exist only as raw JSON; convert them in WolvenKit")
+            raise _StageFailed("dependencies")
         # Advisory only: the sector report never blocks a build, but it is always written.
         stage("sectors", lambda: _sector_report_safe(_export_file(name), workspace / "automation" / "sector-inspection.json"))
         population_audit = stage("npc_population", lambda: _lsp.audit(PROJECT, _export_file(name),
@@ -4633,6 +4650,72 @@ def reference_area_delete(area_id: str) -> str:
     return _json(_send("reference_area_delete", {"id": area_id}))
 
 
+@mcp.tool()
+def dependency_index_build(game_root: str | None = None) -> str:
+    """Offline: index the path hashes of every vanilla content archive (archive/pc/content and ep1) so the dependency
+    resolver can tell vanilla files from missing ones. Rebuild after a game update (~1 min, ~15 MB cache)."""
+    return _json(_lsdep.build_index(_game_root(game_root), VANILLA_INDEX))
+
+
+@mcp.tool()
+def dependency_index_info() -> str:
+    """Offline: whether the vanilla archive index exists, its archives and hash count."""
+    return _json(_lsdep.index_info(VANILLA_INDEX))
+
+
+@mcp.tool()
+def dependency_scan(premise_id: str = "", sources: list[str] | None = None, workspace_name: str = "",
+                    game_root: str | None = None, write_report: bool = True) -> str:
+    """Offline: recursively resolve every resource the exported objects reference (meshes, .ent, .mi/.mt, textures,
+    particles/effects, anims, TweakDB records, audio events) against the mod sources (mod_sources/, sources,
+    LOCATION_STUDIO_MOD_SOURCES, the build workspace), the vanilla archive index and installed mods.
+    Reports what must ship, external mod requirements, unverified records/events and missing files (with the
+    chain from the object). Writes exports/dependency-report.json for the in-game Dependencies tab."""
+    ws = BUILD_ROOT / workspace_name if workspace_name else None
+    out = _dependency_run(premise_id=premise_id or None, sources=sources, workspace=ws, game_root=game_root, write_report=write_report)
+    if write_report:
+        try:  # refresh the in-game tab when the game is running; offline is fine
+            _send("dependency_report_load")
+        except Exception:  # noqa: BLE001
+            pass
+    return _json(out["slim"])
+
+
+@mcp.tool()
+def dependency_check(references: list[str], sources: list[str] | None = None, workspace_name: str = "",
+                     game_root: str | None = None) -> str:
+    """Offline: resolve given depot paths, TweakDB records (Category.Name) or audio events ('audio:event_name')
+    without scanning the project, e.g. before registering a modded asset."""
+    refs = []
+    for r in references:
+        r = str(r).strip()
+        if r.startswith("audio:"):
+            refs.append({"kind": "audio", "value": r[6:], "field": "input"})
+        elif r.startswith("record:") or (_lsdep.RECORD_RE.match(r) and not _lsdep.DEPOT_RE.fullmatch(r)):
+            refs.append({"kind": "record", "value": r.split(":", 1)[-1], "field": "input"})
+        else:
+            refs.append({"kind": "path", "value": r, "field": "input"})
+    ws = BUILD_ROOT / workspace_name if workspace_name else None
+    out = _dependency_run(sources=sources, workspace=ws, game_root=game_root, write_report=False,
+                          roots=[{"object_id": "input", "name": "input", "refs": refs}])
+    return _json(out["slim"])
+
+
+@mcp.tool()
+def dependency_stage(workspace_name: str, premise_id: str = "", sources: list[str] | None = None,
+                     game_root: str | None = None) -> str:
+    """Resolve dependencies and copy every shippable file into a build workspace (source/archive, source/raw for
+    JSON-only files that still need converting, resources/r6/tweaks for TweakXL YAML, prebuilt archives next to
+    the mod). Missing files are reported, never invented."""
+    ws = BUILD_ROOT / workspace_name
+    if not ws.is_dir():
+        raise ValueError(f"build workspace not found: {ws}")
+    out = _dependency_run(premise_id=premise_id or None, sources=sources, workspace=ws, game_root=game_root,
+                          report_file=ws / "automation" / "dependency-report.json")
+    staged = _lsdep.stage(out["full"], ws)
+    return _json({"ready": out["slim"]["ready"], "counts": out["slim"]["counts"], "missing": out["slim"]["missing"], "staged": staged})
+
+
 _TIMELINE_TRACKS = {"camera", "npc", "look_at", "dialogue", "event", "fact", "marker"}
 
 
@@ -4974,6 +5057,56 @@ def performance_export(export_file: str, use_player_position: bool = True) -> st
 
 
 SECTOR_REPORT = MOD_DIR / "exports" / "sector-inspection.json"
+DEPENDENCY_REPORT = MOD_DIR / "exports" / "dependency-report.json"
+VANILLA_INDEX = DATA_DIR / "vanilla-archive-index.bin"
+MOD_SOURCES = MOD_DIR / "mod_sources"
+
+
+def _dependency_sources(sources: list[str] | None, workspace: Path | None) -> list[Path]:
+    """Mod source roots: explicit paths, LOCATION_STUDIO_MOD_SOURCES, mod_sources/ and the build workspace."""
+    roots: list[Path] = [Path(p).expanduser() for p in sources or []]
+    env = os.environ.get("LOCATION_STUDIO_MOD_SOURCES", "")
+    roots += [Path(p).expanduser() for p in env.split(os.pathsep) if p]
+    roots.append(MOD_SOURCES)
+    if workspace is not None:
+        roots += [workspace / "source" / "archive", workspace / "source" / "raw"]
+    seen, out = set(), []
+    for r in roots:
+        key = str(r.resolve()) if r.exists() else str(r)
+        if key not in seen:
+            seen.add(key)
+            out.append(r)
+    return out
+
+
+def _dependency_run(*, premise_id: str | None = None, sources: list[str] | None = None, workspace: Path | None = None,
+                    game_root: str | None = None, roots: list[dict[str, Any]] | None = None,
+                    write_report: bool = True, report_file: Path | None = None) -> dict[str, Any]:
+    source_roots = _dependency_sources(sources, workspace)
+    src = _lsdep.Sources(source_roots)
+    tweak_dirs = list(source_roots) + ([workspace / "source" / "resources"] if workspace is not None else [])
+    sound_dirs = list(source_roots) + ([workspace / "source" / "customSounds"] if workspace is not None else [])
+    game = _optional_game_root(game_root)
+    vanilla = _lsdep.HashSet.load(VANILLA_INDEX) if VANILLA_INDEX.is_file() else None
+    if roots is None:
+        project = json.loads(PROJECT.read_text(encoding="utf-8")) if PROJECT.is_file() else {"objects": []}
+        roots = _lsdep.project_roots(project, premise_id=premise_id)
+    report = _lsdep.resolve(roots, sources=src, vanilla=vanilla, mods=_lsdep.mod_archives(game),
+                            project_tweaks=_lsdep.tweak_records(tweak_dirs),
+                            mod_tweaks=_lsdep.tweak_records([game / "r6" / "tweaks"]) if game else {},
+                            sounds=_lsdep.custom_sounds(sound_dirs))
+    report["generated_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    report["sources"] = [str(p) for p in source_roots if p.exists()]
+    report["game_root"] = str(game) if game else None
+    if vanilla is None:
+        report["warning"] = "No vanilla archive index; run dependency_index_build. Files not in the sources are reported as unknown."
+    slim = _lsdep.slim(report)
+    if write_report:
+        for target in [DEPENDENCY_REPORT] + ([report_file] if report_file else []):
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(json.dumps(slim, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    return {"full": report, "slim": slim}
+
 
 
 def _sector_summary(report: dict[str, Any]) -> dict[str, Any]:

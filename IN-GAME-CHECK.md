@@ -10,6 +10,13 @@
 The upgrade archive does not contain project/config JSON, logs, exports,
 thumbnails, or bridge state.
 
+## v0.69 Asset dependency smoke check
+
+1. Run `dependency_index_build` against your game folder: it reports the content archives and roughly a million-plus hashes.
+2. Place an object that uses a modded mesh from a WolvenKit project listed in `LOCATION_STUDIO_MOD_SOURCES`, and rename one of its textures in that project. `dependency_scan` reports the texture as missing, with the chain object → mesh → material → texture, and the mesh and material under "ship". A vanilla prop reports only vanilla dependencies.
+3. In game, **Spatial → Dependencies → LOAD LATEST REPORT** lists the object; **SELECT** focuses it.
+4. `build_mod_from_project(run=true)` stops at `dependencies`. Restore the texture and build again: the build passes and the packed archive contains the modded mesh, material and texture.
+
 ## v0.68 Reference area smoke check
 
 1. In a vanilla clinic, open **Spatial → Reference**. Set **CORNER A AT V** in one corner of the room and **CORNER B AT AIM** at the opposite top corner, then **CAPTURE REFERENCE** with position-only nodes included. The toast lists captured items and uncloneable originals.
