@@ -4252,6 +4252,165 @@ def environment_restore(blend_time: float = 0.0) -> str:
     return _json(_send("environment_restore", {"blend_time": blend_time}))
 
 
+_COLLISION_SHAPES = {"box", "capsule", "sphere"}
+
+
+def _collision_transform(x: float | None, y: float | None, z: float | None,
+                         roll: float | None, pitch: float | None, yaw: float | None) -> dict[str, Any] | None:
+    if all(v is None for v in (x, y, z)):
+        return None
+    if any(v is None for v in (x, y, z)):
+        raise ValueError("x, y, and z must be supplied together")
+    return {"position": {"x": x, "y": y, "z": z, "w": 1},
+            "rotation": {"roll": roll or 0, "pitch": pitch or 0, "yaw": yaw or 0}}
+
+
+@mcp.tool()
+def collision_presets() -> str:
+    """List collision presets (layers) with World Builder's physics-group hints and whether each blocks the player/NPC estimate, plus physics materials and actor profiles."""
+    return _json(_send("collision_presets"))
+
+
+@mcp.tool()
+def collision_create_primitive(shape: str = "box", size_x: float | None = None, size_y: float | None = None,
+                               size_z: float | None = None, radius: float | None = None, height: float | None = None,
+                               preset: str = "World Static", material: str = "", name: str = "", source: str = "aim",
+                               x: float | None = None, y: float | None = None, z: float | None = None,
+                               roll: float | None = None, pitch: float | None = None, yaw: float | None = None,
+                               visualize: bool = True, room_id: str = "", premise_id: str = "", spawn: bool = True) -> str:
+    """Place a real World Builder worldCollisionNode primitive (box sizes are full metres; capsule radius/height; sphere radius).
+
+    preset is the collision layer name or index from collision_presets (e.g. 'Player Blocker', 'World Static').
+    material is a physmat name such as 'concrete' (blank = World Builder default). visualize draws WB's collider wireframe.
+    """
+    if shape not in _COLLISION_SHAPES:
+        raise ValueError("shape must be box, capsule, or sphere")
+    if source not in {"aim", "player"}:
+        raise ValueError("source must be aim or player")
+    args: dict[str, Any] = {"shape": shape, "preset": preset, "material": material or None, "name": name, "source": source,
+                            "visualize": visualize, "room_id": room_id or None, "premise_id": premise_id or None, "spawn": spawn}
+    sizes = (size_x, size_y, size_z)
+    if any(v is not None for v in sizes):
+        if any(v is None for v in sizes):
+            raise ValueError("size_x, size_y, and size_z must be supplied together")
+        args["size"] = {"x": size_x, "y": size_y, "z": size_z}
+    for key, value in (("radius", radius), ("height", height), ("roll", roll), ("pitch", pitch), ("yaw", yaw)):
+        if value is not None:
+            args[key] = value
+    transform = _collision_transform(x, y, z, roll, pitch, yaw)
+    if transform:
+        args["transform"] = transform
+    return _json(_send("collision_create_primitive", args))
+
+
+@mcp.tool()
+def collision_search_meshes(query: str = "", limit: int = 80) -> str:
+    """Search World Builder's loaded Collision Mesh catalog for imported collision resources."""
+    return _json(_send("collision_search_meshes", {"query": query, "limit": limit}))
+
+
+@mcp.tool()
+def collision_import_mesh(resource_path: str, preset: str = "", material: str = "", scale: float = 1.0, name: str = "",
+                          source: str = "aim", x: float | None = None, y: float | None = None, z: float | None = None,
+                          yaw: float | None = None, visualize: bool = True, room_id: str = "", premise_id: str = "",
+                          spawn: bool = True) -> str:
+    """Place an imported collision resource from the Collision Mesh catalog, optionally overriding its layer and material."""
+    if source not in {"aim", "player"}:
+        raise ValueError("source must be aim or player")
+    args: dict[str, Any] = {"resource_path": resource_path, "preset": preset or None, "material": material or None,
+                            "scale": scale, "name": name, "source": source, "visualize": visualize,
+                            "room_id": room_id or None, "premise_id": premise_id or None, "spawn": spawn}
+    transform = _collision_transform(x, y, z, None, None, yaw)
+    if transform:
+        args["transform"] = transform
+    return _json(_send("collision_import_mesh", args))
+
+
+@mcp.tool()
+def collision_fit_to_object(object_id: str, padding: float = 0.02, preset: str = "World Static", material: str = "",
+                            visualize: bool = True, spawn: bool = True) -> str:
+    """Create a box collider matching a placed object's imported world bounds (see wb_bounds_import)."""
+    return _json(_send("collision_fit_to_object", {"object_id": object_id, "padding": padding, "preset": preset,
+                                                   "material": material or None, "visualize": visualize, "spawn": spawn}))
+
+
+@mcp.tool()
+def collision_update(object_id: str, shape: str | None = None, size_x: float | None = None, size_y: float | None = None,
+                     size_z: float | None = None, radius: float | None = None, height: float | None = None,
+                     scale: float | None = None, preset: str | None = None, material: str | None = None,
+                     visualize: bool | None = None, roll: float | None = None, pitch: float | None = None,
+                     yaw: float | None = None, name: str | None = None) -> str:
+    """Edit a collider's shape/dimensions, layer, material, visualization or rotation (undoable; live colliders respawn)."""
+    if shape is not None and shape not in _COLLISION_SHAPES:
+        raise ValueError("shape must be box, capsule, or sphere")
+    patch: dict[str, Any] = {}
+    sizes = (size_x, size_y, size_z)
+    if any(v is not None for v in sizes):
+        if any(v is None for v in sizes):
+            raise ValueError("size_x, size_y, and size_z must be supplied together")
+        patch["size"] = {"x": size_x, "y": size_y, "z": size_z}
+    for key, value in (("shape", shape), ("radius", radius), ("height", height), ("scale", scale), ("preset", preset),
+                       ("material", material), ("visualize", visualize), ("roll", roll), ("pitch", pitch),
+                       ("yaw", yaw), ("name", name)):
+        if value is not None:
+            patch[key] = value
+    return _json(_send("collision_update", {"id": object_id, "patch": patch}))
+
+
+@mcp.tool()
+def collision_list(premise_id: str = "", room_id: str = "", preset: str = "") -> str:
+    """List every collider (authored, imported and room-kit) with shape, dimensions, layer, groups and visualization state."""
+    return _json(_send("collision_list", {"premise_id": premise_id or None, "room_id": room_id or None,
+                                          "preset": preset or None}))
+
+
+@mcp.tool()
+def collision_layers(premise_id: str = "") -> str:
+    """Summarize collision layers in use: collider counts per preset, groups, and player/NPC blocking."""
+    return _json(_send("collision_layers", {"premise_id": premise_id or None}))
+
+
+@mcp.tool()
+def collision_visualization(visible: bool = True, object_ids: list[str] | None = None, premise_id: str = "",
+                            preset: str = "") -> str:
+    """Show or hide World Builder's collider wireframes for chosen colliders, a premise, or one layer (live colliders respawn)."""
+    return _json(_send("collision_visualization", {"visible": visible, "object_ids": object_ids or [],
+                                                   "premise_id": premise_id or None, "preset": preset or None}))
+
+
+@mcp.tool()
+def collision_passability(actor: str = "both", room_id: str = "", center_x: float | None = None,
+                          center_y: float | None = None, center_z: float | None = None, half_width: float = 10.0,
+                          half_depth: float | None = None, grid_step: float = 0.5, floor_z: float | None = None,
+                          start_x: float | None = None, start_y: float | None = None, start_z: float | None = None,
+                          goal_x: float | None = None, goal_y: float | None = None, goal_z: float | None = None,
+                          live: bool = False, premise_id: str = "") -> str:
+    """Preview player/NPC passability from saved colliders: a text map ('#' both, 'p' player-only, 'n' NPC-only),
+    blocking colliders, and an optional start->goal route per actor.
+
+    Area: room_id, or center_x/y (+ half sizes), or around V. live=true cross-checks the route with the
+    collision-ray walkability scan. This is an estimate from authored colliders, not a navmesh query.
+    """
+    if actor not in {"both", "player", "npc"}:
+        raise ValueError("actor must be both, player, or npc")
+    args: dict[str, Any] = {"actor": actor, "grid_step": grid_step, "half_width": half_width, "live": live,
+                            "room_id": room_id or None, "premise_id": premise_id or None}
+    if half_depth is not None:
+        args["half_depth"] = half_depth
+    if floor_z is not None:
+        args["floor_z"] = floor_z
+    if center_x is not None or center_y is not None:
+        if center_x is None or center_y is None:
+            raise ValueError("center_x and center_y must be supplied together")
+        args["center"] = {"x": center_x, "y": center_y, "z": center_z if center_z is not None else floor_z or 0}
+    for label, point in (("start", (start_x, start_y, start_z)), ("goal", (goal_x, goal_y, goal_z))):
+        if any(v is not None for v in point):
+            if any(v is None for v in point):
+                raise ValueError(f"{label}_x, {label}_y, and {label}_z must be supplied together")
+            args[label] = {"x": point[0], "y": point[1], "z": point[2]}
+    return _json(_send("collision_passability", args))
+
+
 @mcp.tool()
 def screenshot_mode_capabilities() -> str:
     """Report which configured HUD/post-effect/camera-shake settings exist in this game build (with current values), and whether world freezing and environments are available."""

@@ -247,3 +247,11 @@ time only for the capture and restores them in `finally`; if the result reports
 `screenshot_mode_restore_error`, call `screenshot_mode_restore` before anything
 else and tell the user. Report `screenshot_mode_unavailable` settings instead of
 claiming they were disabled.
+
+## Collision authoring
+
+Author blockers with `collision_create_primitive` (or `collision_fit_to_object`)
+and a preset from `collision_presets`; never invent collision mesh paths, use
+`collision_search_meshes`. `collision_passability` is an estimate from saved
+colliders on one floor level: report it as such, and use `live=true` or the
+walkability/navigation tools before claiming an actor can or cannot pass.

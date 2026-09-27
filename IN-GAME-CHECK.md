@@ -10,6 +10,14 @@
 The upgrade archive does not contain project/config JSON, logs, exports,
 thumbnails, or bridge state.
 
+## v0.60 Collision authoring smoke check
+
+1. Open **Spatial → Collision**. Place a 4 × 0.4 × 3 m box with preset **Player Blocker** across a corridor. The wireframe must appear, and V must be unable to walk through it.
+2. Watch an NPC path through the corridor: an NPC should pass a Player Blocker. Change the preset to **World Static** with **APPLY TO COLLIDER**; now nobody passes.
+3. **HIDE ALL COLLISION** removes the wireframes while the wall still blocks V.
+4. Set a goal beyond the wall from aim and **PREVIEW PASSABILITY**. The map shows the wall and `no_route`. Leave a gap and the route (`*`) goes through it; compare with the live cross-check.
+5. Fit a collider to a placed prop with imported bounds and confirm it encloses the prop.
+
 ## v0.59 Deterministic screenshot mode smoke check
 
 1. In **Spatial → Environment** click **CHECK GAME SETTINGS** and note any unavailable settings.

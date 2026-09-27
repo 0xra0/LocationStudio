@@ -1,3 +1,11 @@
+## 0.60.0 - 2026-09-27
+
+- Added collision authoring (`modules/collision.lua`, Spatial → Collision). It places World Builder `worldCollisionNode` box/capsule/sphere primitives, imports collision resources from World Builder's Collision Mesh catalog, and fits box colliders to a placed object's imported bounds. Shape, dimensions, layer, material, visualization and rotation are editable and undoable; live colliders respawn.
+- Collision layers use World Builder's 59 presets with its physics-group hints; presets and materials are stored as the indices World Builder's collider class reads. Room-kit colliders are included in lists, layers and passability.
+- Added visualization toggles for colliders, premises or layers, using World Builder's collider wireframe (`previewed`).
+- Added a player/NPC passability preview from saved colliders. It returns a text map, blocking colliders and per-actor 8-neighbour routes, handles yaw-oriented boxes (conservative bounds for roll/pitch) and head/step height, and can cross-check with the live collision-ray walkability scan.
+- Added MCP tools `collision_presets`, `collision_create_primitive`, `collision_search_meshes`, `collision_import_mesh`, `collision_fit_to_object`, `collision_update`, `collision_list`, `collision_layers`, `collision_visualization` and `collision_passability`, plus `COLLISION-AUTHORING.md` and runtime/UI/bridge/MCP tests. Bumped to v0.60.0.
+
 ## 0.59.0 - 2026-09-27
 
 - Added deterministic screenshot mode (`modules/screenshot_mode.lua`). It records and then overrides configurable CET settings ConfigVars: HUD elements under `/interface/hud`, and motion blur/film grain/chromatic aberration/depth of field/lens flares under `/graphics/basic`. List settings fall back to `SetIndex`. Settings missing from the running build, or refusing a write, are reported and left alone.
