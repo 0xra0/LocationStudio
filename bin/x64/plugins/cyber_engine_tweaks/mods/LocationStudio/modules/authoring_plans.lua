@@ -12,14 +12,14 @@ local OP_KIND={
     edl_begin='edl',set_room_kit='settings',import_resource='asset',place_resource='object',create_light='object',create_collision='object',
     create_vfx='object',create_audio_emitter='object',create_reverb_zone='object',create_occluder='object',create_interactable='object',
     create_npc='object',create_workspot='location',create_npc_route='npc_route',add_route_waypoint='waypoint',create_device_graph='device_graph',
-    add_device_node='device_node',add_device_link='device_link',link_fact='volume',import_navigation='navigation_graph',create_spline='spline',
+    add_device_node='device_node',add_device_link='device_link',link_fact='volume',import_navigation='navigation_graph',create_spline='spline',create_procedural='object',
 }
 local V2_ONLY={}
 for _,op in ipairs({'edl_begin','set_room_kit','import_resource','place_resource','create_light','create_collision','create_vfx','create_audio_emitter',
     'create_reverb_zone','create_occluder','create_interactable','create_npc','create_workspot','create_npc_route','add_route_waypoint','create_device_graph',
-    'add_device_node','add_device_link','link_fact','import_navigation','create_spline'}) do V2_ONLY[op]=true end
+    'add_device_node','add_device_link','link_fact','import_navigation','create_spline','create_procedural'}) do V2_ONLY[op]=true end
 local NEEDS_PREMISE={create_room=true,create_volume=true,create_camera=true,create_scene=true,capture_scene=true,place_asset=true,place_resource=true,
-    create_light=true,create_collision=true,create_vfx=true,create_audio_emitter=true,create_occluder=true,create_interactable=true,create_npc=true}
+    create_light=true,create_collision=true,create_vfx=true,create_audio_emitter=true,create_occluder=true,create_interactable=true,create_npc=true,create_procedural=true}
 -- Ops that do not need the World Builder runtime.
 local NO_RUNTIME={edl_begin=true,create_workspot=true,create_npc_route=true,add_route_waypoint=true,create_device_graph=true,add_device_node=true,
     add_device_link=true,link_fact=true,import_navigation=true,create_spline=true}
@@ -100,6 +100,7 @@ function Plans:schema()
             add_device_link={'graph_id','from_id','to_id','trigger?','condition_fact?','condition_value?'},
             link_fact={'volume_id','fact_name','value?'},import_navigation={'as','name','nodes [{id,offset}]','edges'},
             create_spline={'as','premise_id','points [offset]','closed?'},
+            create_procedural={'as','premise_id','generator','params','offset','yaw?','material?','collision?','layer?'},
         },
     }
 end
@@ -439,6 +440,11 @@ function Plans:_run_step(step,aliases,origin)
     elseif op=='create_spline' then
         local points={};for i,p in ipairs(a.points or {}) do points[i]={position=self:_point(origin,p.offset or p),mode=p.mode} end
         item,warning=app.splines:create({name=a.name,premise_id=a.premise_id,points=points,closed=a.closed,tension=a.tension,mode=a.mode});kind='spline'
+    elseif op=='create_procedural' then
+        if not app.procedural then return nil,'procedural geometry is unavailable' end
+        local r;r,warning=app.procedural:create({generator=a.generator,params=a.params,premise_id=a.premise_id,room_id=a.room_id,name=a.name,layer=a.layer,
+            material=a.material,collision=a.collision,collision_preset=a.collision_preset,stream_range=a.stream_range,transform=self:_transform(origin,a),spawn=a.spawn})
+        item=r and r.object;kind='object';if r and r.preview_error then warning=r.preview_error end
     elseif op=='activate_scene' then item,warning=app.scenes:activate(a.id,a.spawn~=false);kind='scene'
     elseif op=='deactivate_scene' then item,warning=app.scenes:deactivate(a.id);kind='scene'
     elseif op=='isolate_scene' then item,warning=app.scenes:isolate(a.id);kind='scene'

@@ -348,7 +348,7 @@ class Sources:
 
 # --------------------------------------------------------------------------- project roots
 
-_SKIP_KEYS = {"vanilla_source", "runtime", "reference_area_id"}
+_SKIP_KEYS = {"vanilla_source", "runtime", "reference_area_id", "procedural"}
 
 
 def project_roots(project: dict[str, Any], *, premise_id: str | None = None) -> list[dict[str, Any]]:
@@ -378,6 +378,12 @@ def project_roots(project: dict[str, Any], *, premise_id: str | None = None) -> 
             add("record", wb.get("resource_path"), "world_builder.resource_path")
         elif key == "audio":
             add("audio", wb.get("resource_path"), "world_builder.resource_path")
+        # Procedural geometry: its mesh is generated at build time; the template's materials are real dependencies.
+        proc = md.get("procedural") if isinstance(md.get("procedural"), dict) else None
+        if proc:
+            material = proc.get("material") or {}
+            add("path", material.get("template"), "procedural.material.template")
+            add("path", material.get("glass_template"), "procedural.material.glass_template")
         if (md.get("npc_population") or {}).get("record"):
             add("record", md["npc_population"]["record"], "npc_population.record")
         for fld in ("event", "sound_event"):

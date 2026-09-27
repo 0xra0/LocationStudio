@@ -46,13 +46,16 @@ function BuildExport:_objects(args)
     elseif type(args.object_ids)=='table' then
         wanted={};for _,id in ipairs(args.object_ids) do wanted[id]=true end
     end
-    local out={};self.last_excluded_by_layer={}
+    local out={};self.last_excluded_by_layer={};self.last_procedural={}
     for _,object in ipairs(model.data.objects or {}) do
         local in_scope=(wanted==nil or wanted[object.id]) and (args.premise_id==nil or object.premise_id==args.premise_id)
         -- Layers with export disabled (e.g. Debug) are left out on purpose;
         -- they are reported separately and never count as skipped.
         if in_scope and self.app.layers and not self.app.layers:export_enabled(object) then
             table.insert(self.last_excluded_by_layer,{id=object.id,name=object.name,layer=object.layer})
+        elseif in_scope and object.metadata and object.metadata.procedural then
+            -- Generated meshes are written by the Build Mod `procedural` stage, not by World Builder.
+            table.insert(self.last_procedural,{id=object.id,name=object.name,mesh_path=object.metadata.procedural.mesh_path})
         elseif in_scope then table.insert(out,object) end
     end
     return out
@@ -71,7 +74,7 @@ end
 -- objects that will be written. Return true to continue, or nil plus a message
 -- that the MCP caller will see.
 function BuildExport:_accept_skipped(skipped,exported,args)
-    if exported==0 then return nil,'No exportable World Builder objects in scope.' end
+    if exported==0 then return nil,'No exportable World Builder objects in scope.'..((#(self.last_procedural or {})>0) and ' Procedural geometry is added to an exported sector by Build Mod, so the scope needs at least one World Builder object (a light, collision or prop).' or '') end
     if #skipped==0 or args.allow_skipped==true then return true end
     local names={}
     for i=1,math.min(#skipped,5) do table.insert(names,tostring(skipped[i].name or skipped[i].id)..' ('..skipped[i].reason..')') end
@@ -222,7 +225,7 @@ function BuildExport:export(args)
         name=name,group=group_name,
         world_builder_group_file='data/objects/'..group_name..'.json',
         world_builder_export_file='export/'..name..'_exported.json',
-        exported=#children,skipped=skipped,excluded_by_layer=Util.deepcopy(self.last_excluded_by_layer or {}),export_issues=issues,origin=origin,
+        exported=#children,skipped=skipped,excluded_by_layer=Util.deepcopy(self.last_excluded_by_layer or {}),procedural=Util.deepcopy(self.last_procedural or {}),export_issues=issues,origin=origin,
     }
     self.last_error=nil
     self:_log('info','exported',{name=name,exported=#children,skipped=#skipped})

@@ -350,3 +350,13 @@ rollback). Keep the document id stable so re-applying updates the same location.
 Tell the user that re-applying replaces hand edits to built items. Use
 `edl_build` to go on to the preflight and Build Mod, and report a preflight stop
 instead of forcing the build.
+
+## Procedural geometry
+
+Use `procedural_create` (or EDL `geometry:`) for structural pieces that have no
+suitable game mesh; check parameters first with `procedural_preview_parts`.
+Pick the material template with `asset_catalog_search`, never an invented
+path, and tell the user that Build Mod needs a local copy of it (extracted with
+WolvenKit into mod_sources) plus the WolvenKit CLI. The preview is an
+approximation made of boxes. Describe the real mesh as existing only after a
+successful build, and verify it in game.

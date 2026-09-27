@@ -28,7 +28,7 @@ def test_mcp_operations_are_handled() -> None:
     handled.update(re.findall(r"or op == '([a-z_]+)'", bridge))
     handled.update(re.findall(r"'((?:wb_)?(?:clipcheck|fixturecheck|fitcheck))'", bridge))
     assert sent <= handled, f'MCP operations missing in CET bridge: {sorted(sent - handled)}'
-    assert len(re.findall(r'@mcp\.tool\(\)', server)) == 469
+    assert len(re.findall(r'@mcp\.tool\(\)', server)) == 478
     for operation in ('register_asset', 'update_asset', 'delete_asset', 'place_asset', 'clear_debug_log', 'run_diagnostics',
                       'capture_camera', 'copy_transform', 'paste_transform', 'move_item_to_aim',
                       'drop_item_to_ground', 'aim_item_at_target', 'scatter_at_aim',
@@ -89,7 +89,9 @@ def test_mcp_operations_are_handled() -> None:
         assert operation in sent
     for operation in ('sector_report_load', 'sector_report_flags', 'sector_report_select',
                       'dependency_report_load', 'dependency_report_objects', 'dependency_report_select',
-                      'preflight_run', 'preflight_load', 'preflight_select', 'edl_list', 'edl_get', 'edl_remove'):
+                      'preflight_run', 'preflight_load', 'preflight_select', 'edl_list', 'edl_get', 'edl_remove',
+                      'procedural_generators', 'procedural_preview_parts', 'procedural_create', 'procedural_update', 'procedural_delete',
+                      'procedural_list', 'procedural_show', 'procedural_settings'):
         assert operation in handled, operation
     for tool in ('performance_export', 'sector_inspect', 'sector_node', 'wb_favorite_add', 'wb_favorites_list', 'wb_device_connect', 'wb_elevator_wire',
                  'wb_polygon_scatter', 'wb_volume_scatter', 'wb_live_surface_scatter', 'wb_rng_create'):
@@ -152,6 +154,11 @@ def test_v6_modules_are_packaged() -> None:
     assert (mod / 'modules' / 'dependencies.lua').is_file()
     assert (mod / 'modules' / 'preflight.lua').is_file()
     assert (mod / 'mcp_server' / 'lsbuild' / 'edl.py').is_file()
+    assert (mod / 'modules' / 'procedural.lua').is_file()
+    assert (mod / 'mcp_server' / 'lsbuild' / 'procedural.py').is_file()
+    assert (mod / 'mcp_server' / 'test_procedural.py').is_file()
+    assert (mod.parents[5] / 'PROCEDURAL-GEOMETRY.md').is_file()
+    assert (mod.parents[5] / 'tests' / 'procedural_runtime_test.lua').is_file()
     assert (mod / 'edl' / 'locationstudio-edl-1.schema.json').is_file()
     assert (mod / 'edl' / 'examples' / 'ripperdoc_clinic.edl.yaml').is_file()
     assert (mod / 'mcp_server' / 'test_edl.py').is_file()

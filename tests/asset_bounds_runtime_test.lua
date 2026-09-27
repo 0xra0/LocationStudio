@@ -1,6 +1,6 @@
 local env=dofile(arg[2]..'/support/cet_mock.lua')
 local app=env.app
-assert(app.version=='0.71.0')
+assert(app.version=='0.72.0')
 local asset=assert(app.model:get_asset('builtin_chair_poor'))
 local premise=assert(app.model:add_premise({name='Bounds Test'}))
 local base={min={x=-1,y=-0.5,z=-0.5},max={x=1,y=0.5,z=0.5},units='m'}

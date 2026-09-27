@@ -1,6 +1,6 @@
 local env=dofile(arg[2]..'/support/cet_mock.lua')
 local app=env.app
-assert(app.version=='0.71.0' and app.device_logic)
+assert(app.version=='0.72.0' and app.device_logic)
 local graph=assert(app.device_logic:create({name='Clinic entrance logic'}))
 local door=assert(app.device_logic:add_node({graph_id=graph.id,kind='door',name='Front Door'}))
 local terminal=assert(app.device_logic:add_node({graph_id=graph.id,kind='terminal',name='Reception Panel'}))

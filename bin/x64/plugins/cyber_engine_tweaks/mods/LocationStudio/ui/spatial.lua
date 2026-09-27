@@ -22,6 +22,7 @@ function SpatialUI.new(app,notify)
         world_variant_id='',world_variant_name='before_quest',world_variant_fact='',world_variant_value=1,world_variant_operator='==',world_variant_priority=0,world_variant_object_visible=true,world_variant_auto=false,
         cover_name='Cover Node',cover_type='crouch',cover_exposure='medium',cover_spacing=1.5,cover_radius=8,cover_samples=24,cover_nodes_scan=nil,cover_selected_id='',cover_position={0,0,0},cover_yaw=0,
         spline_id='',spline_name='New Spline',spline_point=1,spline_handle={2,0,0},spline_use_kind='distribute',spline_asset_id='',spline_spacing=2,spline_npc_id='',spline_sample=nil,
+        pg_gen='wall',pg_params='{"length": 4, "height": 3, "thickness": 0.15}',pg_template='',pg_collision=true,pg_name='',pg_selected='',
         pf_deep=false,pf_open='',
         ref_name='Original',ref_pad=0.5,ref_approx=false,ref_show=false,ref_area_id='',ref_compare=nil,
         vc_radius=8,vc_term='',vc_hide=true,vc_approx=false,vc_group='',
@@ -915,6 +916,54 @@ function SpatialUI:draw_splines()
     end
 end
 
+function SpatialUI:draw_procedural()
+    local app=self.app;local P=app.procedural
+    ImGui.Text('PROCEDURAL GEOMETRY')
+    if not P then ImGui.TextDisabled('Procedural geometry failed to load.');return end
+    ImGui.TextWrapped('Generate walls, floors, ceilings, columns, stairs, ramps, door frames, windows, railings, pipes, ducts and boxes from dimensions. The preview uses World Builder shapes; Build Mod turns the geometry into a real .mesh (WolvenKit, using the material template mesh) and adds it to the exported sector.')
+    local gens=P:generators()
+    if ImGui.BeginCombo('Generator',self.pg_gen) then
+        for _,g in ipairs(gens.items) do if ImGui.Selectable(g.id..' - '..g.label..'##pg_'..g.id,self.pg_gen==g.id) then self.pg_gen=g.id end end
+        ImGui.EndCombo()
+    end
+    for _,g in ipairs(gens.items) do if g.id==self.pg_gen then for k,v in pairs(g.params) do ImGui.TextDisabled('  '..k..': '..v) end end end
+    self.pg_params=select(1,ImGui.InputTextMultiline('Parameters (JSON)',self.pg_params,2048))
+    self.pg_name=select(1,ImGui.InputText('Name##pg',self.pg_name,64))
+    self.pg_template=select(1,ImGui.InputText('Material template .mesh',self.pg_template,256))
+    self.pg_collision=select(1,ImGui.Checkbox('Generate collision',self.pg_collision))
+    local function params() local ok,v=pcall(json.decode,self.pg_params);if ok and type(v)=='table' then return v end;return nil end
+    if ImGui.Button('CREATE AT V##pg',140,28) then
+        local p=params();if not p then self:toast('Parameters must be a JSON object') else
+            local r,err=P:create({generator=self.pg_gen,params=p,name=self.pg_name,premise_id=app.selected_premise_id,material={template=self.pg_template},collision=self.pg_collision,source='player'})
+            if r then self.pg_selected=r.object.id end;self:toast(err or (r.parts..' part(s) generated'))
+        end
+    end
+    ImGui.SameLine();if ImGui.Button('CREATE AT AIM##pg',150,28) then
+        local p=params();if not p then self:toast('Parameters must be a JSON object') else
+            local r,err=P:create({generator=self.pg_gen,params=p,name=self.pg_name,premise_id=app.selected_premise_id,material={template=self.pg_template},collision=self.pg_collision,source='aim'})
+            if r then self.pg_selected=r.object.id end;self:toast(err or (r.parts..' part(s) generated'))
+        end
+    end
+    ImGui.Separator()
+    for _,row in ipairs(P:list({premise_id=app.selected_premise_id}).items) do
+        local b=row.bounds or {min={x=0,y=0,z=0},max={x=0,y=0,z=0}}
+        if ImGui.Selectable(string.format('%s [%s] %d part(s) %.1fx%.1fx%.1f m%s##pgrow_%s',row.name,row.generator,row.parts,b.max.x-b.min.x,b.max.y-b.min.y,b.max.z-b.min.z,row.collision and ' +collision' or '',row.id),self.pg_selected==row.id) then
+            self.pg_selected=row.id;local o=app.model:get_object(row.id);self.pg_gen=row.generator
+            self.pg_params=json.encode(o.metadata.procedural.params);self.pg_template=row.material and row.material.template or ''
+        end
+    end
+    local sel=app.model:get_object(self.pg_selected)
+    if sel and sel.metadata and sel.metadata.procedural then
+        if ImGui.Button('APPLY PARAMETERS##pg',180,26) then
+            local p=params();if not p then self:toast('Parameters must be a JSON object') else
+                local _,err=P:update(sel.id,{params=p,replace_params=true,generator=self.pg_gen,material={template=self.pg_template},collision=self.pg_collision});self:toast(err or 'Geometry regenerated') end
+        end
+        ImGui.SameLine();if ImGui.Button((P:is_shown(sel) and 'HIDE' or 'SHOW')..' PREVIEW##pg',150,26) then if P:is_shown(sel) then P:hide(sel) else local _,err=P:show(sel);if err then self:toast(err) end end end
+        ImGui.SameLine();if ImGui.Button('DELETE##pg',90,26) then local _,err=P:delete(sel.id);self:toast(err or 'Deleted');self.pg_selected='' end
+        ImGui.TextDisabled('Mesh: '..tostring(sel.metadata.procedural.mesh_path))
+    end
+end
+
 function SpatialUI:draw_preflight()
     local app=self.app;local P=app.preflight
     ImGui.Text('SHIPPING PREFLIGHT')
@@ -1657,6 +1706,7 @@ function SpatialUI:draw()
     local premise=self.app.model:get_premise(self.app.selected_premise_id)
     if ImGui.BeginTabBar('##spatial_tabs') then
         if ImGui.BeginTabItem('Preflight') then self:draw_preflight();ImGui.EndTabItem() end
+        if ImGui.BeginTabItem('Geometry') then self:draw_procedural();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Layers') then self:draw_layers();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Splines') then self:draw_splines();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Timeline') then self:draw_timeline();ImGui.EndTabItem() end

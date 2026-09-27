@@ -97,6 +97,18 @@ class CompilerTests(unittest.TestCase):
         self.assertEqual((upper["level"], upper["z"]), (1, 0.0), "floor elevation 3 = level 1 x floor height 3")
         self.assertEqual(len(steps(r, "import_resource")), 1, "resources are imported once")
 
+    def test_geometry(self):
+        r = edl.compile_document(doc(floors=[{"id": "g", "height": 3, "rooms": [{"id": "r", "at": [5, 0], "yaw": 90, "size": [6, 4],
+            "geometry": [{"id": "st", "generator": "stairs", "params": {"height": 3}, "at": [1, 0, 0], "material": "base\\stone.mesh"}]}]}],
+            geometry=[{"id": "w", "generator": "wall", "params": {"length": 4}}]))
+        self.assertTrue(r["valid"], r["errors"])
+        st = [s for s in r["plan"]["steps"] if s["op"] == "create_procedural"]
+        self.assertEqual([s["generator"] for s in st], ["stairs", "wall"])
+        self.assertAlmostEqual(st[0]["offset"]["y"], 1.0, msg="room frame applies")
+        self.assertEqual(st[0]["material"]["template"], "base\\stone.mesh")
+        self.assertTrue(any("material.template" in w for w in r["warnings"]))
+        self.assertFalse(edl.compile_document(doc(geometry=[{"id": "x", "generator": "dome"}]))["valid"])
+
     def test_errors(self):
         cases = {
             "duplicate id": doc(objects=[{"id": "r", "resource": "base\\a.mesh"}]),

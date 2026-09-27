@@ -3756,7 +3756,7 @@ def status_resource() -> str:
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from mod_inventory import scan_mod_installation as _scan_mod_installation  # noqa: E402
-from lsbuild import build as _lsb, native as _lsn, worker as _lsw, wiring as _lswire, rng as _lsrng, interactables as _lsip, population as _lsp, vfx as _lsvfx, sectors as _lssec, performance as _lsperf, vanilla as _lsvan, dependencies as _lsdep, preflight as _lspf, edl as _lsedl  # noqa: E402
+from lsbuild import build as _lsb, native as _lsn, worker as _lsw, wiring as _lswire, rng as _lsrng, interactables as _lsip, population as _lsp, vfx as _lsvfx, sectors as _lssec, performance as _lsperf, vanilla as _lsvan, dependencies as _lsdep, preflight as _lspf, edl as _lsedl, procedural as _lsproc  # noqa: E402
 
 WORLD_BUILDER_ROOT = MOD_DIR.parent / "entSpawner"
 BUILD_ROOT = MOD_DIR / "exports" / "build"
@@ -4118,6 +4118,21 @@ def build_mod_from_project(
         wb_root = WORLD_BUILDER_ROOT if WORLD_BUILDER_ROOT.is_dir() else None
         stage("prepare", lambda: _lsb.prepare_build_workspace(_export_file(name), BUILD_ROOT, world_builder_root=wb_root,
                                                               description="Built with LocationStudio", force=True))
+        # Procedural geometry: glb -> .mesh (WolvenKit) and native nodes, before dependencies see the meshes.
+        def procedural_stage():
+            sources = _lsdep.Sources(_dependency_sources(None, workspace))
+
+            def template_file(path: str):
+                hit = sources.files.get(_lsdep.normalize(path))
+                return hit[0] if hit and hit[1] == "binary" else None
+
+            cli_path = cli or shutil.which("cp77tools") or shutil.which("WolvenKit.CLI")
+            return _lsproc.apply_to_workspace(PROJECT, workspace, premise_id=premise_id, cli=cli_path, template_file=template_file,
+                                              output=workspace / "automation" / "procedural-report.json")
+        proc = stage("procedural", procedural_stage)
+        if not proc.get("ready"):
+            stages["procedural"]["error"] = f"{len(proc['issues'])} procedural mesh(es) could not be generated"
+            raise _StageFailed("procedural")
         def dependencies():
             out = _dependency_run(premise_id=premise_id, workspace=workspace,
                                   report_file=workspace / "automation" / "dependency-report.json")
@@ -4724,6 +4739,114 @@ def dependency_stage(workspace_name: str, premise_id: str = "", sources: list[st
                           report_file=ws / "automation" / "dependency-report.json")
     staged = _lsdep.stage(out["full"], ws)
     return _json({"ready": out["slim"]["ready"], "counts": out["slim"]["counts"], "missing": out["slim"]["missing"], "staged": staged})
+
+
+PROCEDURAL_EXPORTS = MOD_DIR / "exports" / "procedural"
+
+
+@mcp.tool()
+def procedural_generators() -> str:
+    """Procedural geometry generators (wall, floor, ceiling, column, stairs, ramp, door_frame, window, railing, pipe,
+    duct, box) with their parameters, and the preview/mesh-path settings."""
+    return _json(_send("procedural_generators"))
+
+
+@mcp.tool()
+def procedural_preview_parts(generator: str, params: dict[str, Any] | None = None) -> str:
+    """Dry run: the parts (box/wedge/cylinder/sphere/prism) and local bounds a generator produces, without creating anything."""
+    return _json(_send("procedural_preview_parts", {"generator": generator, "params": params or {}}))
+
+
+@mcp.tool()
+def procedural_create(generator: str, params: dict[str, Any] | None = None, name: str = "", position: list[float] | None = None,
+                      yaw: float = 0.0, source: str = "player", premise_id: str = "", room_id: str = "",
+                      material_template: str = "", appearance: str = "default", uv_scale: float = 1.0, glass_template: str = "",
+                      collision: bool = True, collision_preset: str = "", layer: str = "", stream_range: float | None = None,
+                      mesh_path: str = "", spawn: bool = True) -> str:
+    """Generate structural geometry from dimensions (one undo step). The object keeps its parameters and parts, shows
+    a World Builder shape preview, optionally gets real collision boxes, and becomes a real .mesh at Build Mod:
+    material_template must be an existing .mesh (catalog path) whose materials the generated mesh reuses, and a
+    local copy of it must be in a mod source folder for the WolvenKit import. Place at position [x,y,z] + yaw, or at
+    source=player|aim."""
+    args: dict[str, Any] = {"generator": generator, "params": params or {}, "name": name or None, "premise_id": premise_id or None,
+                            "room_id": room_id or None, "layer": layer or None, "collision": collision, "collision_preset": collision_preset or None,
+                            "stream_range": stream_range, "mesh_path": mesh_path or None, "spawn": spawn,
+                            "material": {"template": material_template, "appearance": appearance, "uv_scale": uv_scale, "glass_template": glass_template}}
+    if position is not None:
+        p = _xyz(position, "position")
+        args["transform"] = {"position": {**p, "w": 1}, "rotation": {"roll": 0, "pitch": 0, "yaw": yaw}}
+    else:
+        if source not in {"player", "aim"}:
+            raise ValueError("source must be player or aim (or give position)")
+        args.update(source=source, yaw=yaw)
+    return _json(_send("procedural_create", {k: v for k, v in args.items() if v is not None}))
+
+
+@mcp.tool()
+def procedural_update(object_id: str, params: dict[str, Any] | None = None, replace_params: bool = False, generator: str = "",
+                      material_template: str | None = None, appearance: str | None = None, uv_scale: float | None = None,
+                      collision: bool | None = None, name: str | None = None, stream_range: float | None = None) -> str:
+    """Change a procedural object's parameters (merged unless replace_params), generator, material or collision and
+    regenerate it, replacing its collision boxes and preview. One undo step; invalid parameters change nothing."""
+    material = {k: v for k, v in (("template", material_template), ("appearance", appearance), ("uv_scale", uv_scale)) if v is not None}
+    args: dict[str, Any] = {"id": object_id, "params": params or {}, "replace_params": replace_params, "generator": generator or None,
+                            "material": material or None, "collision": collision, "name": name, "stream_range": stream_range}
+    return _json(_send("procedural_update", {k: v for k, v in args.items() if v is not None}))
+
+
+@mcp.tool()
+def procedural_delete(object_id: str) -> str:
+    """Delete a procedural object with its collision boxes and preview (undoable)."""
+    return _json(_send("procedural_delete", {"id": object_id}))
+
+
+@mcp.tool()
+def procedural_list(premise_id: str = "") -> str:
+    """Procedural objects with generator, part count, bounds, generated mesh path, material and collision."""
+    return _json(_send("procedural_list", {"premise_id": premise_id or None}))
+
+
+@mcp.tool()
+def procedural_show(object_id: str, visible: bool = True) -> str:
+    """Show or hide the World Builder shape preview of a procedural object."""
+    return _json(_send("procedural_show", {"id": object_id, "visible": visible}))
+
+
+@mcp.tool()
+def procedural_settings(proxy: str = "", proxy_asset_id: str | None = None, proxy_native_size: list[float] | None = None,
+                        mesh_root: str = "") -> str:
+    """Preview mode: collision (visualized World Builder collision shapes, no setup; they block movement while shown),
+    mesh (a registered unit mesh asset scaled per part; give its native size unless its bounds are imported) or none.
+    mesh_root is the depot folder generated meshes are written under."""
+    args: dict[str, Any] = {}
+    if proxy:
+        args["proxy"] = proxy
+    if proxy_asset_id is not None:
+        args["proxy_asset_id"] = proxy_asset_id
+    if proxy_native_size is not None:
+        args["proxy_native_size"] = _xyz(proxy_native_size, "proxy_native_size")
+    if mesh_root:
+        args["mesh_root"] = mesh_root
+    return _json(_send("procedural_settings", args))
+
+
+@mcp.tool()
+def procedural_export_glb(object_id: str = "", premise_id: str = "", output_dir: str = "") -> str:
+    """Offline: write the saved procedural geometry as glTF binaries (for checking in Blender or custom conversion),
+    from the saved project. Coordinates are object-local, Y-up."""
+    project = json.loads(PROJECT.read_text(encoding="utf-8")) if PROJECT.is_file() else {"objects": []}
+    objects = [o for o in _lsproc.procedural_objects(project, premise_id or None) if not object_id or o.get("id") == object_id]
+    if not objects:
+        raise ValueError("no saved procedural objects match; save the project first")
+    out_dir = Path(output_dir).expanduser() if output_dir else PROCEDURAL_EXPORTS
+    files = []
+    for o in objects:
+        mesh = _lsproc.object_mesh(o)
+        name = re.sub(r"[^A-Za-z0-9_-]+", "_", f"{o.get('name')}_{o.get('id')}")
+        target = out_dir / f"{name}.glb"
+        _lsproc.write_glb(mesh, target, name=name)
+        files.append({"object_id": o.get("id"), "file": str(target), "triangles": mesh.triangle_count, "bounds": mesh.bounds()})
+    return _json({"count": len(files), "files": files})
 
 
 EDL_EXPORTS = MOD_DIR / "exports" / "edl"
