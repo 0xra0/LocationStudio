@@ -1,3 +1,12 @@
+## 0.58.0 - 2026-09-27
+
+- Added saved authoring environments (project schema 17, `environments`) with time, weather state (which determines rain), weather blend/priority, an optional World Builder Fog Volume (size, density, falloff, absorption, color; player/camera/premise anchor) and an exposure note.
+- Added Spatial → Environment: create, capture current conditions, edit, preview, force (re-apply clock every 1 s and weather every 2 s when the game changes them), and restore. Restore sets the exact pre-preview game time, calls `ResetWeather` to return to the game cycle, and removes the fog volume; the restore point survives CET reloads and a failed restore is retryable.
+- Exposure and independent rain intensity are not applied: CET exposes no verified setter. Live rain intensity is reported read-only when available.
+- The Lighting time preview is refused while an environment preview is active, and an in-progress lighting time preview is taken over so restore returns to the true original time. Deleting a premise unlinks its environments instead of removing them.
+- `visual_regression_capture` / `hotcycle_rebuild` accept an environment, force it for the whole shot series, restore afterwards, record it in the manifest and accepted baseline, and flag `environment_mismatch`.
+- Added MCP tools `environment_weather_states`, `environment_list`, `environment_create`, `environment_update`, `environment_delete`, `environment_preview`, `environment_force`, `environment_status`, `environment_restore`, plus `ENVIRONMENT-PREVIEW.md` and mocked runtime/UI/bridge/MCP tests. Updated the static bridge test to the current schema and tool count. Bumped to v0.58.0.
+
 ## 0.57.0 - 2026-09-27
 
 - Added a VFX / particle editor (Spatial → VFX) that searches World Builder's loaded Particles (`worldStaticParticleNode`) and Effects (`worldEffectNode`) catalogs, with keyword categories for smoke, steam, sparks, holograms, fire, dust, leaks, electrical and weather effects. Paths outside the loaded catalogs are rejected.

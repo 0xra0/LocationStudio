@@ -85,6 +85,7 @@ function Lighting:apply_preset(object_id,preset_id)
     return nil,'unknown lighting preset: '..tostring(preset_id)
 end
 function Lighting:preview_time(hour,minute)
+    if self.app.environment and self.app.environment:status().active then return nil,'An environment preview controls the game clock; restore it first' end
     hour=math.floor(tonumber(hour) or -1);minute=math.floor(tonumber(minute) or 0)
     if hour<0 or hour>23 or minute<0 or minute>59 then return nil,'time must be between 00:00 and 23:59' end
     local ok,sys=pcall(function() return Game.GetTimeSystem() end);if not ok or not sys then return nil,'CET game-time system is unavailable' end

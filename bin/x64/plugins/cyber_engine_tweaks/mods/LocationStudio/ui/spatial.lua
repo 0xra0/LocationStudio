@@ -21,6 +21,7 @@ function SpatialUI.new(app,notify)
         questsim_filter='',questsim_fact='',questsim_value=1,questsim_trigger_id='',questsim_pending=nil,questsim_catalog=nil,
         world_variant_id='',world_variant_name='before_quest',world_variant_fact='',world_variant_value=1,world_variant_operator='==',world_variant_priority=0,world_variant_object_visible=true,world_variant_auto=false,
         cover_name='Cover Node',cover_type='crouch',cover_exposure='medium',cover_spacing=1.5,cover_radius=8,cover_samples=24,cover_nodes_scan=nil,cover_selected_id='',cover_position={0,0,0},cover_yaw=0,
+        env_selected_id='',env_new_name='Golden hour rain',env_edit_id=nil,env_edit=nil,env_force=true,
         vfx_query='',vfx_category='all',vfx_backend='all',vfx_results=nil,vfx_selected=nil,vfx_name='',vfx_scale={1,1,1},vfx_rotation={0,0,0},vfx_emission=1,vfx_respawn_on_move=false,vfx_align=false,vfx_follow=true,vfx_distance=10,vfx_edit_id=nil,vfx_edit=nil,
         lighting_name='New Static Light',lighting_preset='warm',lighting_search='',lighting_hour=20,lighting_minute=0,
         audio_query='amb_',audio_results=nil,audio_selected_path='',audio_name='Room Tone',audio_radius=5,audio_metadata='',
@@ -852,6 +853,72 @@ function SpatialUI:_vfx_args(extra)
     return args
 end
 
+function SpatialUI:draw_environment()
+    local app=self.app;local envs=app.environment
+    ImGui.Text('ENVIRONMENT & WEATHER PREVIEW')
+    if not envs then ImGui.TextDisabled('The environment module failed to load. Check the debug log.');return end
+    ImGui.TextWrapped('Save time, weather (which sets rain) and a local fog volume as a named authoring environment. Preview applies it; Force holds the clock and weather while you work or capture screenshots. Restore returns the original time and hands weather back to the game cycle.')
+    local status=envs:status();local cur=status.current or {}
+    ImGui.TextDisabled('Live: '..(cur.hour and string.format('%02d:%02d',cur.hour,cur.minute) or 'time ?')..' · '..tostring(cur.weather or 'weather ?')..(cur.rain_intensity and string.format(' · rain %.2f',cur.rain_intensity) or ''))
+    self.env_new_name=select(1,ImGui.InputText('New environment name',self.env_new_name,96))
+    if ImGui.Button('NEW ENVIRONMENT',170,28) then local env,err=envs:create({name=self.env_new_name});if env then self.env_selected_id=env.id end;self:toast(err or 'Environment created') end
+    ImGui.SameLine();if ImGui.Button('CAPTURE CURRENT CONDITIONS',240,28) then local env,err=envs:create({name=self.env_new_name,capture_current=true});if env then self.env_selected_id=env.id end;self:toast(err or 'Current time and weather saved') end
+    ImGui.BeginChild('##env_list',230,300,true)
+    for _,env in ipairs(envs:list().items) do
+        local mark=status.active and status.environment_id==env.id and ' ●' or ''
+        if ImGui.Selectable(env.name..mark..'##env_'..env.id,self.env_selected_id==env.id) then self.env_selected_id=env.id end
+    end
+    ImGui.EndChild();ImGui.SameLine();ImGui.BeginChild('##env_edit',0,300,true)
+    local env=app.model:get_environment(self.env_selected_id)
+    if env then
+        if self.env_edit_id~=env.id then self.env_edit_id=env.id;self.env_edit=app.util.deepcopy(env) end
+        local e=self.env_edit
+        e.name=select(1,ImGui.InputText('Name##env',e.name,96))
+        e.time.enabled=select(1,ImGui.Checkbox('Set time',e.time.enabled))
+        e.time.hour=select(1,ImGui.InputInt('Hour##env',e.time.hour));e.time.minute=select(1,ImGui.InputInt('Minute##env',e.time.minute))
+        e.weather.enabled=select(1,ImGui.Checkbox('Set weather',e.weather.enabled))
+        local label=e.weather.state
+        for _,w in ipairs(envs:weather_states()) do if w.id==e.weather.state then label=w.name..(w.rain~='none' and (' — rain: '..w.rain) or '') end end
+        if ImGui.BeginCombo('Weather##env',label) then
+            for _,w in ipairs(envs:weather_states()) do if ImGui.Selectable(w.name..(w.rain~='none' and (' — rain: '..w.rain) or '')..(w.fog and ' — haze/fog' or '')..'##w_'..w.id,e.weather.state==w.id) then e.weather.state=w.id end end
+            ImGui.EndCombo()
+        end
+        e.weather.state=select(1,ImGui.InputText('Weather state CName',e.weather.state,96))
+        e.weather.blend_time=select(1,ImGui.InputFloat('Blend time (s)',e.weather.blend_time,1,5,'%.1f'))
+        e.weather.priority=select(1,ImGui.InputInt('Weather priority',e.weather.priority))
+        e.fog.enabled=select(1,ImGui.Checkbox('Local fog volume (World Builder)',e.fog.enabled))
+        if e.fog.enabled then
+            if ImGui.BeginCombo('Fog anchor',e.fog.anchor) then for _,a in ipairs({'player','camera','premise'}) do if ImGui.Selectable(a..'##fog_'..a,e.fog.anchor==a) then e.fog.anchor=a end end;ImGui.EndCombo() end
+            e.fog.size.x=select(1,ImGui.InputFloat('Fog width (m)',e.fog.size.x,1,10,'%.0f'))
+            e.fog.size.y=select(1,ImGui.InputFloat('Fog depth (m)',e.fog.size.y,1,10,'%.0f'))
+            e.fog.size.z=select(1,ImGui.InputFloat('Fog height (m)',e.fog.size.z,1,10,'%.0f'))
+            e.fog.density_factor=select(1,ImGui.InputFloat('Density factor',e.fog.density_factor,0.05,0.5,'%.2f'))
+            e.fog.density_falloff=select(1,ImGui.InputFloat('Density falloff',e.fog.density_falloff,0.05,0.5,'%.2f'))
+            e.fog.absorption=select(1,ImGui.InputFloat('Absorption',e.fog.absorption,0.05,0.5,'%.2f'))
+            e.fog.blend_falloff=select(1,ImGui.InputFloat('Blend falloff',e.fog.blend_falloff,0.05,0.5,'%.2f'))
+            local r,g,b,changed=ImGui.ColorEdit3('Fog color',e.fog.color[1],e.fog.color[2],e.fog.color[3]);if changed then e.fog.color={r,g,b} end
+        end
+        e.exposure_note=select(1,ImGui.InputText('Exposure note (not applied)',e.exposure_note,160))
+        if ImGui.Button('SAVE ENVIRONMENT',170,28) then
+            local result,err=envs:update(env.id,{name=e.name,time=e.time,weather=e.weather,fog=e.fog,exposure_note=e.exposure_note})
+            if result then self.env_edit_id=nil end
+            self:toast(err or result.warning or (result.reapplied and 'Saved and re-applied to the preview' or 'Environment saved'))
+        end
+        ImGui.SameLine();if ImGui.Button('DELETE ENVIRONMENT',180,28) then local ok,err=envs:delete(env.id);if ok then self.env_selected_id='' end;self:toast(err or 'Environment deleted') end
+    else ImGui.TextDisabled('Select or create an environment.') end
+    ImGui.EndChild()
+    ImGui.Separator()
+    self.env_force=select(1,ImGui.Checkbox('Force (hold time and weather) while previewing',self.env_force))
+    if ImGui.Button('PREVIEW ENVIRONMENT',190,30) then local result,err=envs:preview(self.env_selected_id,{force=self.env_force});self:toast(err or (result.warning and ('Previewing with warnings: '..result.warning)) or 'Environment applied') end
+    ImGui.SameLine();if ImGui.Button('RESTORE ORIGINAL',170,30) then local result,err=envs:restore();self:toast(err or 'Original time restored; weather returned to the game cycle') end
+    if status.active then
+        ImGui.TextDisabled('Previewing '..tostring(status.name)..(status.force and ' (forced)' or '')..(status.fog_spawned and ' · fog volume live' or ''))
+        if not status.force then ImGui.SameLine();if ImGui.SmallButton('FORCE NOW') then envs:set_force(true) end
+        else ImGui.SameLine();if ImGui.SmallButton('STOP FORCING') then envs:set_force(false) end end
+        for _,w in ipairs(status.warnings or {}) do ImGui.TextDisabled('! '..w) end
+    end
+end
+
 function SpatialUI:draw_vfx()
     local app=self.app;local vfx=app.vfx
     ImGui.Text('VFX / PARTICLE EDITOR')
@@ -999,6 +1066,7 @@ function SpatialUI:draw()
         if ImGui.BeginTabItem('Combat encounters') then self:draw_combat_encounters(premise);ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Lighting') then self:draw_lighting();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('VFX') then self:draw_vfx();ImGui.EndTabItem() end
+        if ImGui.BeginTabItem('Environment') then self:draw_environment();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Ambient Audio') then self:draw_ambient_audio();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Meshes + Decals') then self:draw_mesh_appearance();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Interactables') then self:draw_interactables();ImGui.EndTabItem() end
