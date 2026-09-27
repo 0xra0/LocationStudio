@@ -10,6 +10,13 @@
 The upgrade archive does not contain project/config JSON, logs, exports,
 thumbnails, or bridge state.
 
+## v0.65 Spline editor smoke check
+
+1. In **Spatial → Splines**, create a spline at aim and add four points along a street. Click **PREVIEW IN WORLD**: markers follow a smooth curve through the points.
+2. Set point 2 to `free` and move its out handle: the curve kinks only at point 2. Set it to `linear`: the segments become straight.
+3. Apply `distribute` with a lamp-post asset at 8 m spacing. Move a point to aim, then click **REGENERATE ALL USES**: the posts follow the new curve and **UNDO** restores them.
+4. Apply `native_spline`, export with Build Mod, and open the result in World Builder: the curve matches the preview.
+
 ## v0.64 Layer manager smoke check
 
 1. Open **Spatial → Layers**. The eight default layers are listed with object counts.

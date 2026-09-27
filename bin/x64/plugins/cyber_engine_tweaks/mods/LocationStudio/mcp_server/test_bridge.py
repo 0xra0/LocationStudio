@@ -10,8 +10,8 @@ def test_project_shape() -> None:
     # of requiring mutable runtime data in the source tree.
     mod = Path(__file__).resolve().parents[1]
     model = (mod / 'modules' / 'model.lua').read_text(encoding='utf-8')
-    assert 'schema_version=17' in model
-    for collection in ('locations', 'routes', 'premises', 'rooms', 'objects', 'object_groups', 'object_prefabs', 'volumes', 'cameras', 'assets', 'room_frames', 'environments'):
+    assert 'schema_version=18' in model
+    for collection in ('locations', 'routes', 'premises', 'rooms', 'objects', 'object_groups', 'object_prefabs', 'volumes', 'cameras', 'assets', 'room_frames', 'environments', 'splines'):
         assert re.search(rf'\b{collection}\s*=\s*\{{\}}', model), collection
     for layer in ('shell', 'gameplay', 'decoration', 'lighting', 'quest', 'npc', 'audio', 'debug'):
         assert layer in model
@@ -28,7 +28,7 @@ def test_mcp_operations_are_handled() -> None:
     handled.update(re.findall(r"or op == '([a-z_]+)'", bridge))
     handled.update(re.findall(r"'((?:wb_)?(?:clipcheck|fixturecheck|fitcheck))'", bridge))
     assert sent <= handled, f'MCP operations missing in CET bridge: {sorted(sent - handled)}'
-    assert len(re.findall(r'@mcp\.tool\(\)', server)) == 401
+    assert len(re.findall(r'@mcp\.tool\(\)', server)) == 415
     for operation in ('register_asset', 'update_asset', 'delete_asset', 'place_asset', 'clear_debug_log', 'run_diagnostics',
                       'capture_camera', 'copy_transform', 'paste_transform', 'move_item_to_aim',
                       'drop_item_to_ground', 'aim_item_at_target', 'scatter_at_aim',
@@ -74,7 +74,10 @@ def test_mcp_operations_are_handled() -> None:
                       'visibility_capabilities', 'visibility_create_occluder', 'visibility_occlude_room',
                       'visibility_update_occluder', 'visibility_list_occluders', 'visibility_pvs', 'visibility_hidden_meshes',
                       'layer_list', 'layer_create', 'layer_update', 'layer_set_visible', 'layer_set_locked', 'layer_isolate',
-                      'layer_select_all', 'layer_assign', 'layer_auto_assign', 'layer_delete'):
+                      'layer_select_all', 'layer_assign', 'layer_auto_assign', 'layer_delete',
+                      'spline_list', 'spline_create', 'spline_update', 'spline_delete', 'spline_add_point', 'spline_insert_point',
+                      'spline_update_point', 'spline_delete_point', 'spline_sample', 'spline_apply_use', 'spline_regenerate',
+                      'spline_remove_use', 'spline_preview', 'spline_preview_clear'):
         assert operation in sent
     for operation in ('sector_report_load', 'sector_report_flags', 'sector_report_select'):
         assert operation in handled, operation
@@ -132,6 +135,10 @@ def test_v6_modules_are_packaged() -> None:
     assert (mod / 'modules' / 'performance.lua').is_file()
     assert (mod / 'modules' / 'visibility.lua').is_file()
     assert (mod / 'modules' / 'layers.lua').is_file()
+    assert (mod / 'modules' / 'splines.lua').is_file()
+    assert (mod / 'mcp_server' / 'test_splines.py').is_file()
+    assert (mod.parents[5] / 'SPLINES.md').is_file()
+    assert (mod.parents[5] / 'tests' / 'splines_runtime_test.lua').is_file()
     assert (mod / 'mcp_server' / 'test_layers.py').is_file()
     assert (mod.parents[5] / 'LAYERS.md').is_file()
     assert (mod.parents[5] / 'tests' / 'layers_runtime_test.lua').is_file()

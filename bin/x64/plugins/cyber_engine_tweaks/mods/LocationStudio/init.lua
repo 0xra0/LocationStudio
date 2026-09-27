@@ -50,6 +50,7 @@ local SectorInspector=safe_require('modules/sector_inspector')
 local Performance=safe_require('modules/performance')
 local Visibility=safe_require('modules/visibility')
 local Layers=safe_require('modules/layers')
+local Splines=safe_require('modules/splines')
 local BuildExport=safe_require('modules/build_export')
 local WbImport=safe_require('modules/wb_import')
 local AssetBounds=safe_require('modules/asset_bounds')
@@ -61,7 +62,7 @@ local Checkpoints=safe_require('modules/checkpoints')
 local Editor=safe_require('ui/editor')
 
 local LocationStudio={
-    version='0.64.0',ready=false,diagnostic_ready=true,init_failed=nil,ui_failed=nil,
+    version='0.65.0',ready=false,diagnostic_ready=true,init_failed=nil,ui_failed=nil,
     overlay_open=false,editor_visible=true,dirty=false,dirty_since=0,last_autosave=0,last_bridge_poll=0,
     selected_location_id=nil,selected_route_id=nil,selected_premise_id=nil,selected_room_id=nil,
     selected_object_id=nil,selected_volume_id=nil,selected_camera_id=nil,selected_scene_id=nil,editing_scene_id=nil,live_scene_id=nil,selected_asset_id=nil,last_asset_id=nil,selected_item_kind=nil,
@@ -206,6 +207,7 @@ function LocationStudio:initialize()
     self.performance=Performance and construct('performance',function() return Performance.new(self) end) or nil
     self.visibility=Visibility and construct('visibility',function() return Visibility.new(self) end) or nil
     self.layers=Layers and construct('layers',function() return Layers.new(self) end) or nil
+    self.splines=Splines and construct('splines',function() return Splines.new(self) end) or nil
     self.build_export=BuildExport and construct('build_export',function() return BuildExport.new(self) end) or nil
     self.wb_import=WbImport and construct('wb_import',function() return WbImport.new(self) end) or nil
     self.asset_bounds=AssetBounds and construct('asset_bounds',function() return AssetBounds.new(self) end) or nil
@@ -371,7 +373,7 @@ end)
 registerForEvent('onInit',guarded_callback('event:onInit',function() LocationStudio:initialize() end))
 registerForEvent('onOverlayOpen',guarded_callback('event:onOverlayOpen',function() LocationStudio.overlay_open=true;LocationStudio.editor_visible=true;LocationStudio.config.window_open=true;LocationStudio.logger:debug('overlay','opened',{editor_visible=true}) end))
 registerForEvent('onOverlayClose',guarded_callback('event:onOverlayClose',function()
-    LocationStudio.overlay_open=false;if LocationStudio.ready then if LocationStudio.transform_session:is_active() then LocationStudio.transform_session:cancel() end;if LocationStudio.stamp_session:is_active() then LocationStudio.stamp_session:cancel() end;if not LocationStudio.stamp_session:is_active() then LocationStudio.placement:clear_preview() end;if LocationStudio.vfx then LocationStudio.vfx:preview_clear() end;LocationStudio:save(false);LocationStudio.storage:save_config(LocationStudio.config) end;LocationStudio.logger:debug('overlay','closed')
+    LocationStudio.overlay_open=false;if LocationStudio.ready then if LocationStudio.transform_session:is_active() then LocationStudio.transform_session:cancel() end;if LocationStudio.stamp_session:is_active() then LocationStudio.stamp_session:cancel() end;if not LocationStudio.stamp_session:is_active() then LocationStudio.placement:clear_preview() end;if LocationStudio.vfx then LocationStudio.vfx:preview_clear() end;if LocationStudio.splines then LocationStudio.splines:preview_clear() end;LocationStudio:save(false);LocationStudio.storage:save_config(LocationStudio.config) end;LocationStudio.logger:debug('overlay','closed')
 end))
 registerForEvent('onUpdate',guarded_callback('event:onUpdate',function(delta)
     if not LocationStudio.ready then return end;local now=os.clock();local poll=tonumber(LocationStudio.config.bridge_poll_interval) or 0.15

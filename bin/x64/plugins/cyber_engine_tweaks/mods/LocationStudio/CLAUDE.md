@@ -284,3 +284,11 @@ without the user's approval, and do not move objects onto a locked layer.
 Use `layer_auto_assign` with `apply=false` first and show the moves. Objects on
 export-disabled layers (Debug by default) are intentionally absent from
 builds; report `excluded_by_layer` instead of treating it as a failure.
+
+## Splines
+
+Prefer one spline plus `spline_apply_use` over hand-computed point lists for
+cables, fences, roads, rows of props, NPC patrols and camera paths. After
+editing a curve, call `spline_regenerate`; warn the user that hand edits to
+generated objects are replaced unless the use is removed with
+`keep_outputs=true`.

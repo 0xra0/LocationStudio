@@ -21,6 +21,7 @@ function SpatialUI.new(app,notify)
         questsim_filter='',questsim_fact='',questsim_value=1,questsim_trigger_id='',questsim_pending=nil,questsim_catalog=nil,
         world_variant_id='',world_variant_name='before_quest',world_variant_fact='',world_variant_value=1,world_variant_operator='==',world_variant_priority=0,world_variant_object_visible=true,world_variant_auto=false,
         cover_name='Cover Node',cover_type='crouch',cover_exposure='medium',cover_spacing=1.5,cover_radius=8,cover_samples=24,cover_nodes_scan=nil,cover_selected_id='',cover_position={0,0,0},cover_yaw=0,
+        spline_id='',spline_name='New Spline',spline_point=1,spline_handle={2,0,0},spline_use_kind='distribute',spline_asset_id='',spline_spacing=2,spline_npc_id='',spline_sample=nil,
         layer_new_name='Set Dressing',layer_edit_id='',layer_auto=nil,
         vis_mesh='plane_two_sided',vis_size={4,1,3},vis_pvs=nil,vis_hidden=nil,vis_live=false,
         perf_report=nil,perf_scope='premise',
@@ -859,6 +860,57 @@ function SpatialUI:_vfx_args(extra)
     return args
 end
 
+function SpatialUI:draw_splines()
+    local app=self.app;local S=app.splines
+    ImGui.Text('SPLINE EDITOR')
+    if not S then ImGui.TextDisabled('The spline editor failed to load.');return end
+    ImGui.TextWrapped('Persistent Bezier splines with control points and tangent handles. Build cables, fences, roads, object rows, NPC routes, camera paths or a native World Builder spline from one curve, then REGENERATE after editing it.')
+    self.spline_name=select(1,ImGui.InputText('Spline name',self.spline_name,64))
+    if ImGui.Button('NEW SPLINE AT AIM',170,28) then local sp,err=S:create({name=self.spline_name,source='aim'});if sp then self.spline_id=sp.id;self.spline_point=1 end;self:toast(err or 'Spline created; add points at aim') end
+    ImGui.BeginChild('##spline_list',0,80,true)
+    for _,row in ipairs(S:list({premise_id=app.selected_premise_id}).items) do
+        if ImGui.Selectable(string.format('%s · %d pts · %.1f m%s · %d use(s)##spl_%s',row.name,row.points,row.length,row.closed and ' · closed' or '',#row.uses,row.id),self.spline_id==row.id) then self.spline_id=row.id;self.spline_point=1 end
+    end
+    ImGui.EndChild()
+    local sp=S:get(self.spline_id)
+    if not sp then ImGui.TextDisabled('Create or select a spline.');return end
+    ImGui.Text(sp.name..(sp.closed and ' (closed)' or ' (open)'))
+    if ImGui.Button('ADD POINT AT AIM',160,26) then local r,err=S:add_point(sp.id,{source='aim'});if r then self.spline_point=r.index end;self:toast(err or ('Point '..r.index..' added')) end
+    ImGui.SameLine();if ImGui.Button('ADD AT PLAYER',140,26) then local r,err=S:add_point(sp.id,{source='player'});if r then self.spline_point=r.index end;self:toast(err or 'Point added') end
+    ImGui.SameLine();if ImGui.Button(sp.closed and 'OPEN CURVE' or 'CLOSE CURVE',130,26) then local _,err=S:update(sp.id,{closed=not sp.closed});self:toast(err or 'Updated') end
+    local tension,tchanged=ImGui.SliderFloat('Auto tangent tension',sp.tension,0,1,'%.2f');if tchanged then S:update(sp.id,{tension=tension}) end
+    self.spline_point=math.max(1,math.min(#sp.points,(select(1,ImGui.InputInt('Control point',self.spline_point)))))
+    local p=sp.points[self.spline_point]
+    if p then
+        ImGui.TextDisabled(string.format('Point %d: (%.2f, %.2f, %.2f) · %s',self.spline_point,p.position.x,p.position.y,p.position.z,p.mode))
+        if ImGui.BeginCombo('Tangent mode',p.mode) then for _,m in ipairs({'auto','aligned','free','linear'}) do if ImGui.Selectable(m..'##splmode_'..m,p.mode==m) then S:update_point(sp.id,self.spline_point,{mode=m}) end end;ImGui.EndCombo() end
+        if ImGui.Button('MOVE POINT TO AIM',170,26) then local _,err=S:update_point(sp.id,self.spline_point,{source='aim'});self:toast(err or 'Point moved') end
+        ImGui.SameLine();if ImGui.Button('DELETE POINT',130,26) then local _,err=S:delete_point(sp.id,self.spline_point);self:toast(err or 'Point deleted') end
+        self.spline_handle[1]=select(1,ImGui.InputFloat('Out handle X',self.spline_handle[1],0.1,1,'%.2f'))
+        self.spline_handle[2]=select(1,ImGui.InputFloat('Out handle Y',self.spline_handle[2],0.1,1,'%.2f'))
+        self.spline_handle[3]=select(1,ImGui.InputFloat('Out handle Z',self.spline_handle[3],0.1,1,'%.2f'))
+        if ImGui.Button('SET OUT HANDLE',150,26) then local _,err=S:update_point(sp.id,self.spline_point,{handle_out={x=self.spline_handle[1],y=self.spline_handle[2],z=self.spline_handle[3]}});self:toast(err or 'Handle set (mirrored when aligned)') end
+    end
+    if ImGui.Button('PREVIEW IN WORLD',160,26) then local r,err=S:preview(sp.id,{spacing=1});self:toast(err or (r.markers..' preview marker(s)')) end
+    ImGui.SameLine();if ImGui.Button('CLEAR PREVIEW##spline',140,26) then local _,err=S:preview_clear();self:toast(err or 'Preview cleared') end
+    ImGui.Separator();ImGui.Text('USE THIS SPLINE')
+    if ImGui.BeginCombo('Use',self.spline_use_kind) then for _,k in ipairs({'distribute','cable','fence','road','npc_path','camera_path','native_spline'}) do if ImGui.Selectable(k..'##spluse_'..k,self.spline_use_kind==k) then self.spline_use_kind=k end end;ImGui.EndCombo() end
+    if self.spline_use_kind=='npc_path' then self.spline_npc_id=select(1,ImGui.InputText('NPC population object id',self.spline_npc_id,64))
+    elseif self.spline_use_kind~='camera_path' and self.spline_use_kind~='native_spline' then self.spline_asset_id=select(1,ImGui.InputText('Asset id',self.spline_asset_id,96)) end
+    self.spline_spacing=select(1,ImGui.InputFloat('Spacing (m)',self.spline_spacing,0.25,1,'%.2f'))
+    if ImGui.Button('APPLY USE',130,28) then
+        local params={asset_id=self.spline_asset_id,spacing=self.spline_spacing,npc_id=self.spline_npc_id,premise_id=app.selected_premise_id}
+        if self.spline_use_kind=='camera_path' then params.spacing=nil;params.count=8 end
+        local r,err=S:apply_use(sp.id,self.spline_use_kind,params);self:toast(err or (self.spline_use_kind..' created'))
+    end
+    ImGui.SameLine();if ImGui.Button('REGENERATE ALL USES',190,28) then local r,err=S:regenerate(sp.id);self:toast(err or ('Rebuilt '..r.count..' use(s)')) end
+    for _,use in ipairs(sp.uses) do
+        local out=use.outputs or {}
+        ImGui.BulletText(use.kind..': '..(out.object_ids and (#out.object_ids..' object(s)') or out.camera_ids and (#out.camera_ids..' camera(s)') or out.route_id and (tostring(out.waypoints)..' waypoint(s)') or ''))
+        ImGui.SameLine();if ImGui.SmallButton('REMOVE##spluserm_'..use.id) then local _,err=S:remove_use(sp.id,use.id,false);self:toast(err or 'Use and its output removed') end
+    end
+end
+
 function SpatialUI:draw_layers()
     local app=self.app;local L=app.layers
     ImGui.Text('LAYERS')
@@ -1356,6 +1408,7 @@ function SpatialUI:draw()
     local premise=self.app.model:get_premise(self.app.selected_premise_id)
     if ImGui.BeginTabBar('##spatial_tabs') then
         if ImGui.BeginTabItem('Layers') then self:draw_layers();ImGui.EndTabItem() end
+        if ImGui.BeginTabItem('Splines') then self:draw_splines();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Volumes') then if premise then self:draw_volumes(premise) else ImGui.TextDisabled('Select a premise in Premises Builder first.') end;ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Cameras') then if premise then self:draw_cameras(premise) else ImGui.TextDisabled('Select a premise in Premises Builder first.') end;ImGui.EndTabItem() end
         if ImGui.BeginTabItem('NPC workspots') then if premise then self:draw_workspots(premise) else ImGui.TextDisabled('Select a premise in Premises Builder first.') end;ImGui.EndTabItem() end

@@ -4254,6 +4254,158 @@ def environment_restore(blend_time: float = 0.0) -> str:
     return _json(_send("environment_restore", {"blend_time": blend_time}))
 
 
+_SPLINE_MODES = {"auto", "aligned", "free", "linear"}
+_SPLINE_USES = {"cable", "fence", "road", "distribute", "npc_path", "camera_path", "native_spline"}
+
+
+def _xyz(value: Any, label: str) -> dict[str, float]:
+    if isinstance(value, (list, tuple)) and len(value) == 3:
+        return {"x": float(value[0]), "y": float(value[1]), "z": float(value[2])}
+    if isinstance(value, dict) and all(k in value for k in "xyz"):
+        return {"x": float(value["x"]), "y": float(value["y"]), "z": float(value["z"])}
+    raise ValueError(f"{label} must be [x, y, z] or {{x, y, z}}")
+
+
+@mcp.tool()
+def spline_list(premise_id: str = "") -> str:
+    """List persistent splines with point count, length, open/closed and the uses built from them."""
+    return _json(_send("spline_list", {"premise_id": premise_id or None}))
+
+
+@mcp.tool()
+def spline_create(name: str, points: list[Any] | None = None, closed: bool = False, tension: float = 0.5,
+                  mode: str = "auto", source: str = "", premise_id: str = "") -> str:
+    """Create a spline from [x,y,z] points (or start one at source='aim'/'player'). mode sets the tangent mode of the
+    given points: auto (smooth), aligned, free or linear. closed=true joins the last point to the first."""
+    if mode not in _SPLINE_MODES:
+        raise ValueError("mode must be auto, aligned, free, or linear")
+    pts = [_xyz(p, f"points[{i}]") for i, p in enumerate(points or [])]
+    if not pts and source not in {"aim", "player"}:
+        raise ValueError("give points or source=aim|player")
+    return _json(_send("spline_create", {"name": name, "points": pts, "closed": closed, "tension": tension, "mode": mode,
+                                         "source": source or None, "premise_id": premise_id or None}))
+
+
+@mcp.tool()
+def spline_update(spline_id: str, name: str | None = None, closed: bool | None = None, tension: float | None = None,
+                  color: str | None = None) -> str:
+    """Rename a spline, open/close it, change auto-tangent tension (0-1) or its colour."""
+    patch = {k: v for k, v in (("name", name), ("closed", closed), ("tension", tension), ("color", color)) if v is not None}
+    return _json(_send("spline_update", {"id": spline_id, "patch": patch}))
+
+
+@mcp.tool()
+def spline_add_point(spline_id: str, position: list[float] | None = None, source: str = "", index: int | None = None,
+                     mode: str = "auto") -> str:
+    """Add a control point at [x,y,z] or at source='aim'/'player'; index inserts (1-based), default appends."""
+    if mode not in _SPLINE_MODES:
+        raise ValueError("mode must be auto, aligned, free, or linear")
+    args: dict[str, Any] = {"id": spline_id, "mode": mode}
+    if position is not None:
+        args["position"] = _xyz(position, "position")
+    elif source in {"aim", "player"}:
+        args["source"] = source
+    else:
+        raise ValueError("give position or source=aim|player")
+    if index is not None:
+        args["index"] = index
+    return _json(_send("spline_add_point", args))
+
+
+@mcp.tool()
+def spline_insert_point(spline_id: str, distance: float) -> str:
+    """Insert a control point on the curve at an arc-length distance (metres from the start)."""
+    return _json(_send("spline_insert_point", {"id": spline_id, "distance": distance}))
+
+
+@mcp.tool()
+def spline_update_point(spline_id: str, index: int, position: list[float] | None = None, source: str = "",
+                        mode: str | None = None, handle_in: list[float] | None = None,
+                        handle_out: list[float] | None = None) -> str:
+    """Move a control point, change its tangent mode, or set Bezier handles (offsets from the point).
+    Setting a handle on an auto/linear point switches it to free; aligned points mirror the other handle's direction."""
+    patch: dict[str, Any] = {}
+    if position is not None:
+        patch["position"] = _xyz(position, "position")
+    elif source in {"aim", "player"}:
+        patch["source"] = source
+    if mode is not None:
+        if mode not in _SPLINE_MODES:
+            raise ValueError("mode must be auto, aligned, free, or linear")
+        patch["mode"] = mode
+    if handle_in is not None:
+        patch["handle_in"] = _xyz(handle_in, "handle_in")
+    if handle_out is not None:
+        patch["handle_out"] = _xyz(handle_out, "handle_out")
+    if not patch:
+        raise ValueError("give position/source, mode, or a handle")
+    return _json(_send("spline_update_point", {"id": spline_id, "index": index, "patch": patch}))
+
+
+@mcp.tool()
+def spline_delete_point(spline_id: str, index: int) -> str:
+    """Delete a control point (a closed spline with fewer than three points reopens)."""
+    return _json(_send("spline_delete_point", {"id": spline_id, "index": index}))
+
+
+@mcp.tool()
+def spline_sample(spline_id: str, spacing: float | None = None, count: int | None = None, start_offset: float = 0.0,
+                  end_offset: float = 0.0) -> str:
+    """Sample positions along the spline by arc length (spacing in metres or a fixed count) with yaw/pitch of the tangent."""
+    args: dict[str, Any] = {"id": spline_id, "start_offset": start_offset, "end_offset": end_offset}
+    if spacing is not None:
+        args["spacing"] = spacing
+    if count is not None:
+        args["count"] = count
+    return _json(_send("spline_sample", args))
+
+
+@mcp.tool()
+def spline_apply_use(spline_id: str, kind: str, params: dict[str, Any] | None = None) -> str:
+    """Build something from the spline and remember it for regeneration (one undo step). kind:
+    cable/fence/road (params: asset_id, segment_length?, width?, height?, post_asset_id? for fences, sample_spacing?),
+    distribute (asset_id, spacing|count, align?, yaw_offset?, random_yaw?, seed?, lateral_offset?, height_offset?, follow_pitch?),
+    npc_path (npc_id or route_id, spacing?, speed?, wait_seconds?, variant?),
+    camera_path (count|spacing, speed m/s, look_ahead m or look_at [x,y,z], fov?, height_offset?),
+    native_spline (a World Builder worldSplineNode with the same points and tangents)."""
+    if kind not in _SPLINE_USES:
+        raise ValueError("kind must be one of " + ", ".join(sorted(_SPLINE_USES)))
+    params = dict(params or {})
+    if "look_at" in params and params["look_at"] is not None:
+        params["look_at"] = _xyz(params["look_at"], "look_at")
+    return _json(_send("spline_apply_use", {"id": spline_id, "kind": kind, "params": params}))
+
+
+@mcp.tool()
+def spline_regenerate(spline_id: str, use_id: str = "") -> str:
+    """Rebuild every use of the spline (or one) from the current curve as one undo step."""
+    return _json(_send("spline_regenerate", {"id": spline_id, "use_id": use_id or None}))
+
+
+@mcp.tool()
+def spline_remove_use(spline_id: str, use_id: str, keep_outputs: bool = False) -> str:
+    """Forget a use; its generated objects/cameras are removed unless keep_outputs=true."""
+    return _json(_send("spline_remove_use", {"id": spline_id, "use_id": use_id, "keep_outputs": keep_outputs}))
+
+
+@mcp.tool()
+def spline_delete(spline_id: str, keep_outputs: bool = False) -> str:
+    """Delete a spline and (unless keep_outputs) everything generated from it. Undoable."""
+    return _json(_send("spline_delete", {"id": spline_id, "keep_outputs": keep_outputs}))
+
+
+@mcp.tool()
+def spline_preview(spline_id: str, spacing: float = 1.0, curve: bool = True) -> str:
+    """Show the spline in the world with transient World Builder markers on control points and along the curve."""
+    return _json(_send("spline_preview", {"id": spline_id, "spacing": spacing, "curve": curve}))
+
+
+@mcp.tool()
+def spline_preview_clear() -> str:
+    """Remove the spline preview markers."""
+    return _json(_send("spline_preview_clear"))
+
+
 @mcp.tool()
 def layer_list() -> str:
     """List layers (Architecture, Props, Gameplay, NPC, Lighting, Audio, Quest, Debug and custom) with colour, visibility, lock, export flag, object/live/room counts, isolation state and unknown layer ids in use."""

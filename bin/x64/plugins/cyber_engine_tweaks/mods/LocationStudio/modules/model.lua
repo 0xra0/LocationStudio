@@ -6,12 +6,12 @@ Model.__index = Model
 
 local function blank_project()
     return {
-        schema_version = 17,
+        schema_version = 18,
         project = {
             id = 'default', name = 'Night City Location Project', description = '', author = '', tags = {},
             created_at = Util.now_iso(), updated_at = Util.now_iso(),
         },
-        locations = {}, routes = {}, npc_routes = {}, combat_encounters = {}, cover_nodes = {}, navigation_graphs = {}, device_logic_graphs = {}, world_state_variants = {}, environments = {}, premises = {}, rooms = {}, objects = {}, object_groups = {}, object_prefabs = {}, volumes = {}, cameras = {}, scenes = {}, assets = {}, vanilla_removals = {}, room_frames = {},
+        locations = {}, routes = {}, npc_routes = {}, combat_encounters = {}, cover_nodes = {}, navigation_graphs = {}, device_logic_graphs = {}, world_state_variants = {}, environments = {}, splines = {}, premises = {}, rooms = {}, objects = {}, object_groups = {}, object_prefabs = {}, volumes = {}, cameras = {}, scenes = {}, assets = {}, vanilla_removals = {}, room_frames = {},
         -- Layer ids 'shell' and 'decoration' are kept for compatibility; they are
         -- shown as Architecture and Props.
         layers = {
@@ -291,6 +291,25 @@ local function normalize_environment(item)
         created_at=item.created_at or now,updated_at=now}
 end
 
+local SPLINE_MODES={auto=true,aligned=true,free=true,linear=true}
+local function vec3(v) v=type(v)=='table' and v or {};return {x=tonumber(v.x) or 0,y=tonumber(v.y) or 0,z=tonumber(v.z) or 0} end
+-- Editable spline: control points with cubic Bezier handles (offsets from the
+-- point). `uses` remember what was generated from the spline so it can be
+-- regenerated after edits.
+local function normalize_spline(item)
+    item=item or {};local now=Util.now_iso();local points={}
+    for _,p in ipairs(type(item.points)=='table' and item.points or {}) do
+        if type(p)=='table' then
+            points[#points+1]={id=p.id or Util.make_id('spt'),position=vec3(p.position or p),handle_in=vec3(p.handle_in),handle_out=vec3(p.handle_out),
+                mode=SPLINE_MODES[p.mode] and p.mode or 'auto'}
+        end
+    end
+    local color=tostring(item.color or '#6EC6FF');if not color:match('^#%x%x%x%x%x%x$') then color='#6EC6FF' end
+    return {id=item.id or Util.make_id('spline'),name=Util.trim(item.name or '')~='' and Util.trim(item.name) or 'Spline',premise_id=item.premise_id,
+        closed=item.closed==true,tension=math.max(0,math.min(1,tonumber(item.tension) or 0.5)),color=color,points=points,
+        uses=type(item.uses)=='table' and item.uses or {},notes=tostring(item.notes or ''),created_at=item.created_at or now,updated_at=now}
+end
+
 local function normalize_layer(item)
     item = item or {}
     local color=tostring(item.color or '#FFFFFF');if not color:match('^#%x%x%x%x%x%x$') then color='#FFFFFF' end
@@ -351,7 +370,7 @@ function Model.blank() return blank_project() end
 
 function Model:normalize()
     if type(self.data) ~= 'table' then self.data=blank_project() end
-    local defaults=blank_project(); self.data.schema_version=17
+    local defaults=blank_project(); self.data.schema_version=18
     self.data.project=self.data.project or defaults.project; self.data.locations=self.data.locations or {}; self.data.routes=self.data.routes or {}
     self.data.npc_routes=type(self.data.npc_routes)=='table' and self.data.npc_routes or {}
     self.data.combat_encounters=type(self.data.combat_encounters)=='table' and self.data.combat_encounters or {}
@@ -361,6 +380,8 @@ function Model:normalize()
     self.data.world_state_variants=type(self.data.world_state_variants)=='table' and self.data.world_state_variants or {}
     for i,v in ipairs(self.data.world_state_variants) do self.data.world_state_variants[i]=normalize_world_state_variant(v) end
     self.data.environments=type(self.data.environments)=='table' and self.data.environments or {}
+    self.data.splines=type(self.data.splines)=='table' and self.data.splines or {}
+    for i,v in ipairs(self.data.splines) do self.data.splines[i]=normalize_spline(v) end
     for i,v in ipairs(self.data.environments) do self.data.environments[i]=normalize_environment(v) end
     for _,graph in ipairs(self.data.device_logic_graphs) do if type(graph)=='table' then
         graph.nodes=type(graph.nodes)=='table' and graph.nodes or {};graph.links=type(graph.links)=='table' and graph.links or {}
@@ -508,6 +529,8 @@ function Model:get_scene(id) return get_by_id(self.data.scenes,id) end
 function Model:get_asset(id) return get_by_id(self.data.assets,id) end
 function Model:get_world_state_variant(id) return get_by_id(self.data.world_state_variants,id) end
 function Model:get_environment(id) return get_by_id(self.data.environments,id) end
+function Model:get_spline(id) return get_by_id(self.data.splines,id) end
+Model.normalize_spline=normalize_spline
 Model.normalize_environment=normalize_environment
 
 local function add(self,key,item,normalizer) self:snapshot('Add '..key:gsub('s$','')); local value=normalizer(item); table.insert(self.data[key],value); self:touch(); return value end
@@ -519,10 +542,12 @@ function Model:add_object(v) return add(self,'objects',v,normalize_object) end
 function Model:add_volume(v) return add(self,'volumes',v,normalize_volume) end
 function Model:add_cover_node(v) return add(self,'cover_nodes',v,normalize_cover_node) end
 function Model:add_camera(v) return add(self,'cameras',v,normalize_camera) end
+Model.normalize_camera=normalize_camera
 function Model:add_scene(v) return add(self,'scenes',v,normalize_scene) end
 function Model:add_asset(v) return add(self,'assets',v,normalize_asset) end
 function Model:add_world_state_variant(v) return add(self,'world_state_variants',v,normalize_world_state_variant) end
 function Model:add_environment(v) return add(self,'environments',v,normalize_environment) end
+function Model:add_spline(v) return add(self,'splines',v,normalize_spline) end
 function Model:add_assets(values)
     if type(values)~='table' then return {} end
     if #values==0 then return {} end
@@ -702,6 +727,7 @@ function Model:delete_premise(id)
     for i=#self.data.scenes,1,-1 do if self.data.scenes[i].premise_id==id then table.remove(self.data.scenes,i) end end
     -- Environments are reusable conditions; keep them and drop only the premise link.
     for _,environment in ipairs(self.data.environments or {}) do if environment.premise_id==id then environment.premise_id=nil end end
+    for _,spline in ipairs(self.data.splines or {}) do if spline.premise_id==id then spline.premise_id=nil end end
     self:touch(); return true
 end
 
