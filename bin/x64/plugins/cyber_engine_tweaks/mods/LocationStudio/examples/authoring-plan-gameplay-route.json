@@ -1,0 +1,12 @@
+{
+  "format": "locationstudio-authoring-plan",
+  "version": 1,
+  "name": "Gameplay Route",
+  "origin": "player",
+  "steps": [
+    {"op":"create_location","as":"start","name":"Patrol Start","type":"patrol","category":"AI","offset":{"x":0,"y":0,"z":0}},
+    {"op":"create_location","as":"middle","name":"Patrol Middle","type":"patrol","category":"AI","offset":{"x":0,"y":4,"z":0}},
+    {"op":"create_location","as":"finish","name":"Patrol Finish","type":"patrol","category":"AI","offset":{"x":3,"y":4,"z":0}},
+    {"op":"create_route","as":"route","name":"Guard Patrol","kind":"patrol","location_ids":["$start","$middle","$finish"],"loop":true}
+  ]
+}

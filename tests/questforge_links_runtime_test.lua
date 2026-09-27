@@ -1,0 +1,27 @@
+local env=dofile(arg[2]..'/support/cet_mock.lua')
+local app=env.app
+local marker=app.model:add_location({name='Clinic entrance',type='mappin',transform={position={x=-1891.75,y=-2486.9,z=27.95},rotation={yaw=39.5}},metadata={source='test capture'}})
+local spot=app.model:add_location({name='Counter spot',type='spot',transform={position={x=-1908.11,y=-2471.92,z=24.06},rotation={yaw=109.6}}})
+local volume=app.model:add_volume({name='Enter clinic',purpose='trigger',shape='box',size={x=8,y=6,z=4},transform={position={x=-1892.08,y=-2486.52,z=28},rotation={yaw=41.6}}})
+local linked=assert(app.bridge:handle({id='fact-link',op='link_volume_fact',args={id=volume.id,fact_name='clinic_entered',value=1}}))
+assert(linked.linked and linked.fact_name=='clinic_entered')
+local invalid,err=app.bridge:handle({id='fact-invalid',op='link_volume_fact',args={id=volume.id,fact_name='Bad Fact!'}})
+assert(not invalid and err:find('fact_name',1,true))
+local path='exports/test_questforge_links.json'
+assert(app.storage:export_questforge(app.model,path))
+local handoff=assert(json.decode(assert(app.util.read_file(path))))
+assert(handoff.version==2 and handoff.questforge_world.nodeRefPrefix)
+local sector=handoff.questforge_world.sectors[1]
+assert(#sector.markers==2 and #sector.triggers==1)
+assert(sector.markers[1].verified==false and sector.markers[1].pos[1]==-1891.75)
+assert(sector.triggers[1].size[1]==4 and sector.triggers[1].size[2]==3 and sector.triggers[1].size[3]==2)
+assert(sector.triggers[1]._questforge.fact=='clinic_entered')
+local marker_ref=handoff.semantic_locations[1].node_ref
+assert(marker_ref:find('mappin_',1,true)==1 and handoff.quest_manifest_fragment.locations.clinic_entrance.node_ref==marker_ref)
+assert(handoff.fact_triggers[1].fact=='clinic_entered')
+local captured=assert(app.bridge:handle({id='capture-verified',op='create_from_player',args={name='Stood here',type='spot'}}))
+assert(captured.metadata.coordinates_verified==true)
+assert(app.model:update_volume(volume.id,{metadata={questforge={fact_name='invalid fact'}}}))
+local exported,bad_fact_err=app.storage:export_questforge(app.model,'exports/invalid_questforge.json')
+assert(not exported and bad_fact_err:find('Invalid Quest Forge fact name',1,true))
+print('LocationStudio Quest Forge links: OK')

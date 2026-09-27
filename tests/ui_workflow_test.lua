@@ -1,0 +1,40 @@
+local env=dofile(arg[2]..'/support/cet_mock.lua')
+local app=env.app
+events.onOverlayOpen()
+env.clicks['CREATE ROOM HERE']=true;env:draw()
+assert(#app.model.data.rooms==1,'Build button did not create a room')
+env.clicks['ASSETS']=true;env:draw()
+env.clicks['MY ASSETS (6)']=true;env:draw()
+local asset=app.model:get_asset('builtin_chair_poor')
+env.clicks['PREVIEW##'..asset.id]=true;env:draw()
+assert(app.placement:preview_status().confirmed)
+env.aim_x=25;assert(app.placement:update_preview(true))
+env.clicks['PLACE + EDIT##'..asset.id]=true;env:draw()
+assert(app.selection.kind=='object')
+local placed=app.selection:resolve();assert(placed.transform.position.x==25)
+assert(app.transform_session:is_active(),'asset placement did not enter Transform Edit')
+env.clicks['COMMIT##edit_header']=true;env:draw();assert(not app.transform_session:is_active())
+env.clicks['SCENE']=true;env:draw()
+env.inputs['Name']='Renamed chair';env.clicks['APPLY NAME']=true;env:draw()
+assert(placed.name=='Renamed chair','simple name edit was not applied')
+env.clicks['SAVE PROJECT']=true;env:draw()
+env.clicks['SAVE DEBUG REPORT']=true;env:draw()
+local report=assert(io.open('logs/LocationStudio-v0.57.0-support.txt','r'));local report_text=report:read('*a');report:close()
+assert(report_text:find('v0.57.0',1,true))
+env.collapsed=true;env:draw();env.collapsed=false
+-- Exercise all advanced panels, not just a frame with no selection.
+app.model.data.settings.workspace.beginner_mode=false
+for _,panel in ipairs({'BUILD','SPATIAL','TOOLS','SCENE','LIBRARY'}) do
+    app.model.data.settings.workspace.panel=panel
+    env:draw()
+end
+assert(env.labels['SET GOAL FROM AIM'] and env.labels['CHECK LIVE ROUTE'],'Spatial walkability controls were not rendered')
+assert(env.labels['PLACE AT AIM'] and env.labels['PLACE AT PLAYER'],'Spatial interactable placement controls were not rendered')
+assert(env.labels['SEARCH AUDIO CATALOG'] and env.labels['PLACE EMITTER AT AIM'] and env.labels['CREATE REVERB ZONE FROM ROOM'],'ambient audio controls were not rendered')
+app.model.data.settings.workspace.panel='TOOLS';app.selection:set('object',placed.id)
+env.clicks['CHECK SELECTED FIT']=true;env:draw()
+assert(app.ui.tools.last_validation and app.ui.tools.last_validation.validator=='fitcheck','Tools panel fit validator button did not run')
+env.width=850;app.model.data.settings.workspace.beginner_mode=true;app.model.data.settings.workspace.panel='SCENE';env:draw()
+assert(env.labels['INSPECTOR'] and env.labels['OVERVIEW'],'compact inspector navigation missing')
+events.onOverlayClose();events.onShutdown()
+print('CET-facing create / preview / place / edit / save / report UI: OK')

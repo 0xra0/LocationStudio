@@ -1,0 +1,136 @@
+#!/usr/bin/env python3
+import json
+import re
+from pathlib import Path
+
+
+def test_project_shape() -> None:
+    # Source/upgrade packages intentionally do not ship a user project.json.
+    # Validate schema/default collections from the model implementation instead
+    # of requiring mutable runtime data in the source tree.
+    mod = Path(__file__).resolve().parents[1]
+    model = (mod / 'modules' / 'model.lua').read_text(encoding='utf-8')
+    assert 'schema_version=14' in model
+    for collection in ('locations', 'routes', 'premises', 'rooms', 'objects', 'object_groups', 'object_prefabs', 'volumes', 'cameras', 'assets', 'room_frames'):
+        assert re.search(rf'\b{collection}\s*=\s*\{{\}}', model), collection
+    for layer in ('shell', 'gameplay', 'decoration', 'lighting', 'quest'):
+        assert layer in model
+    for setting in ('shell_templates', 'snapping', 'visuals', 'workspace', 'quickstart', 'ent_tools'):
+        assert setting in model
+
+
+def test_mcp_operations_are_handled() -> None:
+    mod = Path(__file__).resolve().parents[1]
+    server = (mod / 'mcp_server' / 'server.py').read_text(encoding='utf-8')
+    bridge = (mod / 'modules' / 'bridge.lua').read_text(encoding='utf-8')
+    sent = set(re.findall(r'_send\("([a-z_]+)"', server))
+    handled = set(re.findall(r"op == '([a-z_]+)'", bridge))
+    handled.update(re.findall(r"or op == '([a-z_]+)'", bridge))
+    handled.update(re.findall(r"'((?:wb_)?(?:clipcheck|fixturecheck|fitcheck))'", bridge))
+    assert sent <= handled, f'MCP operations missing in CET bridge: {sorted(sent - handled)}'
+    assert len(re.findall(r'@mcp\.tool\(\)', server)) == 282
+    for operation in ('register_asset', 'update_asset', 'delete_asset', 'place_asset', 'clear_debug_log', 'run_diagnostics',
+                      'capture_camera', 'copy_transform', 'paste_transform', 'move_item_to_aim',
+                      'drop_item_to_ground', 'aim_item_at_target', 'scatter_at_aim',
+                      'detach_shell_piece', 'replace_shell_piece', 'set_construction_state', 'focus_world_builder_object',
+                      'get_object_selection', 'set_object_selection', 'transform_object_group',
+                      'set_object_group_state', 'spawn_object_group', 'duplicate_object_group', 'delete_object_group',
+                      'list_object_groups', 'create_object_group', 'update_object_group', 'select_object_group',
+                      'transform_saved_group', 'dissolve_object_group', 'list_object_prefabs',
+                      'save_object_prefab', 'instantiate_object_prefab', 'delete_object_prefab',
+                      'layout_object_group', 'wb_align', 'wb_distribute', 'wb_path_array', 'wb_radial_array', 'wb_grid', 'replace_object_group_asset', 'pick_aimed_object',
+                      'preview_asset', 'stamp_preview', 'clear_asset_preview',
+                      'start_transform_grab', 'configure_transform_grab', 'get_transform_grab_status',
+                      'commit_transform_grab', 'cancel_transform_grab', 'start_transform_edit',
+                      'start_duplicate_transform_edit', 'start_placement_transform_edit',
+                      'start_pattern_transform_edit', 'start_mirror_transform_edit', 'start_scatter_transform_edit',
+                      'adjust_transform_edit', 'reset_transform_edit', 'get_transform_session_status',
+                      'commit_transform_edit', 'cancel_transform_edit',
+                      'rht_status', 'rht_crosshair', 'rht_scan', 'rht_node', 'reload_runtime', 'walkability_check',
+                      'create_static_light', 'update_static_light', 'preview_time_of_day', 'restore_time_of_day',
+                      'mesh_appearance_list', 'mesh_appearance_preview', 'mesh_appearance_apply', 'mesh_appearance_cancel', 'create_decal',
+                      'create_interactable', 'list_interactables', 'update_interactable', 'delete_interactable',
+                      'vanilla_removal_status', 'remove_vanilla_crosshair', 'remove_vanilla_nearby',
+                      'restore_vanilla_removal', 'restore_all_vanilla_removals', 'list_vanilla_removals',
+                      'npc_play_anim', 'npc_stop_anim', 'npc_stop_all_anims', 'npc_anim_status', 'npc_list',
+                      'raycast_batch', 'floor_probe', 'respawn_tagged', 'camera_pitch', 'npc_spawn_record', 'npc_despawn_tag',
+                      'build_export_world_builder', 'build_export_status', 'import_world_builder_build',
+                      'wb_bounds_import', 'wb_bounds_info', 'wb_bounds_set', 'wb_bounds_world_aabb', 'wb_bounds_overlap', 'wb_collisions', 'wb_clipcheck', 'wb_fixturecheck', 'wb_fitcheck', 'wb_compat_scan', 'wb_find', 'wb_tree', 'wb_get', 'wb_refs', 'wb_bounds_fit',
+                      'wb_frame_create', 'wb_frame_list', 'wb_frame_update', 'wb_frame_delete', 'wb_frame_to_world', 'wb_world_to_frame', 'place_object_in_frame', 'move_object_in_frame',
+                      'link_volume_fact',
+                      'get_history', 'history_undo', 'history_redo', 'checkpoint_create', 'checkpoint_list', 'checkpoint_diff', 'checkpoint_restore', 'get_runtime_sync_status', 'sync_runtime', 'import_catalog_asset',
+                      'wb_favorite_prepare', 'wb_prefab_render', 'wb_prefab_render_status',
+                      'wb_generate_cable', 'wb_generate_fence', 'wb_generate_road', 'wb_generate_market', 'wb_generate_noderef',
+                      'vfx_categories', 'vfx_search', 'vfx_create', 'vfx_update', 'vfx_list', 'vfx_preview',
+                      'vfx_preview_status', 'vfx_preview_commit', 'vfx_preview_clear'):
+        assert operation in sent
+    for tool in ('wb_favorite_add', 'wb_favorites_list', 'wb_device_connect', 'wb_elevator_wire',
+                 'wb_polygon_scatter', 'wb_volume_scatter', 'wb_live_surface_scatter', 'wb_rng_create'):
+        assert re.search(rf'def {tool}\(', server), tool
+    assert re.search(r'def hotcycle_rebuild\(', server)
+    assert re.search(r'def visual_regression_capture\(', server)
+    assert re.search(r'def visual_regression_accept\(', server)
+    assert (mod / 'mcp_server' / 'visual_regression.py').is_file()
+    assert 'Pose changes live in the .reds file' in server
+    assert 'questforge_world' in (mod / 'modules' / 'storage.lua').read_text(encoding='utf-8')
+    assert 'quest_manifest_fragment' in (mod / 'modules' / 'storage.lua').read_text(encoding='utf-8')
+    assert (mod.parents[5] / 'QUEST-FORGE-LINKS.md').is_file()
+    assert re.search(r'def link_volume_to_quest_fact\(', server)
+    for tool in ('create_room_frame', 'list_room_frames', 'update_room_frame', 'delete_room_frame',
+                 'room_frame_to_world', 'world_to_room_frame'):
+        assert re.search(rf'def {tool}\(', server), tool
+    for tool in ('create_project_checkpoint', 'list_project_checkpoints', 'diff_project_checkpoints', 'restore_project_checkpoint', 'get_runtime_sync_status', 'sync_runtime'):
+        assert re.search(rf'def {tool}\(', server), tool
+
+
+def test_v6_modules_are_packaged() -> None:
+    mod = Path(__file__).resolve().parents[1]
+    for relative in (
+        'modules/builder.lua', 'modules/room_kits.lua', 'modules/placement.lua', 'modules/runtime_entities.lua', 'modules/runtime_state.lua', 'modules/vanilla_removal.lua', 'modules/live_tools.lua', 'ui/widgets.lua', 'modules/authoring.lua',
+        'modules/markers.lua', 'modules/selection.lua', 'modules/viewport_tools.lua', 'modules/transform_session.lua', 'modules/assemblies.lua', 'modules/actions.lua',
+        'modules/logger.lua', 'modules/diagnostics.lua', 'modules/rht_inspector.lua', 'modules/vanilla_removal.lua', 'modules/ent_tools.lua', 'modules/quickstart.lua', 'modules/checkpoints.lua',
+        'ui/home.lua', 'ui/premises.lua', 'ui/spatial.lua', 'ui/tools.lua', 'ui/viewport.lua',
+        'ui/hierarchy.lua', 'ui/inspector.lua', 'ui/browser.lua'
+    ):
+        assert (mod / relative).is_file(), relative
+    assert (mod / 'mcp_server' / 'collect-debug.sh').is_file()
+    assert (mod / 'mcp_server' / 'test_runtime_smoke.py').is_file()
+    assert (mod / 'mcp_server' / 'hotcycle.py').is_file()
+    assert (mod / 'mcp_server' / 'test_hotcycle.py').is_file()
+    assert (mod / 'mcp_server' / 'visual_regression.py').is_file()
+    assert (mod / 'mcp_server' / 'test_visual_regression.py').is_file()
+    assert (mod / 'mcp_server' / 'test_visual_regression_mcp.py').is_file()
+    assert (mod.parents[5] / 'VISUAL-REGRESSION.md').is_file()
+    assert (mod / 'logs' / '.keep').is_file()
+    assert (mod / 'modules' / 'build_export.lua').is_file()
+    assert (mod / 'modules' / 'wb_import.lua').is_file()
+    assert (mod / 'modules' / 'asset_bounds.lua').is_file()
+    assert (mod / 'modules' / 'prop_validators.lua').is_file()
+    assert (mod / 'modules' / 'room_frames.lua').is_file()
+    assert (mod / 'modules' / 'project_browser.lua').is_file()
+    assert (mod / 'modules' / 'world_builder_generators.lua').is_file()
+    assert (mod / 'modules' / 'mesh_appearance.lua').is_file()
+    assert (mod / 'modules' / 'vfx.lua').is_file()
+    assert (mod / 'mcp_server' / 'lsbuild' / 'vfx.py').is_file()
+    assert (mod / 'mcp_server' / 'test_vfx.py').is_file()
+    assert (mod.parents[5] / 'VFX.md').is_file()
+    assert (mod.parents[5] / 'tests' / 'vfx_runtime_test.lua').is_file()
+    assert (mod.parents[5] / 'MESH-APPEARANCES-AND-DECALS.md').is_file()
+    assert (mod / 'mcp_server' / 'wbfavorites.py').is_file()
+    assert (mod / 'mcp_server' / 'test_favorites.py').is_file()
+    assert (mod / 'mcp_server' / 'test_rng.py').is_file()
+    assert (mod / 'mcp_server' / 'mod_inventory.py').is_file()
+    assert (mod / 'mcp_server' / 'test_mod_inventory.py').is_file()
+    assert (mod.parents[5] / 'tests' / 'project_browser_runtime_test.lua').is_file()
+    assert (mod.parents[5] / 'tests' / 'scatter_areas_runtime_test.lua').is_file()
+    for relative in ('__init__.py', 'assets.py', 'semantics.py', 'errors.py'):
+        assert (mod / 'mcp_server' / 'lsassets' / relative).is_file(), relative
+    for relative in ('__init__.py', 'build.py', 'native.py', 'worker.py', 'logs.py', 'wiring.py', 'rng.py', 'LICENSE-cp77wb', 'wkit_worker/Program.cs'):
+        assert (mod / 'mcp_server' / 'lsbuild' / relative).is_file(), relative
+
+
+if __name__ == '__main__':
+    test_project_shape()
+    test_mcp_operations_are_handled()
+    test_v6_modules_are_packaged()
+    print('LocationStudio MCP static tests: OK')
