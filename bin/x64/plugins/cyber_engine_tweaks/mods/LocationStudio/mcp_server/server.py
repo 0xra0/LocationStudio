@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import re
 import shutil
 import sys
 import threading
@@ -2470,7 +2471,8 @@ def hotcycle_rebuild(archives: list[str] | None = None, script_files: dict[str, 
                      restream: bool = False, script_timeout_s: float = 120.0,
                      allow_current_script: bool = False, capture_visuals: bool = False,
                      visual_camera_ids: list[str] | None = None, visual_settle_s: float = 6.0,
-                     visual_pixel_threshold: int = 24, visual_change_limit: float = 0.01) -> str:
+                     visual_pixel_threshold: int = 24, visual_change_limit: float = 0.01,
+                     visual_environment_id: str | None = None, visual_deterministic: bool = False) -> str:
     """Deploy changed .reds files and/or rebuilt archives, then optionally respawn tagged entities.
 
     A pose change stored in redscript exists only in the deployed .reds. If respawn_tags are requested,
@@ -2511,7 +2513,9 @@ def hotcycle_rebuild(archives: list[str] | None = None, script_files: dict[str, 
             tool = getattr(visual_regression_capture, "fn", visual_regression_capture)
             visual_result = json.loads(tool(camera_ids=visual_camera_ids, settle_s=visual_settle_s,
                                             pixel_threshold=visual_pixel_threshold,
-                                            change_limit=visual_change_limit))
+                                            change_limit=visual_change_limit,
+                                            environment_id=visual_environment_id,
+                                            deterministic=visual_deterministic))
         except Exception as exc:
             visual_result = {"error": str(exc), "rebuild_completed": True}
     return _json({"script": script_result, "archives": archive_result, "respawn": respawn_result,
@@ -2590,11 +2594,101 @@ def _visual_camera_key(camera_id: str) -> str:
     return hashlib.sha256(camera_id.encode("utf-8")).hexdigest()[:16]
 
 
-def _visual_regression_capture(camera_ids: list[str] | None, settle_s: float,
-                               pixel_threshold: int, change_limit: float,
-                               fullscreen: bool = True) -> dict[str, Any]:
+def _environment_signature(environment: dict[str, Any] | None) -> dict[str, Any] | None:
+    """The parts of a saved environment that change pixels; used to flag baseline mismatches."""
+    if not environment:
+        return None
+    return {"id": environment.get("id"), "name": environment.get("name"),
+            "time": environment.get("time"), "weather": environment.get("weather"), "fog": environment.get("fog")}
+
+
+def _take_shot(key: str, fullscreen: bool, suffix: str = "") -> Path:
+    from visual_regression import read_png
+    shot_fn = getattr(screenshot, "fn", screenshot)
+    shot = json.loads(shot_fn(fullscreen=fullscreen, settle_s=1.0, name=f"lsvr_{key}{suffix}"))
+    source = Path(shot["path"])
+    if not source.is_file() or source.stat().st_size <= 64:
+        raise RuntimeError("screenshot helper returned no usable PNG file")
+    read_png(source)  # Fail here with an actionable error if the PNG is malformed/unsupported.
+    return source
+
+
+def _deterministic_options(options: dict[str, Any]) -> dict[str, Any]:
+    ready_timeout = float(options.get("ready_timeout_s", 20.0))
+    limit = float(options.get("stability_limit", 0.002))
+    shots = int(options.get("stability_max_shots", 4))
+    if not 0 <= ready_timeout <= 120:
+        raise ValueError("ready_timeout_s must be between 0 and 120 seconds")
+    if not 0 <= limit <= 1:
+        raise ValueError("stability_limit must be between 0 and 1")
+    if not 2 <= shots <= 10:
+        raise ValueError("stability_max_shots must be between 2 and 10")
+    lua = {"hide_hud": bool(options.get("hide_hud", True)),
+           "disable_post_effects": bool(options.get("disable_post_effects", True)),
+           "freeze_world": bool(options.get("freeze_world", True))}
+    return {"lua": lua, "wait_for_streaming": bool(options.get("wait_for_streaming", True)),
+            "ready_timeout_s": ready_timeout, "stable_frames": bool(options.get("stable_frames", True)),
+            "stability_limit": limit, "stability_max_shots": shots,
+            "pixel_threshold": int(options.get("pixel_threshold", 24)),
+            "signature": {**lua, "stable_frames": bool(options.get("stable_frames", True))}}
+
+
+def _deterministic_shot(mode: dict[str, Any], record: dict[str, Any], key: str, fullscreen: bool,
+                        run_dir: Path) -> Path:
+    """Wait for streaming, freeze the world, and shoot until two consecutive frames agree."""
     import shutil
     from visual_regression import compare_pngs
+
+    if mode["wait_for_streaming"]:
+        _send("screenshot_mode_reset_ready", {})
+        deadline = time.monotonic() + mode["ready_timeout_s"]
+        probe: dict[str, Any] = {}
+        while True:
+            probe = _send("screenshot_mode_ready", {})
+            if probe.get("ready"):
+                break
+            if time.monotonic() >= deadline:
+                record["streaming"] = probe
+                raise RuntimeError("world around the camera did not finish streaming: " + str(probe.get("reason") or "not ready"))
+            time.sleep(0.5)
+        record["streaming"] = probe
+    _send("screenshot_mode_freeze", {})
+    try:
+        previous = _take_shot(key, fullscreen, "_a")
+        if not mode["stable_frames"]:
+            record["stability"] = {"checked": False}
+            return previous
+        scratch = run_dir / f".stability_{key}"
+        scratch.mkdir(exist_ok=True)
+        kept = scratch / "prev.png"
+        shutil.copy2(previous, kept)
+        fractions: list[float] = []
+        for attempt in range(1, mode["stability_max_shots"]):
+            current = _take_shot(key, fullscreen, f"_{attempt}")
+            metrics = compare_pngs(kept, current, scratch / "diff.png", mode["pixel_threshold"])
+            fraction = float(metrics.get("changed_fraction", 1.0)) if metrics.get("compatible") else 1.0
+            fractions.append(fraction)
+            if fraction <= mode["stability_limit"]:
+                record["stability"] = {"checked": True, "stable": True, "shots": attempt + 1, "changed_fractions": fractions}
+                shutil.rmtree(scratch, ignore_errors=True)
+                return current
+            shutil.copy2(current, kept)
+        record["stability"] = {"checked": True, "stable": False, "shots": mode["stability_max_shots"], "changed_fractions": fractions}
+        shutil.rmtree(scratch, ignore_errors=True)
+        raise RuntimeError(f"frames did not stabilize within {mode['stability_max_shots']} shots (last change {fractions[-1]:.4f})")
+    finally:
+        _send("screenshot_mode_unfreeze", {})
+
+
+def _visual_regression_capture(camera_ids: list[str] | None, settle_s: float,
+                               pixel_threshold: int, change_limit: float,
+                               fullscreen: bool = True, environment_id: str | None = None,
+                               environment_settle_s: float = 4.0,
+                               deterministic: dict[str, Any] | None = None) -> dict[str, Any]:
+    import shutil
+    from visual_regression import compare_pngs
+
+    mode = _deterministic_options(deterministic) if deterministic is not None else None
 
     if not 0 <= settle_s <= 60:
         raise ValueError("settle_s must be between 0 and 60 seconds")
@@ -2613,6 +2707,13 @@ def _visual_regression_capture(camera_ids: list[str] | None, settle_s: float,
         cameras = project_cameras
     if not cameras:
         raise RuntimeError("No enabled saved cameras to capture. Create cameras in Spatial → Cameras first.")
+    environment = None
+    if environment_id:
+        environment = next((e for e in _project().get("environments", []) if e.get("id") == environment_id), None)
+        if environment is None:
+            raise ValueError(f"unknown saved environment ID: {environment_id}")
+        if not 0 <= environment_settle_s <= 120:
+            raise ValueError("environment_settle_s must be between 0 and 120 seconds")
 
     stamp = time.strftime("%Y%m%d-%H%M%S")
     run_id = f"{stamp}-{uuid.uuid4().hex[:8]}"
@@ -2631,7 +2732,25 @@ def _visual_regression_capture(camera_ids: list[str] | None, settle_s: float,
     from visual_regression import read_png
     records: list[dict[str, Any]] = []
     restore_error = None
+    environment_result: dict[str, Any] | None = None
+    environment_restore_error = None
+    mode_result: dict[str, Any] | None = None
+    mode_restore_error = None
     try:
+        if mode is not None:
+            # Screenshot mode records every previous value, then applies HUD/post-effect
+            # overrides and (through the environment) the fixed time/weather.
+            mode_result = _send("screenshot_mode_enter", {**mode["lua"], "environment_id": environment_id},
+                                timeout=30.0)
+            environment_result = ({"applied": mode_result.get("environment_applied"),
+                                   "warning": mode_result.get("environment_warning")} if environment else None)
+            if environment and environment_settle_s:
+                time.sleep(environment_settle_s)
+        elif environment:
+            # Force holds the clock and weather for the whole shot series.
+            environment_result = _send("environment_preview", {"id": environment_id, "force": True}, timeout=20.0)
+            if environment_settle_s:
+                time.sleep(environment_settle_s)
         for camera in cameras:
             camera_id = str(camera["id"])
             key = _visual_camera_key(camera_id)
@@ -2643,13 +2762,10 @@ def _visual_regression_capture(camera_ids: list[str] | None, settle_s: float,
                 _send("preview_camera", {"id": camera_id}, timeout=20.0)
                 if settle_s:
                     time.sleep(settle_s)
-                shot_fn = getattr(screenshot, "fn", screenshot)
-                shot = json.loads(shot_fn(fullscreen=fullscreen, settle_s=1.0,
-                                          name=f"lsvr_{key}"))
-                source = Path(shot["path"])
-                if not source.is_file() or source.stat().st_size <= 64:
-                    raise RuntimeError("screenshot helper returned no usable PNG file")
-                read_png(source)  # Fail here with an actionable error if the PNG is malformed/unsupported.
+                if mode is not None:
+                    source = _deterministic_shot(mode, record, key, fullscreen, run_dir)
+                else:
+                    source = _take_shot(key, fullscreen)
                 shutil.copy2(source, image_path)
                 record["image"] = image_name
                 record["captured"] = True
@@ -2674,8 +2790,23 @@ def _visual_regression_capture(camera_ids: list[str] | None, settle_s: float,
                                     "rotation": player_transform["rotation"]}, timeout=20.0)
         except Exception as exc:
             restore_error = str(exc)
+        if mode is not None:
+            try:
+                _send("screenshot_mode_restore", {}, timeout=30.0)
+            except Exception as exc:
+                mode_restore_error = str(exc)
+        elif environment:
+            try:
+                _send("environment_restore", {}, timeout=20.0)
+            except Exception as exc:
+                environment_restore_error = str(exc)
 
-    completed = all(record.get("captured") for record in records) and restore_error is None
+    completed = all(record.get("captured") for record in records) and restore_error is None and mode_restore_error is None
+    signature = _environment_signature(environment)
+    baseline_signature = accepted.get("environment") if accepted else None
+    environment_mismatch = bool(accepted) and signature != baseline_signature
+    mode_signature = mode["signature"] if mode is not None else None
+    mode_mismatch = bool(accepted) and mode_signature != accepted.get("screenshot_mode")
     has_baseline = bool(accepted)
     compared = [r for r in records if r.get("comparison", {}).get("compatible") is True]
     regressions = [r for r in records if r.get("regression") is True]
@@ -2684,7 +2815,18 @@ def _visual_regression_capture(camera_ids: list[str] | None, settle_s: float,
     manifest = {"run_id": run_id, "created_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
                 "complete": completed, "status": status, "accepted_baseline_run_id": accepted.get("run_id"),
                 "pixel_threshold": pixel_threshold, "change_limit": change_limit,
-                "settle_s": settle_s, "cameras": records, "player_restore_error": restore_error}
+                "settle_s": settle_s, "cameras": records, "player_restore_error": restore_error,
+                "environment": signature, "environment_applied": (environment_result or {}).get("applied"),
+                "environment_warning": (environment_result or {}).get("warning"),
+                "environment_restore_error": environment_restore_error,
+                "environment_mismatch": environment_mismatch,
+                "environment_note": ("The accepted baseline was captured under a different environment; pixel changes may come from time/weather, not the build."
+                                     if environment_mismatch else None),
+                "screenshot_mode": mode_signature,
+                "screenshot_mode_applied": (mode_result or {}).get("applied"),
+                "screenshot_mode_unavailable": (mode_result or {}).get("unavailable"),
+                "screenshot_mode_restore_error": mode_restore_error,
+                "screenshot_mode_mismatch": mode_mismatch}
     _atomic_json(run_dir / "manifest.json", manifest)
     return {**manifest, "run_dir": str(run_dir),
             "accept_tool": "visual_regression_accept(run_id='" + run_id + "')" if completed else None}
@@ -2693,9 +2835,30 @@ def _visual_regression_capture(camera_ids: list[str] | None, settle_s: float,
 @mcp.tool()
 def visual_regression_capture(camera_ids: list[str] | None = None, settle_s: float = 6.0,
                               pixel_threshold: int = 24, change_limit: float = 0.01,
-                              fullscreen: bool = True) -> str:
-    """Capture every enabled saved camera (or the selected camera IDs) and compare against the last explicitly accepted set. Saves screenshots, per-camera diff PNGs, and a JSON manifest under LOCATION_STUDIO_REGRESSION_DIR or the configured screenshot directory. An empty baseline is never accepted automatically."""
-    return _json(_visual_regression_capture(camera_ids, settle_s, pixel_threshold, change_limit, fullscreen))
+                              fullscreen: bool = True, environment_id: str | None = None,
+                              environment_settle_s: float = 4.0, deterministic: bool = False,
+                              hide_hud: bool = True, disable_post_effects: bool = True, freeze_world: bool = True,
+                              wait_for_streaming: bool = True, ready_timeout_s: float = 20.0,
+                              stable_frames: bool = True, stability_limit: float = 0.002,
+                              stability_max_shots: int = 4) -> str:
+    """Capture every enabled saved camera (or the selected camera IDs) and compare against the last explicitly accepted set. Saves screenshots, per-camera diff PNGs, and a JSON manifest under LOCATION_STUDIO_REGRESSION_DIR or the configured screenshot directory. An empty baseline is never accepted automatically.
+
+    environment_id forces a saved authoring environment (time, weather, fog) for the whole series and restores the original conditions afterwards; the manifest flags a baseline taken under a different environment.
+
+    deterministic=true enters screenshot mode first: hides HUD elements and disables motion blur/film grain/
+    chromatic aberration/depth of field/lens flares through game settings (previous values are restored),
+    waits per camera until collision around the camera has streamed in, freezes NPCs/traffic/particles with
+    a near-zero time dilation only while shooting, and repeats the shot until two consecutive frames differ by
+    at most stability_limit. Settings missing from this game build are listed in screenshot_mode_unavailable.
+    A camera that never becomes ready or stable is reported as not captured."""
+    mode = None
+    if deterministic:
+        mode = {"hide_hud": hide_hud, "disable_post_effects": disable_post_effects, "freeze_world": freeze_world,
+                "wait_for_streaming": wait_for_streaming, "ready_timeout_s": ready_timeout_s,
+                "stable_frames": stable_frames, "stability_limit": stability_limit,
+                "stability_max_shots": stability_max_shots, "pixel_threshold": pixel_threshold}
+    return _json(_visual_regression_capture(camera_ids, settle_s, pixel_threshold, change_limit, fullscreen,
+                                            environment_id, environment_settle_s, mode))
 
 
 @mcp.tool()
@@ -2713,7 +2876,8 @@ def visual_regression_accept(run_id: str) -> str:
         if Path(image_name).name != image_name or not (run_dir / image_name).is_file():
             raise ValueError("run is missing a screenshot required for its baseline")
     payload = {"run_id": run_id, "accepted_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
-               "camera_count": len(manifest.get("cameras", []))}
+               "camera_count": len(manifest.get("cameras", [])), "environment": manifest.get("environment"),
+               "screenshot_mode": manifest.get("screenshot_mode")}
     _atomic_json(REGRESSION_DIR / "accepted.json", payload)
     return _json({"accepted": True, **payload, "baseline_dir": str(run_dir)})
 
@@ -3972,6 +4136,156 @@ def build_mod_from_project(
         return _json({"ran": True, "ok": False, "failed_stage": failed.stage, "stages": stages})
     return _json({"ran": True, "ok": True, "layout": str(layout), "zip": str(workspace / f"{name}.zip"),
                   "next": "build_deploy(layout, apply=true)", "stages": stages})
+
+
+def _environment_patch(name: str | None, hour: int | None, minute: int | None, time_enabled: bool | None,
+                       weather_state: str | None, weather_enabled: bool | None, blend_time: float | None,
+                       priority: int | None, fog_enabled: bool | None, fog_anchor: str | None,
+                       fog_size_x: float | None, fog_size_y: float | None, fog_size_z: float | None,
+                       fog_density_factor: float | None, fog_density_falloff: float | None,
+                       fog_absorption: float | None, fog_blend_falloff: float | None,
+                       fog_color: list[float] | None, exposure_note: str | None) -> dict[str, Any]:
+    if fog_anchor is not None and fog_anchor not in {"player", "camera", "premise"}:
+        raise ValueError("fog_anchor must be player, camera, or premise")
+    if weather_state is not None and not re.fullmatch(r"[A-Za-z0-9_]+", weather_state):
+        raise ValueError("weather_state must be a weather-state CName such as 24h_weather_rain")
+    if fog_color is not None and (len(fog_color) != 3 or any(not 0 <= float(c) <= 1 for c in fog_color)):
+        raise ValueError("fog_color must be three 0-1 RGB values")
+    patch: dict[str, Any] = {}
+    for key, value in (("name", name), ("hour", hour), ("minute", minute), ("time_enabled", time_enabled),
+                       ("weather_state", weather_state), ("weather_enabled", weather_enabled),
+                       ("blend_time", blend_time), ("priority", priority), ("fog_enabled", fog_enabled),
+                       ("fog_anchor", fog_anchor), ("fog_density_factor", fog_density_factor),
+                       ("fog_density_falloff", fog_density_falloff), ("fog_absorption", fog_absorption),
+                       ("fog_blend_falloff", fog_blend_falloff), ("fog_color", fog_color),
+                       ("exposure_note", exposure_note)):
+        if value is not None:
+            patch[key] = value
+    axes = (fog_size_x, fog_size_y, fog_size_z)
+    if any(v is not None for v in axes):
+        if any(v is None for v in axes):
+            raise ValueError("fog_size_x, fog_size_y, and fog_size_z must be supplied together")
+        patch["fog_size"] = {"x": fog_size_x, "y": fog_size_y, "z": fog_size_z}
+    return patch
+
+
+@mcp.tool()
+def environment_weather_states() -> str:
+    """List known weather-state CNames (with their rain/fog character) and which environment controls this game session supports."""
+    return _json(_send("environment_weather_states"))
+
+
+@mcp.tool()
+def environment_list(premise_id: str = "") -> str:
+    """List saved authoring environments (time, weather, fog volume, exposure note) and the active preview."""
+    return _json(_send("environment_list", {"premise_id": premise_id or None}))
+
+
+@mcp.tool()
+def environment_create(name: str, hour: int | None = None, minute: int | None = None, time_enabled: bool | None = None,
+                       weather_state: str | None = None, weather_enabled: bool | None = None,
+                       blend_time: float | None = None, priority: int | None = None, fog_enabled: bool | None = None,
+                       fog_anchor: str | None = None, fog_size_x: float | None = None, fog_size_y: float | None = None,
+                       fog_size_z: float | None = None, fog_density_factor: float | None = None,
+                       fog_density_falloff: float | None = None, fog_absorption: float | None = None,
+                       fog_blend_falloff: float | None = None, fog_color: list[float] | None = None,
+                       exposure_note: str | None = None, premise_id: str = "", capture_current: bool = False) -> str:
+    """Save an authoring environment. Rain comes from the weather state (see environment_weather_states).
+
+    Fog adds a World Builder Fog Volume around the player, camera or premise while previewing.
+    capture_current=true seeds time and weather from the live game. exposure_note is documentation only:
+    CET exposes no verified exposure control.
+    """
+    patch = _environment_patch(name, hour, minute, time_enabled, weather_state, weather_enabled, blend_time, priority,
+                               fog_enabled, fog_anchor, fog_size_x, fog_size_y, fog_size_z, fog_density_factor,
+                               fog_density_falloff, fog_absorption, fog_blend_falloff, fog_color, exposure_note)
+    patch.update({"premise_id": premise_id or None, "capture_current": capture_current})
+    return _json(_send("environment_create", patch))
+
+
+@mcp.tool()
+def environment_update(environment_id: str, name: str | None = None, hour: int | None = None, minute: int | None = None,
+                       time_enabled: bool | None = None, weather_state: str | None = None,
+                       weather_enabled: bool | None = None, blend_time: float | None = None, priority: int | None = None,
+                       fog_enabled: bool | None = None, fog_anchor: str | None = None, fog_size_x: float | None = None,
+                       fog_size_y: float | None = None, fog_size_z: float | None = None,
+                       fog_density_factor: float | None = None, fog_density_falloff: float | None = None,
+                       fog_absorption: float | None = None, fog_blend_falloff: float | None = None,
+                       fog_color: list[float] | None = None, exposure_note: str | None = None) -> str:
+    """Edit a saved environment; only the given fields change. An environment being previewed is re-applied."""
+    patch = _environment_patch(name, hour, minute, time_enabled, weather_state, weather_enabled, blend_time, priority,
+                               fog_enabled, fog_anchor, fog_size_x, fog_size_y, fog_size_z, fog_density_factor,
+                               fog_density_falloff, fog_absorption, fog_blend_falloff, fog_color, exposure_note)
+    return _json(_send("environment_update", {"id": environment_id, "patch": patch}))
+
+
+@mcp.tool()
+def environment_delete(environment_id: str) -> str:
+    """Delete a saved environment (undoable). An active preview of it is restored first."""
+    return _json(_send("environment_delete", {"id": environment_id}))
+
+
+@mcp.tool()
+def environment_preview(environment_id: str, force: bool = False) -> str:
+    """Apply a saved environment live. force=true keeps re-applying the clock and weather until restored.
+
+    This changes the running game's clock and weather. Always finish with environment_restore.
+    """
+    return _json(_send("environment_preview", {"id": environment_id, "force": force}))
+
+
+@mcp.tool()
+def environment_force(force: bool) -> str:
+    """Turn holding of the previewed time/weather on or off without changing the preview."""
+    return _json(_send("environment_force", {"force": force}))
+
+
+@mcp.tool()
+def environment_status() -> str:
+    """Report live time/weather/rain intensity and the active environment preview, if any."""
+    return _json(_send("environment_status"))
+
+
+@mcp.tool()
+def environment_restore(blend_time: float = 0.0) -> str:
+    """End the environment preview: restore the original game time, return weather to the game's normal cycle, remove the fog volume."""
+    return _json(_send("environment_restore", {"blend_time": blend_time}))
+
+
+@mcp.tool()
+def screenshot_mode_capabilities() -> str:
+    """Report which configured HUD/post-effect/camera-shake settings exist in this game build (with current values), and whether world freezing and environments are available."""
+    return _json(_send("screenshot_mode_capabilities"))
+
+
+@mcp.tool()
+def screenshot_mode_status() -> str:
+    """Report whether deterministic screenshot mode is active, what it changed, and what was unavailable."""
+    return _json(_send("screenshot_mode_status"))
+
+
+@mcp.tool()
+def screenshot_mode_enter(environment_id: str = "", hide_hud: bool = True, disable_post_effects: bool = True,
+                          freeze_world: bool = True) -> str:
+    """Manually enter deterministic screenshot mode (visual_regression_capture(deterministic=true) does this for you).
+
+    Records then overrides HUD and post-effect settings and optionally forces a saved environment.
+    Always finish with screenshot_mode_restore.
+    """
+    return _json(_send("screenshot_mode_enter", {"environment_id": environment_id or None, "hide_hud": hide_hud,
+                                                 "disable_post_effects": disable_post_effects, "freeze_world": freeze_world}))
+
+
+@mcp.tool()
+def screenshot_mode_freeze(freeze: bool = True) -> str:
+    """Freeze (near-zero time dilation) or unfreeze NPCs, traffic and particles while screenshot mode is active."""
+    return _json(_send("screenshot_mode_freeze" if freeze else "screenshot_mode_unfreeze"))
+
+
+@mcp.tool()
+def screenshot_mode_restore() -> str:
+    """Leave screenshot mode: unfreeze, restore every changed setting to its recorded value, and restore the environment."""
+    return _json(_send("screenshot_mode_restore"))
 
 
 @mcp.tool()

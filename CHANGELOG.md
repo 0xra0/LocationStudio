@@ -1,3 +1,20 @@
+## 0.59.0 - 2026-09-27
+
+- Added deterministic screenshot mode (`modules/screenshot_mode.lua`). It records and then overrides configurable CET settings ConfigVars: HUD elements under `/interface/hud`, and motion blur/film grain/chromatic aberration/depth of field/lens flares under `/graphics/basic`. List settings fall back to `SetIndex`. Settings missing from the running build, or refusing a write, are reported and left alone.
+- A near-zero named time dilation freezes NPCs, traffic and particles only while shooting. A streaming-readiness probe requires consecutive static-collision hits below the camera.
+- Restore unfreezes, writes back every recorded value, and restores a forced environment. A failed restore keeps only the unrestored settings for a safe retry, and the restore record survives CET reloads.
+- `visual_regression_capture(deterministic=true, …)` / `hotcycle_rebuild(visual_deterministic=true)` enter the mode (optionally with an environment) and wait for streaming per camera. They freeze, shoot until two consecutive frames agree within `stability_limit`, unfreeze, and always restore. Streaming timeouts and unstable frames mark the camera as not captured; the manifest and accepted baseline record the mode and flag `screenshot_mode_mismatch`.
+- Added Spatial → Environment screenshot-mode controls, MCP tools `screenshot_mode_capabilities/status/enter/freeze/restore`, and runtime, UI, bridge and capture-sequence tests. Bumped to v0.59.0.
+
+## 0.58.0 - 2026-09-27
+
+- Added saved authoring environments (project schema 17, `environments`) with time, weather state (which determines rain), weather blend/priority, an optional World Builder Fog Volume (size, density, falloff, absorption, color; player/camera/premise anchor) and an exposure note.
+- Added Spatial → Environment: create, capture current conditions, edit, preview, force (re-apply clock every 1 s and weather every 2 s when the game changes them), and restore. Restore sets the exact pre-preview game time, calls `ResetWeather` to return to the game cycle, and removes the fog volume; the restore point survives CET reloads and a failed restore is retryable.
+- Exposure and independent rain intensity are not applied: CET exposes no verified setter. Live rain intensity is reported read-only when available.
+- The Lighting time preview is refused while an environment preview is active, and an in-progress lighting time preview is taken over so restore returns to the true original time. Deleting a premise unlinks its environments instead of removing them.
+- `visual_regression_capture` / `hotcycle_rebuild` accept an environment, force it for the whole shot series, restore afterwards, record it in the manifest and accepted baseline, and flag `environment_mismatch`.
+- Added MCP tools `environment_weather_states`, `environment_list`, `environment_create`, `environment_update`, `environment_delete`, `environment_preview`, `environment_force`, `environment_status`, `environment_restore`, plus `ENVIRONMENT-PREVIEW.md` and mocked runtime/UI/bridge/MCP tests. Updated the static bridge test to the current schema and tool count. Bumped to v0.58.0.
+
 ## 0.57.0 - 2026-09-27
 
 - Added a VFX / particle editor (Spatial → VFX) that searches World Builder's loaded Particles (`worldStaticParticleNode`) and Effects (`worldEffectNode`) catalogs, with keyword categories for smoke, steam, sparks, holograms, fire, dust, leaks, electrical and weather effects. Paths outside the loaded catalogs are rejected.

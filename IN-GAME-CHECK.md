@@ -10,6 +10,22 @@
 The upgrade archive does not contain project/config JSON, logs, exports,
 thumbnails, or bridge state.
 
+## v0.59 Deterministic screenshot mode smoke check
+
+1. In **Spatial → Environment** click **CHECK GAME SETTINGS** and note any unavailable settings.
+2. Note the HUD and graphics options, then click **ENTER SCREENSHOT MODE**. The minimap, quest tracker and prompts must disappear, and motion blur and film grain must turn off.
+3. Click **FREEZE WORLD**: pedestrians, cars and smoke stop. Click **UNFREEZE WORLD**: they resume.
+4. Click **RESTORE SCREENSHOT MODE**. Every HUD element and graphics option returns to what you noted. Check **Settings** in the game menu too.
+5. Run `visual_regression_capture(deterministic=true)` twice with a saved camera and accept the first. The second run must pass, and the game must be back to normal afterwards.
+
+## v0.58 Environment preview smoke check
+
+1. Note the in-game time and weather. Open **Advanced → Spatial → Environment**, create "Rain test" at 22:30 with **Rain**, enable the local fog volume, and save.
+2. **PREVIEW ENVIRONMENT** with Force on: the clock jumps to 22:30, rain starts (allow the blend time), and a fog volume surrounds V. Wait two in-game minutes: the clock must stay at 22:30.
+3. Close the overlay and walk around; the fog volume follows V and the conditions hold.
+4. **RESTORE ORIGINAL**: the clock returns to the noted time, the fog volume disappears and the weather returns to the normal cycle.
+5. Run `visual_regression_capture(environment_id=...)` twice and confirm the second run passes; run once with a different environment and confirm `environment_mismatch` is true.
+
 ## v0.57 VFX / particle editor smoke check
 
 1. Load World Builder and open its Spawn New tab once. In LocationStudio open **Advanced → Spatial → VFX** and click **SEARCH VFX CATALOG** with the category set to *Steam / vapor*. Rows must show `[P]`/`[E]` and real depot paths.

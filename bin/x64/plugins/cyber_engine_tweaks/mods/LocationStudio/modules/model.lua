@@ -6,12 +6,12 @@ Model.__index = Model
 
 local function blank_project()
     return {
-        schema_version = 16,
+        schema_version = 17,
         project = {
             id = 'default', name = 'Night City Location Project', description = '', author = '', tags = {},
             created_at = Util.now_iso(), updated_at = Util.now_iso(),
         },
-        locations = {}, routes = {}, npc_routes = {}, combat_encounters = {}, cover_nodes = {}, navigation_graphs = {}, device_logic_graphs = {}, world_state_variants = {}, premises = {}, rooms = {}, objects = {}, object_groups = {}, object_prefabs = {}, volumes = {}, cameras = {}, scenes = {}, assets = {}, vanilla_removals = {}, room_frames = {},
+        locations = {}, routes = {}, npc_routes = {}, combat_encounters = {}, cover_nodes = {}, navigation_graphs = {}, device_logic_graphs = {}, world_state_variants = {}, environments = {}, premises = {}, rooms = {}, objects = {}, object_groups = {}, object_prefabs = {}, volumes = {}, cameras = {}, scenes = {}, assets = {}, vanilla_removals = {}, room_frames = {},
         layers = {
             {id='shell', name='Shell', color='#5BC0EB', visible=true, locked=false},
             {id='gameplay', name='Gameplay', color='#FDE74C', visible=true, locked=false},
@@ -36,6 +36,30 @@ local function blank_project()
             transform_grab={distance=12.0,surface_offset=0.02,align_surface=false,snap_position=false,pivot_mode='center',update_interval=0.08},
             transform_edit={move_step=0.25,angle_step=5.0,scale_step=0.10,local_space=false,pivot_mode='center'},
             asset_browser={view='ALL',card_width=246,thumbnail_height=138,show_missing=true},
+            -- Deterministic screenshot mode. Settings variables are CET ConfigVars
+            -- ({group,name,value}); names missing from a game build are reported,
+            -- never faked, and every applied value is restored afterwards.
+            screenshot_mode={
+                hide_hud=true,disable_post_effects=true,freeze_world=true,wait_for_streaming=true,
+                freeze_dilation=0.0001,ready_timeout=20.0,ready_samples=3,
+                hud_vars={
+                    {group='/interface/hud',name='action_buttons',value=false},{group='/interface/hud',name='activity_log',value=false},
+                    {group='/interface/hud',name='ammo_counter',value=false},{group='/interface/hud',name='boss_healthbar',value=false},
+                    {group='/interface/hud',name='crouch_indicator',value=false},{group='/interface/hud',name='dpad',value=false},
+                    {group='/interface/hud',name='healthbar',value=false},{group='/interface/hud',name='input_hints',value=false},
+                    {group='/interface/hud',name='johnny_hud',value=false},{group='/interface/hud',name='minimap',value=false},
+                    {group='/interface/hud',name='npc_healthbar',value=false},{group='/interface/hud',name='npc_names',value=false},
+                    {group='/interface/hud',name='object_markers',value=false},{group='/interface/hud',name='phone_avatar',value=false},
+                    {group='/interface/hud',name='prompts',value=false},{group='/interface/hud',name='quest_tracker',value=false},
+                    {group='/interface/hud',name='stamina_oxygen',value=false},
+                },
+                post_effect_vars={
+                    {group='/graphics/basic',name='MotionBlur',value='Off'},{group='/graphics/basic',name='FilmGrain',value=false},
+                    {group='/graphics/basic',name='ChromaticAberration',value=false},{group='/graphics/basic',name='DepthOfField',value=false},
+                    {group='/graphics/basic',name='LensFlares',value=false},
+                },
+                camera_shake_vars={},extra_vars={},
+            },
             starter_assets_seeded=false,
         },
     }
@@ -226,6 +250,35 @@ local function normalize_world_state_variant(item)
         description=tostring(item.description or ''),created_at=item.created_at or now,updated_at=now}
 end
 
+local function clamp(value,low,high,fallback)
+    local n=tonumber(value);if not n then return fallback end
+    return math.max(low,math.min(high,n))
+end
+
+-- Authoring environment: time/weather/fog conditions for preview and
+-- deterministic screenshots. Weather is a game weather-state CName; fog is an
+-- optional World Builder Fog Volume spawned only while previewing.
+local function normalize_environment(item)
+    item=item or {};local now=Util.now_iso()
+    local time=type(item.time)=='table' and item.time or {}
+    local weather=type(item.weather)=='table' and item.weather or {}
+    local fog=type(item.fog)=='table' and item.fog or {}
+    local size=type(fog.size)=='table' and fog.size or {}
+    local color=type(fog.color)=='table' and fog.color or {}
+    return {id=item.id or Util.make_id('env'),name=Util.trim(item.name or '')~='' and Util.trim(item.name) or 'Environment',
+        premise_id=item.premise_id,
+        time={enabled=time.enabled~=false,hour=math.floor(clamp(time.hour,0,23,12)),minute=math.floor(clamp(time.minute,0,59,0))},
+        weather={enabled=weather.enabled~=false,state=Util.trim(weather.state or '')~='' and Util.trim(weather.state) or '24h_weather_sunny',
+            blend_time=clamp(weather.blend_time,0,600,0),priority=math.floor(clamp(weather.priority,0,100,9))},
+        fog={enabled=fog.enabled==true,anchor=({player=true,premise=true,camera=true})[fog.anchor] and fog.anchor or 'player',
+            size={x=clamp(size.x,1,2000,60),y=clamp(size.y,1,2000,60),z=clamp(size.z,1,1000,20)},
+            density_factor=clamp(fog.density_factor,0,100,1),density_falloff=clamp(fog.density_falloff,0,100,1),
+            absorption=clamp(fog.absorption,0,100,1),blend_falloff=clamp(fog.blend_falloff,0,100,1),
+            color={clamp(color[1],0,1,1),clamp(color[2],0,1,1),clamp(color[3],0,1,1)},resource_path=tostring(fog.resource_path or '')},
+        exposure_note=tostring(item.exposure_note or ''),notes=tostring(item.notes or ''),
+        created_at=item.created_at or now,updated_at=now}
+end
+
 local function normalize_layer(item)
     item = item or {}
     return {id=item.id or Util.make_id('layer'), name=item.name or 'Layer', color=item.color or '#FFFFFF', visible=item.visible ~= false, locked=item.locked == true}
@@ -276,7 +329,7 @@ function Model.blank() return blank_project() end
 
 function Model:normalize()
     if type(self.data) ~= 'table' then self.data=blank_project() end
-    local defaults=blank_project(); self.data.schema_version=16
+    local defaults=blank_project(); self.data.schema_version=17
     self.data.project=self.data.project or defaults.project; self.data.locations=self.data.locations or {}; self.data.routes=self.data.routes or {}
     self.data.npc_routes=type(self.data.npc_routes)=='table' and self.data.npc_routes or {}
     self.data.combat_encounters=type(self.data.combat_encounters)=='table' and self.data.combat_encounters or {}
@@ -285,6 +338,8 @@ function Model:normalize()
     self.data.device_logic_graphs=type(self.data.device_logic_graphs)=='table' and self.data.device_logic_graphs or {}
     self.data.world_state_variants=type(self.data.world_state_variants)=='table' and self.data.world_state_variants or {}
     for i,v in ipairs(self.data.world_state_variants) do self.data.world_state_variants[i]=normalize_world_state_variant(v) end
+    self.data.environments=type(self.data.environments)=='table' and self.data.environments or {}
+    for i,v in ipairs(self.data.environments) do self.data.environments[i]=normalize_environment(v) end
     for _,graph in ipairs(self.data.device_logic_graphs) do if type(graph)=='table' then
         graph.nodes=type(graph.nodes)=='table' and graph.nodes or {};graph.links=type(graph.links)=='table' and graph.links or {}
         for _,node in ipairs(graph.nodes) do if type(node)=='table' then
@@ -296,7 +351,7 @@ function Model:normalize()
     self.data.volumes=self.data.volumes or {}; self.data.cameras=self.data.cameras or {}; self.data.scenes=self.data.scenes or {}; self.data.assets=self.data.assets or {}; self.data.vanilla_removals=self.data.vanilla_removals or {};self.data.room_frames=type(self.data.room_frames)=='table' and self.data.room_frames or {}
     self.data.layers=self.data.layers or defaults.layers; self.data.settings=self.data.settings or defaults.settings
     for k,v in pairs(defaults.settings) do if self.data.settings[k] == nil then self.data.settings[k]=Util.deepcopy(v) end end
-    for _,key in ipairs({'snapping','visuals','shell_templates','workspace','quickstart','ent_tools','asset_preview','asset_browser','transform_grab','transform_edit'}) do
+    for _,key in ipairs({'snapping','visuals','shell_templates','workspace','quickstart','ent_tools','asset_preview','asset_browser','transform_grab','transform_edit','screenshot_mode'}) do
         self.data.settings[key]=self.data.settings[key] or Util.deepcopy(defaults.settings[key])
         for k,v in pairs(defaults.settings[key]) do if self.data.settings[key][k]==nil then self.data.settings[key][k]=Util.deepcopy(v) end end
     end
@@ -429,6 +484,8 @@ function Model:get_camera(id) return get_by_id(self.data.cameras,id) end
 function Model:get_scene(id) return get_by_id(self.data.scenes,id) end
 function Model:get_asset(id) return get_by_id(self.data.assets,id) end
 function Model:get_world_state_variant(id) return get_by_id(self.data.world_state_variants,id) end
+function Model:get_environment(id) return get_by_id(self.data.environments,id) end
+Model.normalize_environment=normalize_environment
 
 local function add(self,key,item,normalizer) self:snapshot('Add '..key:gsub('s$','')); local value=normalizer(item); table.insert(self.data[key],value); self:touch(); return value end
 function Model:add_location(v) return add(self,'locations',v,normalize_location) end
@@ -442,6 +499,7 @@ function Model:add_camera(v) return add(self,'cameras',v,normalize_camera) end
 function Model:add_scene(v) return add(self,'scenes',v,normalize_scene) end
 function Model:add_asset(v) return add(self,'assets',v,normalize_asset) end
 function Model:add_world_state_variant(v) return add(self,'world_state_variants',v,normalize_world_state_variant) end
+function Model:add_environment(v) return add(self,'environments',v,normalize_environment) end
 function Model:add_assets(values)
     if type(values)~='table' then return {} end
     if #values==0 then return {} end
@@ -619,6 +677,8 @@ function Model:delete_premise(id)
     for i=#self.data.cover_nodes,1,-1 do if self.data.cover_nodes[i].premise_id==id then table.remove(self.data.cover_nodes,i) end end
     for i=#self.data.object_groups,1,-1 do if self.data.object_groups[i].premise_id==id then table.remove(self.data.object_groups,i) end end
     for i=#self.data.scenes,1,-1 do if self.data.scenes[i].premise_id==id then table.remove(self.data.scenes,i) end end
+    -- Environments are reusable conditions; keep them and drop only the premise link.
+    for _,environment in ipairs(self.data.environments or {}) do if environment.premise_id==id then environment.premise_id=nil end end
     self:touch(); return true
 end
 

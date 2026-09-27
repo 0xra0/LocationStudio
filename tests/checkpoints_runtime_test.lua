@@ -1,6 +1,6 @@
 local env=dofile(arg[2]..'/support/cet_mock.lua')
 local app=env.app
-assert(app.version=='0.57.0' and app.checkpoints)
+assert(app.version=='0.59.0' and app.checkpoints)
 local object=app.model:add_object({id='checkpoint_object',name='Test chair',kind='entity',template='base\\chair.ent',transform={position={x=1,y=2,z=3},rotation={yaw=0}}})
 assert(app.placement:spawn(object))
 local first=assert(app.checkpoints:create({name='Before edit'}))

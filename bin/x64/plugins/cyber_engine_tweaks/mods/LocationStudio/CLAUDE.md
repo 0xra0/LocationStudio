@@ -229,3 +229,21 @@ with commit or `vfx_preview_clear`. Report `placement_source=forward_fallback`
 as approximate. Scale is saved and applied to native nodes at build time only;
 do not claim the live preview shows it. Rotation and particle emission edits
 may update live; a resource swap respawns the node.
+
+## Environment preview
+
+Use `environment_list`/`environment_create` for saved time, weather and fog
+conditions; rain is chosen through the weather state, and exposure is a note
+that is never applied. `environment_preview` changes the running game's clock
+and weather: tell the user, and always finish with `environment_restore`. For
+repeatable screenshots pass `environment_id` to `visual_regression_capture` and
+report `environment_mismatch` instead of treating that diff as a regression.
+
+## Deterministic screenshots
+
+For regression shots prefer `visual_regression_capture(deterministic=true,
+environment_id=...)`. It changes the user's HUD/graphics settings and freezes
+time only for the capture and restores them in `finally`; if the result reports
+`screenshot_mode_restore_error`, call `screenshot_mode_restore` before anything
+else and tell the user. Report `screenshot_mode_unavailable` settings instead of
+claiming they were disabled.

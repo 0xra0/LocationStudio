@@ -1,4 +1,4 @@
-# LocationStudio v0.57.0 — VFX / Particle Editor
+# LocationStudio v0.59.0 — Deterministic Screenshot Mode
 
 LocationStudio is an in-game Cyber Engine Tweaks editor for building locations,
 placing the full World Builder game-resource catalog, moving live objects, and
@@ -11,6 +11,10 @@ v0.53.0 adds persistent Device Logic graphs for terminals, doors, elevators, swi
 v0.54.0 adds a conflict-aware Quest Forge round-trip. Preview/import matches exact LocationStudio IDs (or previously linked NodeRefs), displays linked facts beside selected objects, preserves local notes and placement by default, and only applies changed coordinates when explicitly enabled. See [QUEST-FORGE-ROUNDTRIP.md](QUEST-FORGE-ROUNDTRIP.md).
 
 v0.55.0 adds a quest simulation/debug panel with live fact reads, writer/consumer mapping, and staged fact writes. Each write/reset/manual trigger requires a second confirmation after a persistent-save warning. Manual trigger simulation sets the configured fact; it does not dispatch a native volume event. See [QUEST-SIMULATION.md](QUEST-SIMULATION.md).
+
+v0.59.0 adds deterministic screenshot mode for visual regression. It forces a saved environment, hides the HUD and turns off motion blur and other post effects through game settings (each previous value is restored). It also waits for streaming around each camera, freezes NPCs and traffic while shooting, and keeps only a frame that matches the next one. Settings missing from the running build are reported, not faked. See [VISUAL-REGRESSION.md](VISUAL-REGRESSION.md#deterministic-screenshot-mode).
+
+v0.58.0 adds saved authoring environments: time, weather (which sets rain) and an optional World Builder fog volume, previewed live and optionally forced so the clock and weather stay put. Restore returns the original time and hands weather back to the game cycle. Visual-regression captures can force an environment and flag baselines shot under different conditions. Exposure has no verified CET control and is stored as a note only. See [ENVIRONMENT-PREVIEW.md](ENVIRONMENT-PREVIEW.md).
 
 v0.57.0 adds a VFX / particle editor: search World Builder's loaded Particles and Effects catalogs by keyword category (smoke, steam, sparks, holograms, fire, dust, leaks, electrical, weather), preview one live effect that follows the aim point, then place it with roll/pitch/yaw, optional surface alignment, particle emission rate, and scale. Scale is written to the native node by Build Mod because World Builder previews particles/effects at 1:1. See [VFX.md](VFX.md).
 
@@ -93,7 +97,7 @@ can be imported as a validated manifest, tuned through MCP, used to calculate
 fit scales, transformed into world AABBs, and checked for pairwise overlap.
 This is authoring math; it does not create or modify the game's collision mesh.
 
-Start with [FIRST-RUN.md](FIRST-RUN.md), then the guides for [device logic](DEVICE-LOGIC.md), [navigation graphs](NAVIGATION.md), [cover nodes](COVER-NODES.md), [combat encounters](COMBAT-ENCOUNTERS.md), [NPC patrol routes](NPC-AI-ROUTES.md), [NPC population](NPC-POPULATION.md), [mesh appearances and decals](MESH-APPEARANCES-AND-DECALS.md), [lighting](LIGHTING.md), [VFX / particles](VFX.md), [interactables](INTERACTABLES.md), [walkability checks](WALKABILITY.md), and [NPC workspots](NPC-WORKSPOTS.md). Read [WB-ASSET-BOUNDS.md](WB-ASSET-BOUNDS.md)
+Start with [FIRST-RUN.md](FIRST-RUN.md), then the guides for [device logic](DEVICE-LOGIC.md), [navigation graphs](NAVIGATION.md), [cover nodes](COVER-NODES.md), [combat encounters](COMBAT-ENCOUNTERS.md), [NPC patrol routes](NPC-AI-ROUTES.md), [NPC population](NPC-POPULATION.md), [mesh appearances and decals](MESH-APPEARANCES-AND-DECALS.md), [lighting](LIGHTING.md), [VFX / particles](VFX.md), [environment & weather preview](ENVIRONMENT-PREVIEW.md), [interactables](INTERACTABLES.md), [walkability checks](WALKABILITY.md), and [NPC workspots](NPC-WORKSPOTS.md). Read [WB-ASSET-BOUNDS.md](WB-ASSET-BOUNDS.md)
 for bounds manifests and calculations, [WB-FAVORITES.md](WB-FAVORITES.md) for
 native favorite workflows, [WB-PREFAB-THUMBNAILS.md](WB-PREFAB-THUMBNAILS.md)
 for capture requirements, [WB-ARRAYS.md](WB-ARRAYS.md) for arrays and layout,

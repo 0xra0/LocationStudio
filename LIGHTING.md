@@ -25,6 +25,9 @@ MCP changes use the same saved project and live World Builder node as the in-gam
 
 ## Time preview scope
 
+For saved time + weather + fog conditions, use the Environment tab ([ENVIRONMENT-PREVIEW.md](ENVIRONMENT-PREVIEW.md)); this time preview is refused while an environment preview is active.
+
+
 Time preview changes Cyberpunk's game clock through CET's `Game.GetTimeSystem()` / `SetGameTimeByHMS`. It does not change weather, cloud cover, exposure, or the sun independently. Another mod that writes the game clock at the same time can override this preview. The restore value is in memory for the current LocationStudio session and is cleared after a successful restore.
 
 ## Requirements and limits
