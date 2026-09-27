@@ -238,3 +238,12 @@ that is never applied. `environment_preview` changes the running game's clock
 and weather: tell the user, and always finish with `environment_restore`. For
 repeatable screenshots pass `environment_id` to `visual_regression_capture` and
 report `environment_mismatch` instead of treating that diff as a regression.
+
+## Deterministic screenshots
+
+For regression shots prefer `visual_regression_capture(deterministic=true,
+environment_id=...)`. It changes the user's HUD/graphics settings and freezes
+time only for the capture and restores them in `finally`; if the result reports
+`screenshot_mode_restore_error`, call `screenshot_mode_restore` before anything
+else and tell the user. Report `screenshot_mode_unavailable` settings instead of
+claiming they were disabled.

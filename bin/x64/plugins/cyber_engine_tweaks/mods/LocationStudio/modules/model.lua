@@ -36,6 +36,30 @@ local function blank_project()
             transform_grab={distance=12.0,surface_offset=0.02,align_surface=false,snap_position=false,pivot_mode='center',update_interval=0.08},
             transform_edit={move_step=0.25,angle_step=5.0,scale_step=0.10,local_space=false,pivot_mode='center'},
             asset_browser={view='ALL',card_width=246,thumbnail_height=138,show_missing=true},
+            -- Deterministic screenshot mode. Settings variables are CET ConfigVars
+            -- ({group,name,value}); names missing from a game build are reported,
+            -- never faked, and every applied value is restored afterwards.
+            screenshot_mode={
+                hide_hud=true,disable_post_effects=true,freeze_world=true,wait_for_streaming=true,
+                freeze_dilation=0.0001,ready_timeout=20.0,ready_samples=3,
+                hud_vars={
+                    {group='/interface/hud',name='action_buttons',value=false},{group='/interface/hud',name='activity_log',value=false},
+                    {group='/interface/hud',name='ammo_counter',value=false},{group='/interface/hud',name='boss_healthbar',value=false},
+                    {group='/interface/hud',name='crouch_indicator',value=false},{group='/interface/hud',name='dpad',value=false},
+                    {group='/interface/hud',name='healthbar',value=false},{group='/interface/hud',name='input_hints',value=false},
+                    {group='/interface/hud',name='johnny_hud',value=false},{group='/interface/hud',name='minimap',value=false},
+                    {group='/interface/hud',name='npc_healthbar',value=false},{group='/interface/hud',name='npc_names',value=false},
+                    {group='/interface/hud',name='object_markers',value=false},{group='/interface/hud',name='phone_avatar',value=false},
+                    {group='/interface/hud',name='prompts',value=false},{group='/interface/hud',name='quest_tracker',value=false},
+                    {group='/interface/hud',name='stamina_oxygen',value=false},
+                },
+                post_effect_vars={
+                    {group='/graphics/basic',name='MotionBlur',value='Off'},{group='/graphics/basic',name='FilmGrain',value=false},
+                    {group='/graphics/basic',name='ChromaticAberration',value=false},{group='/graphics/basic',name='DepthOfField',value=false},
+                    {group='/graphics/basic',name='LensFlares',value=false},
+                },
+                camera_shake_vars={},extra_vars={},
+            },
             starter_assets_seeded=false,
         },
     }
@@ -327,7 +351,7 @@ function Model:normalize()
     self.data.volumes=self.data.volumes or {}; self.data.cameras=self.data.cameras or {}; self.data.scenes=self.data.scenes or {}; self.data.assets=self.data.assets or {}; self.data.vanilla_removals=self.data.vanilla_removals or {};self.data.room_frames=type(self.data.room_frames)=='table' and self.data.room_frames or {}
     self.data.layers=self.data.layers or defaults.layers; self.data.settings=self.data.settings or defaults.settings
     for k,v in pairs(defaults.settings) do if self.data.settings[k] == nil then self.data.settings[k]=Util.deepcopy(v) end end
-    for _,key in ipairs({'snapping','visuals','shell_templates','workspace','quickstart','ent_tools','asset_preview','asset_browser','transform_grab','transform_edit'}) do
+    for _,key in ipairs({'snapping','visuals','shell_templates','workspace','quickstart','ent_tools','asset_preview','asset_browser','transform_grab','transform_edit','screenshot_mode'}) do
         self.data.settings[key]=self.data.settings[key] or Util.deepcopy(defaults.settings[key])
         for k,v in pairs(defaults.settings[key]) do if self.data.settings[key][k]==nil then self.data.settings[key][k]=Util.deepcopy(v) end end
     end

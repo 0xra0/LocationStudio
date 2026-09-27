@@ -136,5 +136,107 @@ class EnvironmentMcpTests(unittest.TestCase):
             self.assertIn("environment_restore", sent)
 
 
+class DeterministicCaptureTests(unittest.TestCase):
+    def _run(self, frames, ready_sequence, **kwargs):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name)
+        sent: list[tuple[str, dict]] = []
+        ready = list(ready_sequence)
+        shots = {"n": 0}
+
+        def mock_screenshot(**_kwargs):
+            index = min(shots["n"], len(frames) - 1)
+            shots["n"] += 1
+            path = root / f"shot_{shots['n']}.png"
+            write_rgba_png(path, 2, 2, [frames[index]] * 4)
+            return json.dumps({"path": str(path)})
+
+        def mock_send(op, args=None, **_kwargs):
+            sent.append((op, args or {}))
+            if op == "capture_player":
+                return {"position": {"x": 0, "y": 0, "z": 0, "w": 1}, "rotation": {"roll": 0, "pitch": 0, "yaw": 0}}
+            if op == "screenshot_mode_enter":
+                return {"active": True, "applied": [{"group": "/interface/hud", "name": "minimap"}],
+                        "unavailable": [{"group": "/graphics/basic", "name": "LensFlares", "reason": "missing"}],
+                        "environment_applied": {"time": {"hour": 22, "minute": 30}}}
+            if op == "screenshot_mode_ready":
+                return {"ready": ready.pop(0) if ready else True, "reason": "no static collision below the camera yet"}
+            return {"ok": True}
+
+        project = {"cameras": [{"id": "cam", "name": "Front", "enabled": True}], "environments": [RAINY]}
+        with patch.object(server, "REGRESSION_DIR", root / "regression"), \
+             patch.object(server, "_project", lambda: project), \
+             patch.object(server, "_send", mock_send), \
+             patch.object(server, "screenshot", Tool(mock_screenshot)), \
+             patch.object(server.time, "sleep", lambda _s: None):
+            result = call(server.visual_regression_capture, settle_s=0, fullscreen=False, deterministic=True, **kwargs)
+        return result, [op for op, _ in sent], sent, shots["n"]
+
+    def test_waits_freezes_and_keeps_the_stable_frame(self):
+        moving, still = (10, 10, 10, 255), (200, 200, 200, 255)
+        result, ops, sent, shots = self._run([moving, still, still], [False, False, True], environment_id="env-rain")
+        self.assertTrue(result["complete"], result)
+        enter = sent[ops.index("screenshot_mode_enter")][1]
+        self.assertEqual(enter["environment_id"], "env-rain")
+        self.assertNotIn("environment_preview", ops, "screenshot mode applies the environment itself")
+        self.assertEqual(ops.count("screenshot_mode_ready"), 3)
+        self.assertLess(ops.index("screenshot_mode_ready"), ops.index("screenshot_mode_freeze"))
+        self.assertLess(ops.index("screenshot_mode_freeze"), ops.index("screenshot_mode_unfreeze"))
+        self.assertEqual(ops[-1], "screenshot_mode_restore")
+        camera = result["cameras"][0]
+        self.assertTrue(camera["stability"]["stable"])
+        self.assertEqual(camera["stability"]["shots"], 3)
+        self.assertEqual(shots, 3)
+        self.assertEqual(result["screenshot_mode_unavailable"][0]["name"], "LensFlares")
+        self.assertEqual(result["environment_applied"]["time"]["hour"], 22)
+        self.assertEqual(result["screenshot_mode"]["hide_hud"], True)
+
+    def test_streaming_timeout_and_unstable_frames_are_not_captured(self):
+        result, ops, _sent, _shots = self._run([(1, 1, 1, 255)], [False] * 50, ready_timeout_s=0)
+        self.assertFalse(result["complete"])
+        self.assertIn("did not finish streaming", result["cameras"][0]["error"])
+        self.assertNotIn("screenshot_mode_freeze", ops)
+        self.assertEqual(ops[-1], "screenshot_mode_restore")
+
+        frames = [(i * 40 % 255, 0, 0, 255) for i in range(10)]
+        result, ops, _sent, _shots = self._run(frames, [], stability_max_shots=3)
+        self.assertFalse(result["complete"])
+        self.assertIn("did not stabilize", result["cameras"][0]["error"])
+        self.assertEqual(ops.count("screenshot_mode_freeze"), ops.count("screenshot_mode_unfreeze"),
+                         "every freeze is released even when a shot fails")
+        self.assertEqual(ops[-1], "screenshot_mode_restore")
+
+    def test_mode_mismatch_against_baseline_is_flagged(self):
+        still = (50, 60, 70, 255)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "s.png"
+            write_rgba_png(source, 2, 2, [still] * 4)
+
+            def mock_send(op, args=None, **_kwargs):
+                if op == "capture_player":
+                    return {"position": {"x": 0, "y": 0, "z": 0, "w": 1}, "rotation": {"roll": 0, "pitch": 0, "yaw": 0}}
+                if op == "screenshot_mode_ready":
+                    return {"ready": True}
+                return {"active": True, "applied": [], "unavailable": []}
+
+            project = {"cameras": [{"id": "cam", "enabled": True}]}
+            with patch.object(server, "REGRESSION_DIR", root / "regression"), \
+                 patch.object(server, "_project", lambda: project), \
+                 patch.object(server, "_send", mock_send), \
+                 patch.object(server, "screenshot", Tool(lambda **_k: json.dumps({"path": str(source)}))), \
+                 patch.object(server.time, "sleep", lambda _s: None):
+                first = call(server.visual_regression_capture, settle_s=0, deterministic=True)
+                call(server.visual_regression_accept, first["run_id"])
+                same = call(server.visual_regression_capture, settle_s=0, deterministic=True)
+                plain = call(server.visual_regression_capture, settle_s=0)
+                self.assertFalse(same["screenshot_mode_mismatch"])
+                self.assertEqual(same["status"], "passed")
+                self.assertTrue(plain["screenshot_mode_mismatch"])
+                with self.assertRaises(ValueError):
+                    call(server.visual_regression_capture, settle_s=0, deterministic=True, stability_max_shots=1)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -28,7 +28,7 @@ def test_mcp_operations_are_handled() -> None:
     handled.update(re.findall(r"or op == '([a-z_]+)'", bridge))
     handled.update(re.findall(r"'((?:wb_)?(?:clipcheck|fixturecheck|fitcheck))'", bridge))
     assert sent <= handled, f'MCP operations missing in CET bridge: {sorted(sent - handled)}'
-    assert len(re.findall(r'@mcp\.tool\(\)', server)) == 363
+    assert len(re.findall(r'@mcp\.tool\(\)', server)) == 368
     for operation in ('register_asset', 'update_asset', 'delete_asset', 'place_asset', 'clear_debug_log', 'run_diagnostics',
                       'capture_camera', 'copy_transform', 'paste_transform', 'move_item_to_aim',
                       'drop_item_to_ground', 'aim_item_at_target', 'scatter_at_aim',
@@ -64,7 +64,9 @@ def test_mcp_operations_are_handled() -> None:
                       'vfx_categories', 'vfx_search', 'vfx_create', 'vfx_update', 'vfx_list', 'vfx_preview',
                       'vfx_preview_status', 'vfx_preview_commit', 'vfx_preview_clear',
                       'environment_weather_states', 'environment_list', 'environment_create', 'environment_update',
-                      'environment_delete', 'environment_preview', 'environment_force', 'environment_status', 'environment_restore'):
+                      'environment_delete', 'environment_preview', 'environment_force', 'environment_status', 'environment_restore',
+                      'screenshot_mode_capabilities', 'screenshot_mode_status', 'screenshot_mode_enter', 'screenshot_mode_freeze',
+                      'screenshot_mode_unfreeze', 'screenshot_mode_ready', 'screenshot_mode_reset_ready', 'screenshot_mode_restore'):
         assert operation in sent
     for tool in ('wb_favorite_add', 'wb_favorites_list', 'wb_device_connect', 'wb_elevator_wire',
                  'wb_polygon_scatter', 'wb_volume_scatter', 'wb_live_surface_scatter', 'wb_rng_create'):
@@ -114,6 +116,8 @@ def test_v6_modules_are_packaged() -> None:
     assert (mod / 'modules' / 'mesh_appearance.lua').is_file()
     assert (mod / 'modules' / 'vfx.lua').is_file()
     assert (mod / 'modules' / 'environment.lua').is_file()
+    assert (mod / 'modules' / 'screenshot_mode.lua').is_file()
+    assert (mod.parents[5] / 'tests' / 'screenshot_mode_runtime_test.lua').is_file()
     assert (mod / 'mcp_server' / 'test_environment.py').is_file()
     assert (mod.parents[5] / 'ENVIRONMENT-PREVIEW.md').is_file()
     assert (mod.parents[5] / 'tests' / 'environment_runtime_test.lua').is_file()

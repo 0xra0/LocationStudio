@@ -1,3 +1,11 @@
+## 0.59.0 - 2026-09-27
+
+- Added deterministic screenshot mode (`modules/screenshot_mode.lua`). It records and then overrides configurable CET settings ConfigVars: HUD elements under `/interface/hud`, and motion blur/film grain/chromatic aberration/depth of field/lens flares under `/graphics/basic`. List settings fall back to `SetIndex`. Settings missing from the running build, or refusing a write, are reported and left alone.
+- A near-zero named time dilation freezes NPCs, traffic and particles only while shooting. A streaming-readiness probe requires consecutive static-collision hits below the camera.
+- Restore unfreezes, writes back every recorded value, and restores a forced environment. A failed restore keeps only the unrestored settings for a safe retry, and the restore record survives CET reloads.
+- `visual_regression_capture(deterministic=true, …)` / `hotcycle_rebuild(visual_deterministic=true)` enter the mode (optionally with an environment) and wait for streaming per camera. They freeze, shoot until two consecutive frames agree within `stability_limit`, unfreeze, and always restore. Streaming timeouts and unstable frames mark the camera as not captured; the manifest and accepted baseline record the mode and flag `screenshot_mode_mismatch`.
+- Added Spatial → Environment screenshot-mode controls, MCP tools `screenshot_mode_capabilities/status/enter/freeze/restore`, and runtime, UI, bridge and capture-sequence tests. Bumped to v0.59.0.
+
 ## 0.58.0 - 2026-09-27
 
 - Added saved authoring environments (project schema 17, `environments`) with time, weather state (which determines rain), weather blend/priority, an optional World Builder Fog Volume (size, density, falloff, absorption, color; player/camera/premise anchor) and an exposure note.

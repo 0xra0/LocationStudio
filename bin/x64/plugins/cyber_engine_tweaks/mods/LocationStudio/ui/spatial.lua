@@ -917,6 +917,35 @@ function SpatialUI:draw_environment()
         else ImGui.SameLine();if ImGui.SmallButton('STOP FORCING') then envs:set_force(false) end end
         for _,w in ipairs(status.warnings or {}) do ImGui.TextDisabled('! '..w) end
     end
+    self:draw_screenshot_mode()
+end
+
+function SpatialUI:draw_screenshot_mode()
+    local app=self.app;local mode=app.screenshot_mode
+    ImGui.Separator();ImGui.Text('DETERMINISTIC SCREENSHOT MODE')
+    if not mode then ImGui.TextDisabled('The screenshot mode module failed to load.');return end
+    ImGui.TextWrapped('Used by visual_regression_capture(deterministic=true). Hides HUD and post effects through game settings (previous values are recorded and restored), forces the selected environment, and freezes NPCs/traffic only while shooting.')
+    local cfg=mode:settings();local changed
+    cfg.hide_hud,changed=ImGui.Checkbox('Hide HUD',cfg.hide_hud);if changed then app:mark_dirty() end
+    cfg.disable_post_effects,changed=ImGui.Checkbox('Disable motion blur / film grain / DOF / lens effects',cfg.disable_post_effects);if changed then app:mark_dirty() end
+    cfg.freeze_world,changed=ImGui.Checkbox('Freeze NPCs, traffic and particles while shooting',cfg.freeze_world);if changed then app:mark_dirty() end
+    if ImGui.Button('CHECK GAME SETTINGS',190,28) then
+        local caps=mode:capabilities();local missing=0
+        for _,row in ipairs(caps.settings) do if not row.available then missing=missing+1 end end
+        self.shot_caps=caps;self:toast(#caps.settings-missing..' of '..#caps.settings..' settings available'..(caps.time_dilation and '; world freeze available' or '; world freeze unavailable'))
+    end
+    local status=mode:status()
+    if not status.active then
+        ImGui.SameLine();if ImGui.Button('ENTER SCREENSHOT MODE',210,28) then local result,err=mode:enter({environment_id=app.model:get_environment(self.env_selected_id) and self.env_selected_id or nil});self:toast(err or ('Screenshot mode on; '..#result.unavailable..' setting(s) unavailable')) end
+    else
+        ImGui.SameLine();if ImGui.Button(status.frozen and 'UNFREEZE WORLD' or 'FREEZE WORLD',150,28) then local _,err;if status.frozen then _,err=mode:unfreeze() else _,err=mode:freeze() end;self:toast(err or (status.frozen and 'World unfrozen' or 'World frozen')) end
+        ImGui.SameLine();if ImGui.Button('RESTORE SCREENSHOT MODE',220,28) then local result,err=mode:restore();self:toast(err or ('Restored '..result.settings_restored..' setting(s)')) end
+        ImGui.TextDisabled('Active: '..#status.applied..' setting(s) managed'..(status.frozen and ' · world frozen' or '')..(status.environment_id and ' · environment forced' or ''))
+        for _,row in ipairs(status.unavailable or {}) do ImGui.TextDisabled('! '..row.group..'/'..row.name..': '..tostring(row.reason)) end
+    end
+    if self.shot_caps and not status.active then
+        for _,row in ipairs(self.shot_caps.settings) do if not row.available then ImGui.TextDisabled('! '..row.group..'/'..row.name..' unavailable') end end
+    end
 end
 
 function SpatialUI:draw_vfx()

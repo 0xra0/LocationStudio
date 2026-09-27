@@ -1,6 +1,6 @@
 local env=dofile(arg[2]..'/support/cet_mock.lua')
 local app=env.app
-assert(app.version=='0.58.0')
+assert(app.version=='0.59.0')
 local premise=assert(app.actions:create_premise_from_player('NPC Route Test','interior'))
 local record='Character.test_route_guard'
 local asset=app.model:add_asset({name='Route Guard',kind='entity_record',template=record,size={x=1,y=1,z=1},metadata={world_builder={definition_key='entity_record',module_path='entity/entityRecord',resource_path=record,resource_name='Route Guard',entry={name='Route Guard',fileName='Route Guard',data={modulePath='entity/entityRecord',spawnData=record,app='default'}}}}})

@@ -1,6 +1,6 @@
 local env=dofile(arg[2]..'/support/cet_mock.lua')
 local app=env.app
-assert(app.version=='0.58.0')
+assert(app.version=='0.59.0')
 local premise=assert(app.model:add_premise({name='Generator Test'}))
 local mesh=app.model:add_asset({name='Generator Mesh',kind='mesh',template='base\\environment\\architecture\\walls\\game_wall.mesh',size={x=1,y=1,z=1},metadata={
     asset_bounds={min={x=-1,y=-0.5,z=0},max={x=1,y=0.5,z=2},units='m'},
