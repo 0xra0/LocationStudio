@@ -44,7 +44,7 @@ function Game.GetTeleportationFacility() return {Teleport=function(self,p,pos,ro
 ImGui={};ImGuiCond={FirstUseEver=1};ImGuiCol={Button=1,ButtonHovered=2,ButtonActive=3,Header=4,HeaderHovered=5,Tab=6,TabHovered=7,Border=8}
 for _,n in ipairs({'Begin','End','BeginChild','EndChild','Button','SmallButton','Text','TextDisabled','TextWrapped','TextColored','Separator','SameLine','Spacing','NewLine','BulletText','Selectable','InputText','InputTextWithHint','InputTextMultiline','InputFloat','InputFloat3','InputInt','Checkbox','SliderFloat','BeginTabBar','EndTabBar','BeginTabItem','EndTabItem','BeginCombo','EndCombo','BeginPopup','EndPopup','OpenPopup','CloseCurrentPopup','SetTooltip','SetNextWindowSize','PushStyleColor','PopStyleColor','PushStyleVar','PopStyleVar','PushItemWidth','PopItemWidth','GetContentRegionAvail','IsItemHovered'}) do ImGui[n]=function(...) return false end end
 
-local app=dofile(mod..'/init.lua');events.onInit();assert(app.ready);assert(app.version=='0.66.0')
+local app=dofile(mod..'/init.lua');events.onInit();assert(app.ready);assert(app.version=='0.67.0')
 local premise=app.model:add_premise({name='P',transform={position={x=0,y=0,z=0,w=1},rotation={roll=0,pitch=0,yaw=0}}});app.selection:set('premise',premise.id)
 local room=app.builder:create_room({premise_id=premise.id,name='R',width=4,depth=4,height=3,x=2,y=0,generate_shell=false})
 local object=app.builder:place_object({premise_id=premise.id,room_id=room.id,name='O',template='base\\o.ent',transform={position={x=3,y=0,z=1,w=1},rotation={roll=0,pitch=0,yaw=0}}})

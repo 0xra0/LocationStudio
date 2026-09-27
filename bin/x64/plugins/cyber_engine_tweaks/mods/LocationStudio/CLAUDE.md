@@ -300,3 +300,14 @@ Build timelines from saved cameras and objects; never invent ids. Use
 structured handoff for `.scene` authoring: no native `.scene` is generated.
 `timeline_play` moves V and spawns/hides objects: tell the user, and always
 finish with `timeline_stop`. Fact keys are never written to the game.
+
+## Vanilla clone / import
+
+Stage vanilla nodes with `vanilla_clone_pick`/`vanilla_clone_scan` and show the
+candidates (cloneability, warnings, confidence) before importing. Live node picks
+are `position_only`: prefer `vanilla_clone_from_sector` with a WolvenKit sector
+JSON for exact transforms, and pass `allow_approximate` only with the user's
+consent, then report that rotation/scale need aligning. Ask before
+`hide_originals`; hidden originals are reversible visibility toggles, not
+deletions. Device logic, spawner settings, lights and collision are not cloned;
+say so rather than implying a complete copy.

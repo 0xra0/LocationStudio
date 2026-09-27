@@ -10,6 +10,14 @@
 The upgrade archive does not contain project/config JSON, logs, exports,
 thumbnails, or bridge state.
 
+## v0.67 Vanilla clone smoke check
+
+1. With RedHotTools installed, stand in a vanilla interior (for example a clinic). In **Spatial → Vanilla clone**, aim at a bed and click **PICK CROSSHAIR**: it is staged as `worldMeshNode` with its mesh path and appearance, marked "position only".
+2. Enable **Allow position-only picks** and **Hide the originals**, then click **IMPORT SELECTED**. The vanilla bed disappears and an identical clone appears at the same spot with the same appearance. Rotate it if it faced another way, then move it: it is an ordinary project object. **UNDO** removes the import.
+3. Export the bed's sector with WolvenKit to JSON and run `vanilla_clone_from_sector(..., match_staged=true)`. The re-staged pick is "exact"; importing it matches the original rotation and scale without adjustment.
+4. Click **REVERT** on a clone: the original returns and the clone is deleted.
+5. **SCAN AREA** with a 6 m radius lists lights and collision as not cloneable, with reasons.
+
 ## v0.66 Cinematic timeline smoke check
 
 1. Save two cameras in a room. In **Spatial → Timeline**, create a 20 s timeline. Select the camera track and the first camera, then click **CUT TO SELECTED CAMERA** at 0 s. Select the second camera, set the playhead to 4 s and click **MOVE TO SELECTED CAMERA**.

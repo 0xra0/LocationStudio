@@ -28,7 +28,7 @@ def test_mcp_operations_are_handled() -> None:
     handled.update(re.findall(r"or op == '([a-z_]+)'", bridge))
     handled.update(re.findall(r"'((?:wb_)?(?:clipcheck|fixturecheck|fitcheck))'", bridge))
     assert sent <= handled, f'MCP operations missing in CET bridge: {sorted(sent - handled)}'
-    assert len(re.findall(r'@mcp\.tool\(\)', server)) == 434
+    assert len(re.findall(r'@mcp\.tool\(\)', server)) == 445
     for operation in ('register_asset', 'update_asset', 'delete_asset', 'place_asset', 'clear_debug_log', 'run_diagnostics',
                       'capture_camera', 'copy_transform', 'paste_transform', 'move_item_to_aim',
                       'drop_item_to_ground', 'aim_item_at_target', 'scatter_at_aim',
@@ -81,7 +81,9 @@ def test_mcp_operations_are_handled() -> None:
                       'timeline_list', 'timeline_get', 'timeline_create', 'timeline_update', 'timeline_delete', 'timeline_add_track',
                       'timeline_update_track', 'timeline_delete_track', 'timeline_add_key', 'timeline_update_key', 'timeline_delete_key',
                       'timeline_evaluate', 'timeline_validate', 'timeline_play', 'timeline_seek', 'timeline_pause', 'timeline_stop',
-                      'timeline_status', 'timeline_export'):
+                      'timeline_status', 'timeline_export',
+                      'vanilla_clone_status', 'vanilla_clone_pick', 'vanilla_clone_scan', 'vanilla_clone_stage', 'vanilla_clone_candidates',
+                      'vanilla_clone_select', 'vanilla_clone_clear', 'vanilla_clone_import', 'vanilla_clone_list', 'vanilla_clone_revert'):
         assert operation in sent
     for operation in ('sector_report_load', 'sector_report_flags', 'sector_report_select'):
         assert operation in handled, operation
@@ -141,6 +143,11 @@ def test_v6_modules_are_packaged() -> None:
     assert (mod / 'modules' / 'layers.lua').is_file()
     assert (mod / 'modules' / 'splines.lua').is_file()
     assert (mod / 'modules' / 'timeline.lua').is_file()
+    assert (mod / 'modules' / 'vanilla_clone.lua').is_file()
+    assert (mod / 'mcp_server' / 'lsbuild' / 'vanilla.py').is_file()
+    assert (mod / 'mcp_server' / 'test_vanilla_clone.py').is_file()
+    assert (mod.parents[5] / 'VANILLA-CLONE.md').is_file()
+    assert (mod.parents[5] / 'tests' / 'vanilla_clone_runtime_test.lua').is_file()
     assert (mod / 'mcp_server' / 'test_timeline.py').is_file()
     assert (mod.parents[5] / 'TIMELINE.md').is_file()
     assert (mod.parents[5] / 'tests' / 'timeline_runtime_test.lua').is_file()

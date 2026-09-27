@@ -3755,7 +3755,7 @@ def status_resource() -> str:
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from mod_inventory import scan_mod_installation as _scan_mod_installation  # noqa: E402
-from lsbuild import build as _lsb, native as _lsn, worker as _lsw, wiring as _lswire, rng as _lsrng, interactables as _lsip, population as _lsp, vfx as _lsvfx, sectors as _lssec, performance as _lsperf  # noqa: E402
+from lsbuild import build as _lsb, native as _lsn, worker as _lsw, wiring as _lswire, rng as _lsrng, interactables as _lsip, population as _lsp, vfx as _lsvfx, sectors as _lssec, performance as _lsperf, vanilla as _lsvan  # noqa: E402
 
 WORLD_BUILDER_ROOT = MOD_DIR.parent / "entSpawner"
 BUILD_ROOT = MOD_DIR / "exports" / "build"
@@ -4404,6 +4404,126 @@ def spline_preview(spline_id: str, spacing: float = 1.0, curve: bool = True) -> 
 def spline_preview_clear() -> str:
     """Remove the spline preview markers."""
     return _json(_send("spline_preview_clear"))
+
+
+@mcp.tool()
+def vanilla_clone_status() -> str:
+    """Vanilla clone importer status: RedHotTools readiness, staged picks, existing clones and cloneable node types."""
+    return _json(_send("vanilla_clone_status"))
+
+
+@mcp.tool()
+def vanilla_clone_pick(distance: float = 50.0, all_hits: bool = False, append: bool = False) -> str:
+    """Stage the vanilla node under the crosshair (RedHotTools). all_hits stages every hit along the ray.
+    Live node picks carry position only (confidence position_only); entities carry their real orientation."""
+    return _json(_send("vanilla_clone_pick", {"distance": distance, "all": all_hits, "append": append}))
+
+
+@mcp.tool()
+def vanilla_clone_scan(radius: float = 10.0, term: str = "", limit: int = 200, entities: bool = False, append: bool = False) -> str:
+    """Stage streamed vanilla nodes in the camera frustum within radius of V, optionally filtered by a substring
+    (node type, mesh/template path, debug name, NodeRef). Turn to face the area first: only visible nodes stream."""
+    return _json(_send("vanilla_clone_scan", {"radius": radius, "term": term, "limit": limit, "entities": entities, "append": append}))
+
+
+@mcp.tool()
+def vanilla_clone_candidates() -> str:
+    """List staged candidates with index, node type, resource path, appearance, transform confidence, support and
+    warnings, and whether each is already cloned or selected."""
+    return _json(_send("vanilla_clone_candidates"))
+
+
+@mcp.tool()
+def vanilla_clone_select(index: str, selected: bool = True) -> str:
+    """Select or deselect a staged candidate by index, or pass index='all' / 'none'."""
+    return _json(_send("vanilla_clone_select", {"index": int(index) if str(index).isdigit() else index, "selected": selected}))
+
+
+@mcp.tool()
+def vanilla_clone_clear() -> str:
+    """Clear the staged candidate list."""
+    return _json(_send("vanilla_clone_clear"))
+
+
+@mcp.tool()
+def vanilla_clone_import(indices: list[int] | None = None, premise_id: str = "", room_id: str = "", layer: str = "",
+                         group_name: str = "", hide_originals: bool = False, allow_approximate: bool = False,
+                         allow_duplicate: bool = False, spawn: bool = True) -> str:
+    """Import staged candidates (indices, default all selected) as editable project objects keeping the real
+    resource path, appearance and transform. hide_originals hides the vanilla nodes through reversible
+    vanilla-removal records so the clones replace them. position_only picks need allow_approximate (rotation 0,
+    scale 1): prefer vanilla_clone_from_sector for exact transforms. One undo step."""
+    args: dict[str, Any] = {"premise_id": premise_id or None, "room_id": room_id or None, "layer": layer or None,
+                            "group_name": group_name or None, "hide_originals": hide_originals,
+                            "allow_approximate": allow_approximate, "allow_duplicate": allow_duplicate, "spawn": spawn}
+    if indices:
+        args["indices"] = [int(i) for i in indices]
+    return _json(_send("vanilla_clone_import", args))
+
+
+@mcp.tool()
+def vanilla_clone_list(premise_id: str = "") -> str:
+    """List cloned vanilla objects with their source node, confidence, whether they were moved/rotated/re-appearanced
+    since import, and whether the original is hidden."""
+    return _json(_send("vanilla_clone_list", {"premise_id": premise_id or None}))
+
+
+@mcp.tool()
+def vanilla_clone_revert(object_id: str, delete: bool = True) -> str:
+    """Show the original vanilla node again and delete the clone (delete=false keeps the clone)."""
+    return _json(_send("vanilla_clone_revert", {"id": object_id, "delete": delete}))
+
+
+def _sector_json(path: str) -> Path:
+    p = Path(path)
+    if not p.is_absolute():
+        p = MOD_DIR / p
+    if not p.is_file():
+        raise ValueError(f"sector JSON not found: {p}. Export the .streamingsector with WolvenKit (Convert to JSON).")
+    return p
+
+
+@mcp.tool()
+def vanilla_sector_nodes(sector_json: str, term: str = "", center: list[float] | None = None, radius: float | None = None,
+                         cloneable_only: bool = True, limit: int = 200) -> str:
+    """Offline: list node instances of a WolvenKit-exported .streamingsector JSON with exact position, rotation
+    (from the nodeData quaternion) and scale, resource paths and appearances. Filter by substring or center+radius."""
+    c = _xyz(center, "center") if center is not None else None
+    return _json(_lsvan.read_sector(_sector_json(sector_json), center=c, radius=radius, term=term,
+                                    cloneable_only=cloneable_only, limit=limit))
+
+
+@mcp.tool()
+def vanilla_clone_from_sector(sector_json: str, node_indices: list[int] | None = None, match_staged: bool = False,
+                              term: str = "", center: list[float] | None = None, radius: float | None = None,
+                              import_now: bool = False, premise_id: str = "", layer: str = "", group_name: str = "",
+                              hide_originals: bool = False, allow_duplicate: bool = False, limit: int = 200) -> str:
+    """Clone vanilla nodes with exact transforms from a WolvenKit-exported sector JSON. Choose nodes by node_indices,
+    term, center+radius, or match_staged (the staged in-game picks of this sector by node index/instance). Stages
+    them in game for review, or imports directly with import_now=true (hide_originals needs the nodes streamed)."""
+    match = None
+    if match_staged:
+        staged = _send("vanilla_clone_candidates")
+        sector = Path(sector_json).name.split(".")[0].lower()
+        match = [{"node_index": row["node_index"], "instance_index": row.get("instance_index")}
+                 for row in staged.get("items", []) if row.get("node_index") is not None
+                 and (not row.get("sector_path") or sector in str(row["sector_path"]).lower().replace("\\", "/"))]
+        if not match:
+            raise ValueError("no staged picks with a node index from this sector; pick them in game first")
+    if not (node_indices or match or term or (center is not None and radius is not None)):
+        raise ValueError("choose nodes with node_indices, match_staged, term or center+radius")
+    c = _xyz(center, "center") if center is not None else None
+    report = _lsvan.read_sector(_sector_json(sector_json), center=c, radius=radius, term=term, node_indices=node_indices,
+                                match=match, cloneable_only=True, limit=limit)
+    if not report["items"]:
+        raise ValueError("no cloneable nodes matched in this sector")
+    if import_now:
+        result = _send("vanilla_clone_import", {"candidates": report["items"], "premise_id": premise_id or None, "layer": layer or None,
+                                               "group_name": group_name or None, "hide_originals": hide_originals,
+                                               "allow_duplicate": allow_duplicate})
+    else:
+        result = _send("vanilla_clone_stage", {"candidates": report["items"], "append": False})
+    return _json({"sector": report["sector"], "matched": report["matched"], "truncated": report["truncated"], "result": result})
 
 
 _TIMELINE_TRACKS = {"camera", "npc", "look_at", "dialogue", "event", "fact", "marker"}

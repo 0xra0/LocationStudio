@@ -1,3 +1,16 @@
+## 0.67.0 - 2026-09-27
+
+- Added vanilla-world clone/import (`modules/vanilla_clone.lua`, Spatial → Vanilla clone). It stages nodes from the RedHotTools crosshair or an area scan, showing cloneability, reasons, warnings and transform confidence. It imports meshes (including bent, destructible and single instances), decals, effects, particles, entity/device templates and population records as editable objects that keep their real resource path, appearance and transform. Provenance (node id, NodeRef, sector, node/instance index, original transform) is kept in `metadata.vanilla_source`.
+- Import options:
+  - one undo step, with an optional persistent group and a target layer;
+  - duplicate protection;
+  - a CET template fallback for entities missing from the World Builder catalog;
+  - optional hiding of the originals through reversible vanilla-removal records.
+- Added a clone list with edits since import, and revert, which shows the original and deletes the clone.
+- Transform honesty: live node picks carry position only and need `allow_approximate`. Added an offline WolvenKit sector JSON reader (`lsbuild/vanilla.py`) that provides the exact nodeData position, orientation (quaternion → REDengine Euler) and scale, and can re-stage in-game picks by node index.
+- Fixed crosshair and nearby vanilla removal to accept RedHotTools' camelCase node data (they previously found no removable target in game), and repaired the stale mocks in `vanilla_removal_runtime_test.lua`.
+- Added eleven MCP tools, `VANILLA-CLONE.md`, and Lua/Python tests. Bumped to v0.67.0.
+
 ## 0.66.0 - 2026-09-27
 
 - Added a cinematic timeline editor (project schema 19, `timelines`; `modules/timeline.lua`, Spatial → Timeline). It has typed tracks with time-sorted keys:
