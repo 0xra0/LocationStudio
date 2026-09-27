@@ -1,3 +1,16 @@
+## 0.66.0 - 2026-09-27
+
+- Added a cinematic timeline editor (project schema 19, `timelines`; `modules/timeline.lua`, Spatial → Timeline). It has typed tracks with time-sorted keys:
+  - camera cuts and blended moves between saved cameras;
+  - NPC positions and AMM workspot animations bound to a saved NPC and/or a live NPC key;
+  - look-at targets, dialogue timing markers (speaker, line, duration, loc key), show/hide/toggle events for lights, VFX, audio or props, quest facts, and markers.
+
+  Every edit is one undo step, and keys are checked against their track kind.
+- Added evaluation at any time and validation: missing references, keys past the end, overlapping lines per speaker, and timelines with no shots.
+- Added in-game preview (play/pause/seek/loop/speed). It teleports V along shots, spawns or despawns event objects and plays NPC animations, and only logs facts. Stop, or closing the overlay, restores objects and animations and returns V to the start position.
+- Added a structured scene handoff export (`locationstudio-timeline-handoff/1` JSON with shot list, chronological cues, dialogue script, facts, resolved camera/object/NPC references and validation) plus a dialogue cue-sheet CSV. No native `.scene` is generated.
+- Added nineteen MCP tools, `TIMELINE.md`, and Lua/Python tests. Bumped to v0.66.0.
+
 ## 0.65.0 - 2026-09-27
 
 - Added persistent editable splines (project schema 18, `splines`; `modules/splines.lua`, Spatial → Splines). They have control points with cubic Bezier handles and auto (Catmull-Rom with tension), aligned (mirrored direction), free or linear modes, open or closed curves, and insertion on the curve at a distance.

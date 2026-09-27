@@ -6,12 +6,12 @@ Model.__index = Model
 
 local function blank_project()
     return {
-        schema_version = 18,
+        schema_version = 19,
         project = {
             id = 'default', name = 'Night City Location Project', description = '', author = '', tags = {},
             created_at = Util.now_iso(), updated_at = Util.now_iso(),
         },
-        locations = {}, routes = {}, npc_routes = {}, combat_encounters = {}, cover_nodes = {}, navigation_graphs = {}, device_logic_graphs = {}, world_state_variants = {}, environments = {}, splines = {}, premises = {}, rooms = {}, objects = {}, object_groups = {}, object_prefabs = {}, volumes = {}, cameras = {}, scenes = {}, assets = {}, vanilla_removals = {}, room_frames = {},
+        locations = {}, routes = {}, npc_routes = {}, combat_encounters = {}, cover_nodes = {}, navigation_graphs = {}, device_logic_graphs = {}, world_state_variants = {}, environments = {}, splines = {}, timelines = {}, premises = {}, rooms = {}, objects = {}, object_groups = {}, object_prefabs = {}, volumes = {}, cameras = {}, scenes = {}, assets = {}, vanilla_removals = {}, room_frames = {},
         -- Layer ids 'shell' and 'decoration' are kept for compatibility; they are
         -- shown as Architecture and Props.
         layers = {
@@ -310,6 +310,28 @@ local function normalize_spline(item)
         uses=type(item.uses)=='table' and item.uses or {},notes=tostring(item.notes or ''),created_at=item.created_at or now,updated_at=now}
 end
 
+local TIMELINE_TRACKS={camera=true,npc=true,look_at=true,dialogue=true,event=true,fact=true,marker=true}
+-- Cinematic timeline: typed tracks of time-ordered keys. Key payloads are kept
+-- as authored; references are validated by modules/timeline.lua.
+local function normalize_timeline(item)
+    item=item or {};local now=Util.now_iso();local tracks={}
+    for _,t in ipairs(type(item.tracks)=='table' and item.tracks or {}) do
+        if type(t)=='table' and TIMELINE_TRACKS[t.kind] then
+            local keys={}
+            for _,k in ipairs(type(t.keys)=='table' and t.keys or {}) do
+                if type(k)=='table' then local key=Util.deepcopy(k);key.id=key.id or Util.make_id('key');key.time=math.max(0,tonumber(key.time) or 0);keys[#keys+1]=key end
+            end
+            table.sort(keys,function(a,b) if a.time==b.time then return tostring(a.id)<tostring(b.id) end;return a.time<b.time end)
+            tracks[#tracks+1]={id=t.id or Util.make_id('track'),kind=t.kind,name=Util.trim(t.name or '')~='' and Util.trim(t.name) or t.kind,
+                target_id=t.target_id,npc_key=t.npc_key,enabled=t.enabled~=false,muted=t.muted==true,keys=keys}
+        end
+    end
+    return {id=item.id or Util.make_id('timeline'),name=Util.trim(item.name or '')~='' and Util.trim(item.name) or 'Timeline',
+        premise_id=item.premise_id,scene_id=item.scene_id,duration=math.max(0.1,math.min(3600,tonumber(item.duration) or 30)),
+        fps=math.max(1,math.min(120,math.floor(tonumber(item.fps) or 30))),tracks=tracks,notes=tostring(item.notes or ''),
+        created_at=item.created_at or now,updated_at=now}
+end
+
 local function normalize_layer(item)
     item = item or {}
     local color=tostring(item.color or '#FFFFFF');if not color:match('^#%x%x%x%x%x%x$') then color='#FFFFFF' end
@@ -370,7 +392,7 @@ function Model.blank() return blank_project() end
 
 function Model:normalize()
     if type(self.data) ~= 'table' then self.data=blank_project() end
-    local defaults=blank_project(); self.data.schema_version=18
+    local defaults=blank_project(); self.data.schema_version=19
     self.data.project=self.data.project or defaults.project; self.data.locations=self.data.locations or {}; self.data.routes=self.data.routes or {}
     self.data.npc_routes=type(self.data.npc_routes)=='table' and self.data.npc_routes or {}
     self.data.combat_encounters=type(self.data.combat_encounters)=='table' and self.data.combat_encounters or {}
@@ -381,6 +403,8 @@ function Model:normalize()
     for i,v in ipairs(self.data.world_state_variants) do self.data.world_state_variants[i]=normalize_world_state_variant(v) end
     self.data.environments=type(self.data.environments)=='table' and self.data.environments or {}
     self.data.splines=type(self.data.splines)=='table' and self.data.splines or {}
+    self.data.timelines=type(self.data.timelines)=='table' and self.data.timelines or {}
+    for i,v in ipairs(self.data.timelines) do self.data.timelines[i]=normalize_timeline(v) end
     for i,v in ipairs(self.data.splines) do self.data.splines[i]=normalize_spline(v) end
     for i,v in ipairs(self.data.environments) do self.data.environments[i]=normalize_environment(v) end
     for _,graph in ipairs(self.data.device_logic_graphs) do if type(graph)=='table' then
@@ -530,6 +554,8 @@ function Model:get_asset(id) return get_by_id(self.data.assets,id) end
 function Model:get_world_state_variant(id) return get_by_id(self.data.world_state_variants,id) end
 function Model:get_environment(id) return get_by_id(self.data.environments,id) end
 function Model:get_spline(id) return get_by_id(self.data.splines,id) end
+function Model:get_timeline(id) return get_by_id(self.data.timelines,id) end
+Model.normalize_timeline=normalize_timeline
 Model.normalize_spline=normalize_spline
 Model.normalize_environment=normalize_environment
 
@@ -548,6 +574,7 @@ function Model:add_asset(v) return add(self,'assets',v,normalize_asset) end
 function Model:add_world_state_variant(v) return add(self,'world_state_variants',v,normalize_world_state_variant) end
 function Model:add_environment(v) return add(self,'environments',v,normalize_environment) end
 function Model:add_spline(v) return add(self,'splines',v,normalize_spline) end
+function Model:add_timeline(v) return add(self,'timelines',v,normalize_timeline) end
 function Model:add_assets(values)
     if type(values)~='table' then return {} end
     if #values==0 then return {} end
@@ -728,6 +755,7 @@ function Model:delete_premise(id)
     -- Environments are reusable conditions; keep them and drop only the premise link.
     for _,environment in ipairs(self.data.environments or {}) do if environment.premise_id==id then environment.premise_id=nil end end
     for _,spline in ipairs(self.data.splines or {}) do if spline.premise_id==id then spline.premise_id=nil end end
+    for _,timeline in ipairs(self.data.timelines or {}) do if timeline.premise_id==id then timeline.premise_id=nil end end
     self:touch(); return true
 end
 
