@@ -1,6 +1,6 @@
 local env=dofile(arg[2]..'/support/cet_mock.lua')
 local app=env.app
-assert(app.version=='0.62.0')
+assert(app.version=='0.63.0')
 
 local premise=assert(app.actions:create_premise_from_player('Viewport Tools','exterior'))
 

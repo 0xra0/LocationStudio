@@ -28,7 +28,7 @@ def test_mcp_operations_are_handled() -> None:
     handled.update(re.findall(r"or op == '([a-z_]+)'", bridge))
     handled.update(re.findall(r"'((?:wb_)?(?:clipcheck|fixturecheck|fitcheck))'", bridge))
     assert sent <= handled, f'MCP operations missing in CET bridge: {sorted(sent - handled)}'
-    assert len(re.findall(r'@mcp\.tool\(\)', server)) == 384
+    assert len(re.findall(r'@mcp\.tool\(\)', server)) == 391
     for operation in ('register_asset', 'update_asset', 'delete_asset', 'place_asset', 'clear_debug_log', 'run_diagnostics',
                       'capture_camera', 'copy_transform', 'paste_transform', 'move_item_to_aim',
                       'drop_item_to_ground', 'aim_item_at_target', 'scatter_at_aim',
@@ -70,7 +70,9 @@ def test_mcp_operations_are_handled() -> None:
                       'collision_presets', 'collision_create_primitive', 'collision_search_meshes', 'collision_import_mesh',
                       'collision_fit_to_object', 'collision_update', 'collision_list', 'collision_layers',
                       'collision_visualization', 'collision_passability',
-                      'performance_analyze', 'performance_set_budget', 'performance_select_cluster'):
+                      'performance_analyze', 'performance_set_budget', 'performance_select_cluster',
+                      'visibility_capabilities', 'visibility_create_occluder', 'visibility_occlude_room',
+                      'visibility_update_occluder', 'visibility_list_occluders', 'visibility_pvs', 'visibility_hidden_meshes'):
         assert operation in sent
     for operation in ('sector_report_load', 'sector_report_flags', 'sector_report_select'):
         assert operation in handled, operation
@@ -126,6 +128,10 @@ def test_v6_modules_are_packaged() -> None:
     assert (mod / 'modules' / 'collision.lua').is_file()
     assert (mod / 'modules' / 'sector_inspector.lua').is_file()
     assert (mod / 'modules' / 'performance.lua').is_file()
+    assert (mod / 'modules' / 'visibility.lua').is_file()
+    assert (mod / 'mcp_server' / 'test_visibility.py').is_file()
+    assert (mod.parents[5] / 'OCCLUSION-VISIBILITY.md').is_file()
+    assert (mod.parents[5] / 'tests' / 'visibility_runtime_test.lua').is_file()
     assert (mod / 'mcp_server' / 'lsbuild' / 'performance.py').is_file()
     assert (mod / 'mcp_server' / 'test_performance.py').is_file()
     assert (mod.parents[5] / 'PERFORMANCE-ANALYZER.md').is_file()

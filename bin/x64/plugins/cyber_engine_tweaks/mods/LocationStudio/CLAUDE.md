@@ -268,3 +268,11 @@ edit the export to "fix" a sector without the user's approval.
 `performance_analyze` / `performance_export` give relative cost estimates, not
 frame times. Use them to point at dense clusters and over-budget rooms; do not
 promise FPS gains. Ask before deleting or thinning objects to meet a budget.
+
+## Occlusion and visibility
+
+Only World Builder Static Occluders can be authored; say so if the user asks
+for visibility volumes or portals. `visibility_pvs` and
+`visibility_hidden_meshes` consider saved cameras only: suggest adding
+cameras for important gameplay views, and never disable a flagged mesh
+without the user's approval.
