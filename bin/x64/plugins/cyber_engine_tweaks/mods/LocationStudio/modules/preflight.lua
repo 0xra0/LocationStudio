@@ -60,8 +60,13 @@ function Preflight:_resource_paths(objects,args)
         if proc then
             if #(proc.parts or {})==0 then c.add('error','procedural geometry has no parts; regenerate it',obj(o)) end
             if not tostring(proc.mesh_path or ''):lower():match('%.mesh$') then c.add('error','procedural mesh path is not a .mesh depot path',obj(o)) end
-            local tpl=Util.trim(tostring(proc.material and proc.material.template or ''))
-            if tpl=='' then c.add('error','procedural geometry needs material.template (a .mesh whose materials the generated mesh uses) before Build Mod',obj(o)) end
+            local mat=proc.material or {};local tpl=Util.trim(tostring(mat.template or ''))
+            local slots=type(mat.materials)=='table' and mat.materials or {}
+            if tpl=='' and not slots.main then c.add('error','procedural geometry needs materials.main (a .mi for the native mesh) or material.template (a .mesh to import over) before Build Mod',obj(o)) end
+            if slots.main then
+                local glass=false;for _,part in ipairs(proc.parts or {}) do if part.material=='glass' then glass=true end end
+                if glass and not slots.glass then c.add('error','the geometry has glass but materials.glass is not set',obj(o)) end
+            end
         elseif type(wb)=='table' then
             local key=wb.definition_key;local path=Util.trim(tostring(wb.resource_path or ''))
             if not (self.app.world_builder and self.app.world_builder:definition(key)) then c.add('error','unknown World Builder definition '..tostring(key),obj(o))

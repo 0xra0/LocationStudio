@@ -9,9 +9,14 @@ solid parts on every procedural object. This module is the build half:
 * ``write_glb`` writes a glTF 2.0 binary. REDengine is Z-up and glTF is Y-up,
   so positions and normals are written as (x, z, -y).
 * ``apply_to_workspace`` (the Build Mod ``procedural`` stage) writes a glb per
-  object, converts it to a CR2W ``.mesh`` with the WolvenKit CLI by importing
-  it over a copy of the object's material template mesh, and adds a native
-  ``worldMeshNode`` for it to the workspace copy of the World Builder export.
+  object and a CR2W ``.mesh`` for it, then adds a native ``worldMeshNode`` to
+  the workspace copy of the World Builder export. The mesh comes from one of
+  two backends:
+  - ``native`` (objects with ``material.materials`` slot -> .mi/.mt): a complete
+    CMesh document with vertex/index buffers, chunks, bounds, LOD metadata and
+    material references (``meshres``), written to CR2W by the WolvenKit worker;
+  - ``import`` (objects with only ``material.template``): the glb imported over
+    a local copy of the template mesh with the WolvenKit CLI.
 
 Rotation convention (shared with the Lua generators): R = Rz(yaw) Rx(pitch) Ry(roll).
 """
@@ -419,9 +424,36 @@ def _import_command(cli: str, glb: Path, mesh: Path) -> list[str]:
     return [str(part).format(cli=cli, glb=str(glb), mesh=str(mesh), raw_dir=str(glb.parent)) for part in template]
 
 
+def backend_for(cfg: dict[str, Any]) -> str:
+    material = cfg.get("material") or {}
+    materials = material.get("materials") if isinstance(material.get("materials"), dict) else {}
+    return "native" if materials.get("main") else "import"
+
+
+def native_mesh(obj: dict[str, Any], *, reference: dict[str, Any] | None = None) -> dict[str, Any]:
+    """CMesh document and stats for one procedural object (native backend)."""
+    from .meshres import build_mesh_resource
+
+    cfg = obj["metadata"]["procedural"]
+    material = cfg.get("material") or {}
+    return build_mesh_resource(object_mesh(obj), dict(material.get("materials") or {}), reference=reference,
+                               appearance=str(material.get("appearance") or "default"), lod_distances=cfg.get("lod_distances"))
+
+
+def _run_worker(worker: str, source: Path, target: Path, timeout: int) -> tuple[bool, str]:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        proc = subprocess.run([worker, "deserialize", "--input", str(source), "--output", str(target), "--json"],
+                              capture_output=True, text=True, timeout=timeout)
+    except (OSError, subprocess.SubprocessError) as exc:
+        return False, str(exc)
+    ok = proc.returncode == 0 and target.is_file() and target.read_bytes()[:4] == b"CR2W"
+    return ok, (proc.stdout + proc.stderr)[-2000:]
+
+
 def apply_to_workspace(project_file: str | Path, workspace: str | Path, *, premise_id: str | None = None, cli: str | None = None,
                        template_file: Callable[[str], Path | None] | None = None, output: str | Path | None = None,
-                       timeout: int = 300) -> dict[str, Any]:
+                       timeout: int = 300, worker: str | None = None, reference: dict[str, Any] | None = None) -> dict[str, Any]:
     """Build Mod stage: generate, convert and place every procedural mesh in scope."""
     from .build import load_manifest
     from .dependencies import normalize
@@ -448,12 +480,35 @@ def apply_to_workspace(project_file: str | Path, workspace: str | Path, *, premi
         rel = Path(*path.split("\\"))
         glb = root / "source" / "raw" / rel.with_suffix(".glb")
         write_glb(mesh, glb, name=rel.stem)
-        entry = {"object_id": obj.get("id"), "mesh_path": path, "glb": str(glb), "triangles": mesh.triangle_count, "converted": False}
+        entry = {"object_id": obj.get("id"), "mesh_path": path, "glb": str(glb), "triangles": mesh.triangle_count, "converted": False,
+                 "backend": backend_for(cfg)}
         report["generated"].append(entry)
+        if entry["backend"] == "native":
+            try:
+                built = native_mesh(obj, reference=reference)
+            except (ValueError, KeyError, TypeError) as exc:
+                report["issues"].append({"object_id": obj.get("id"), "error": f"{label}: {exc}"})
+                continue
+            doc_path = root / "source" / "raw" / Path(str(rel) + ".json")
+            doc_path.parent.mkdir(parents=True, exist_ok=True)
+            doc_path.write_text(json.dumps(built["document"], ensure_ascii=False), encoding="utf-8")
+            entry.update(mesh_json=str(doc_path), stats=built["stats"])
+            if built["stats"].get("warning"):
+                report.setdefault("warnings", []).append(f"{label}: {built['stats']['warning']}")
+            if not worker:
+                report["issues"].append({"object_id": obj.get("id"), "error": f"{label}: the WolvenKit worker is not ready (build_worker_preflight); it writes the native .mesh"})
+                continue
+            target = root / "source" / "archive" / rel
+            ok, out = _run_worker(worker, doc_path, target, timeout)
+            if not ok:
+                report["issues"].append({"object_id": obj.get("id"), "error": f"{label}: the worker did not write a CR2W .mesh", "output": out})
+                continue
+            entry.update(converted=True, mesh_file=str(target))
+            continue
         template = str((cfg.get("material") or {}).get("template") or "")
         local = template_file(template) if (template and template_file) else None
         if not template:
-            report["issues"].append({"object_id": obj.get("id"), "error": f"{label}: no material.template mesh; set one (a .mesh whose materials this geometry uses)"})
+            report["issues"].append({"object_id": obj.get("id"), "error": f"{label}: no materials; set material.materials (slot -> .mi, native mesh) or material.template (a .mesh to import over)"})
             continue
         if local is None or not Path(local).is_file():
             report["issues"].append({"object_id": obj.get("id"), "error": f"{label}: template {template} is not available locally; extract it with WolvenKit into mod_sources (or a source folder)"})

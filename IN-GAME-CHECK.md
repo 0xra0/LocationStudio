@@ -10,6 +10,13 @@
 The upgrade archive does not contain project/config JSON, logs, exports,
 thumbnails, or bridge state.
 
+## v0.73 Native mesh resource smoke check
+
+1. Export any vanilla static wall mesh to JSON with WolvenKit and save it as `mod_sources/reference_static.mesh.json`. `mesh_resource_inspect` on it lists its chunk layout.
+2. Create a `window` in **Spatial → Geometry** with *Material .mi* set to a vanilla plaster `.mi`, then `procedural_update(materials={main: <plaster .mi>, glass: <glass .mi>})`. The preflight passes the object.
+3. Run `mesh_resource_build(write_cr2w=true)` and `mesh_resource_inspect(<json>, vertices=true)`: two chunks, `layout_source: reference`, and positions matching the window size.
+4. `build_mod_from_project(run=true)` and `build_deploy`. In game, the window renders with the plaster frame and glass, lit correctly (normals) and with textures tiled at 1 m. Open the packed `.mesh` in WolvenKit: it shows two submeshes and both materials.
+
 ## v0.72 Procedural geometry smoke check
 
 1. In **Spatial → Geometry**, create a `wall` at V with `{"length": 6, "height": 3, "openings": [{"offset": 0, "width": 1, "height": 2.1}]}`. The preview shows two side panels and a lintel, and V cannot walk through the solid parts but can walk through the doorway.

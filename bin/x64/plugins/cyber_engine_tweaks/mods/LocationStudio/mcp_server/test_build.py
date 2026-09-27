@@ -216,7 +216,7 @@ class HeadlessBuildTests(unittest.TestCase):
             cli = write_fake_cli(root / "cp77tools")
             result = json.loads(server.build_mod_from_project("demo_world", worker=str(worker), cli=str(cli), run=True))
             self.assertEqual(result["failed_stage"], "procedural")
-            self.assertIn("material.template", result["stages"]["procedural"]["issues"][0]["error"])
+            self.assertIn("no materials", result["stages"]["procedural"]["issues"][0]["error"])
             self.assertTrue((root / "build/demo_world/source/raw/mod/ls/wall.glb").is_file(), "the glb is still written for inspection")
 
     def test_pipeline_reports_failing_stage(self):
