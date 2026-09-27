@@ -10,6 +10,14 @@
 The upgrade archive does not contain project/config JSON, logs, exports,
 thumbnails, or bridge state.
 
+## v0.64 Layer manager smoke check
+
+1. Open **Spatial → Layers**. The eight default layers are listed with object counts.
+2. **HIDE** Props: its spawned props disappear. **SHOW** brings back the same props and nothing else.
+3. **ISOLATE** Lighting: only the lights remain. **SHOW ALL LAYERS AGAIN** restores the previous visibility.
+4. **LOCK** Architecture, then try to move a wall with the transform tools: the edit is refused. **UNLOCK** allows it again.
+5. Put a marker on Debug and run Build Mod: the export reports it under `excluded_by_layer`, and the marker is absent from the built mod.
+
 ## v0.63 Occlusion & visibility smoke check
 
 1. Select a room with a door and click **OCCLUDE SELECTED ROOM WALLS**. The occluder previews cover the walls, with the doorway left open.

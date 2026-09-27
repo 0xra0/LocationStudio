@@ -1,4 +1,4 @@
-# LocationStudio v0.63.0 — Occlusion & Visibility Helpers
+# LocationStudio v0.64.0 — Layer Manager
 
 LocationStudio is an in-game Cyber Engine Tweaks editor for building locations,
 placing the full World Builder game-resource catalog, moving live objects, and
@@ -11,6 +11,8 @@ v0.53.0 adds persistent Device Logic graphs for terminals, doors, elevators, swi
 v0.54.0 adds a conflict-aware Quest Forge round-trip. Preview/import matches exact LocationStudio IDs (or previously linked NodeRefs), displays linked facts beside selected objects, preserves local notes and placement by default, and only applies changed coordinates when explicitly enabled. See [QUEST-FORGE-ROUNDTRIP.md](QUEST-FORGE-ROUNDTRIP.md).
 
 v0.55.0 adds a quest simulation/debug panel with live fact reads, writer/consumer mapping, and staged fact writes. Each write/reset/manual trigger requires a second confirmation after a persistent-save warning. Manual trigger simulation sets the configured fact; it does not dispatch a native volume event. See [QUEST-SIMULATION.md](QUEST-SIMULATION.md).
+
+v0.64.0 adds a layer manager with dedicated Architecture, Props, Gameplay, NPC, Lighting, Audio, Quest and Debug layers. Layers can be hidden or shown (live objects despawn and respawn), locked (edits refused), isolated, selected, colour-labelled in the hierarchy and excluded from export; objects can be moved to a layer or auto-assigned by what they are. See [LAYERS.md](LAYERS.md).
 
 v0.63.0 adds occlusion and visibility helpers. It authors World Builder Static Occluders (box and one- or two-sided planes), including one-click occluders on a room's solid wall spans that leave doors and windows open. It computes the rooms each saved camera can potentially see, from authored walls, openings and occluders with an optional live ray cross-check, and flags large meshes no camera can see that are still active. Visibility volumes are not exposed by World Builder and are reported as unsupported. See [OCCLUSION-VISIBILITY.md](OCCLUSION-VISIBILITY.md).
 
@@ -105,7 +107,7 @@ can be imported as a validated manifest, tuned through MCP, used to calculate
 fit scales, transformed into world AABBs, and checked for pairwise overlap.
 This is authoring math; it does not create or modify the game's collision mesh.
 
-Start with [FIRST-RUN.md](FIRST-RUN.md), then the guides for [device logic](DEVICE-LOGIC.md), [navigation graphs](NAVIGATION.md), [cover nodes](COVER-NODES.md), [combat encounters](COMBAT-ENCOUNTERS.md), [NPC patrol routes](NPC-AI-ROUTES.md), [NPC population](NPC-POPULATION.md), [mesh appearances and decals](MESH-APPEARANCES-AND-DECALS.md), [lighting](LIGHTING.md), [VFX / particles](VFX.md), [environment & weather preview](ENVIRONMENT-PREVIEW.md), [collision authoring](COLLISION-AUTHORING.md), [sector inspector](SECTOR-INSPECTOR.md), [performance analyzer](PERFORMANCE-ANALYZER.md), [occlusion & visibility](OCCLUSION-VISIBILITY.md), [interactables](INTERACTABLES.md), [walkability checks](WALKABILITY.md), and [NPC workspots](NPC-WORKSPOTS.md). Read [WB-ASSET-BOUNDS.md](WB-ASSET-BOUNDS.md)
+Start with [FIRST-RUN.md](FIRST-RUN.md), then the guides for [device logic](DEVICE-LOGIC.md), [navigation graphs](NAVIGATION.md), [cover nodes](COVER-NODES.md), [combat encounters](COMBAT-ENCOUNTERS.md), [NPC patrol routes](NPC-AI-ROUTES.md), [NPC population](NPC-POPULATION.md), [mesh appearances and decals](MESH-APPEARANCES-AND-DECALS.md), [lighting](LIGHTING.md), [VFX / particles](VFX.md), [environment & weather preview](ENVIRONMENT-PREVIEW.md), [collision authoring](COLLISION-AUTHORING.md), [sector inspector](SECTOR-INSPECTOR.md), [performance analyzer](PERFORMANCE-ANALYZER.md), [occlusion & visibility](OCCLUSION-VISIBILITY.md), [layers](LAYERS.md), [interactables](INTERACTABLES.md), [walkability checks](WALKABILITY.md), and [NPC workspots](NPC-WORKSPOTS.md). Read [WB-ASSET-BOUNDS.md](WB-ASSET-BOUNDS.md)
 for bounds manifests and calculations, [WB-FAVORITES.md](WB-FAVORITES.md) for
 native favorite workflows, [WB-PREFAB-THUMBNAILS.md](WB-PREFAB-THUMBNAILS.md)
 for capture requirements, [WB-ARRAYS.md](WB-ARRAYS.md) for arrays and layout,

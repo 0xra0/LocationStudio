@@ -37,6 +37,11 @@ function Hierarchy:object_item(item,prefix)
         if values then self:focus_object_group() end
         if err then self.notify(err) end
     end
+    local layers=self.app.layers
+    if layers and item.layer then
+        local r,g,b=layers:color_rgb(item.layer);local layer=layers:get(item.layer)
+        ImGui.SameLine();ImGui.TextColored(r,g,b,1,(layer and layer.locked and '#' or '*'))
+    end
     ImGui.SameLine();self:item('object',item,prefix)
 end
 

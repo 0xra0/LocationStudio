@@ -46,10 +46,14 @@ function BuildExport:_objects(args)
     elseif type(args.object_ids)=='table' then
         wanted={};for _,id in ipairs(args.object_ids) do wanted[id]=true end
     end
-    local out={}
+    local out={};self.last_excluded_by_layer={}
     for _,object in ipairs(model.data.objects or {}) do
         local in_scope=(wanted==nil or wanted[object.id]) and (args.premise_id==nil or object.premise_id==args.premise_id)
-        if in_scope then table.insert(out,object) end
+        -- Layers with export disabled (e.g. Debug) are left out on purpose;
+        -- they are reported separately and never count as skipped.
+        if in_scope and self.app.layers and not self.app.layers:export_enabled(object) then
+            table.insert(self.last_excluded_by_layer,{id=object.id,name=object.name,layer=object.layer})
+        elseif in_scope then table.insert(out,object) end
     end
     return out
 end
@@ -218,7 +222,7 @@ function BuildExport:export(args)
         name=name,group=group_name,
         world_builder_group_file='data/objects/'..group_name..'.json',
         world_builder_export_file='export/'..name..'_exported.json',
-        exported=#children,skipped=skipped,export_issues=issues,origin=origin,
+        exported=#children,skipped=skipped,excluded_by_layer=Util.deepcopy(self.last_excluded_by_layer or {}),export_issues=issues,origin=origin,
     }
     self.last_error=nil
     self:_log('info','exported',{name=name,exported=#children,skipped=#skipped})

@@ -276,3 +276,11 @@ for visibility volumes or portals. `visibility_pvs` and
 `visibility_hidden_meshes` consider saved cameras only: suggest adding
 cameras for important gameplay views, and never disable a flagged mesh
 without the user's approval.
+
+## Layers
+
+Respect layer state: do not unlock a locked layer or show a hidden layer
+without the user's approval, and do not move objects onto a locked layer.
+Use `layer_auto_assign` with `apply=false` first and show the moves. Objects on
+export-disabled layers (Debug by default) are intentionally absent from
+builds; report `excluded_by_layer` instead of treating it as a failure.
