@@ -22,6 +22,7 @@ function SpatialUI.new(app,notify)
         world_variant_id='',world_variant_name='before_quest',world_variant_fact='',world_variant_value=1,world_variant_operator='==',world_variant_priority=0,world_variant_object_visible=true,world_variant_auto=false,
         cover_name='Cover Node',cover_type='crouch',cover_exposure='medium',cover_spacing=1.5,cover_radius=8,cover_samples=24,cover_nodes_scan=nil,cover_selected_id='',cover_position={0,0,0},cover_yaw=0,
         spline_id='',spline_name='New Spline',spline_point=1,spline_handle={2,0,0},spline_use_kind='distribute',spline_asset_id='',spline_spacing=2,spline_npc_id='',spline_sample=nil,
+        pf_deep=false,pf_open='',
         ref_name='Original',ref_pad=0.5,ref_approx=false,ref_show=false,ref_area_id='',ref_compare=nil,
         vc_radius=8,vc_term='',vc_hide=true,vc_approx=false,vc_group='',
         tl_id='',tl_name='New Timeline',tl_duration=30,tl_time=0,tl_track_id='',tl_speaker='V',tl_line='',tl_line_dur=3,tl_fact='',tl_fact_value=1,tl_marker='Beat',tl_move=2,tl_npc_key='',tl_validation=nil,
@@ -914,6 +915,35 @@ function SpatialUI:draw_splines()
     end
 end
 
+function SpatialUI:draw_preflight()
+    local app=self.app;local P=app.preflight
+    ImGui.Text('SHIPPING PREFLIGHT')
+    if not P then ImGui.TextDisabled('Preflight failed to load.');return end
+    ImGui.TextWrapped('Checks resource paths, bounds, spawns, NodeRefs, quest facts, interactables, ambient areas, workspot routes, device links and exportability here. The MCP preflight_run adds dependencies, sector problems, native interactables, NPC population and visual regression, and writes the full report.')
+    self.pf_deep=select(1,ImGui.Checkbox('Look paths up in the World Builder catalogs',self.pf_deep))
+    if ImGui.Button('RUN CHECKS##pf',140,28) then local r=P:run({premise_id=app.selected_premise_id,deep=self.pf_deep});P.loaded=nil;self:toast(r.ready and 'Preflight passed' or (r.summary.errors..' error(s)')) end
+    ImGui.SameLine();if ImGui.Button('LOAD FULL REPORT##pf',180,28) then local _,err=P:load();self:toast(err or 'Full preflight report loaded') end
+    local report=P.loaded or P.last
+    if not report then ImGui.TextDisabled('No preflight yet.');return end
+    local s=report.summary or {}
+    if report.ready then ImGui.TextColored(0.4,1,0.4,1,'READY TO SHIP') else ImGui.TextColored(1,0.4,0.3,1,'NOT READY') end
+    ImGui.SameLine();ImGui.TextDisabled(string.format('%s · %d pass · %d warn · %d fail · %d skipped',report.source=='mcp' and 'full report' or 'in-game checks',s.pass or 0,s.warn or 0,s.fail or 0,s.skipped or 0))
+    for _,c in ipairs(report.checks or {}) do
+        local color=c.status=='fail' and {1,0.4,0.3} or c.status=='warn' and {1,0.8,0.2} or c.status=='skipped' and {0.6,0.6,0.6} or {0.4,1,0.4}
+        ImGui.TextColored(color[1],color[2],color[3],1,string.format('[%s]',string.upper(c.status)))
+        ImGui.SameLine()
+        if ImGui.Selectable(string.format('%s (%d)##pfcheck_%s',c.label,#(c.issues or {}),c.id),self.pf_open==c.id) then self.pf_open=self.pf_open==c.id and '' or c.id end
+        if self.pf_open==c.id then
+            if c.note then ImGui.TextDisabled('  '..c.note) end
+            for i,issue in ipairs(c.issues or {}) do
+                if i>50 then ImGui.TextDisabled('  ...'..(#c.issues-50)..' more');break end
+                ImGui.BulletText((issue.name and (issue.name..': ') or '')..tostring(issue.message))
+                if issue.object_id then ImGui.SameLine();if ImGui.SmallButton('SELECT##pfsel_'..c.id..'_'..i) then local _,err=P:select_issue(c.id,i);if err then self:toast(err) end end end
+            end
+        end
+    end
+end
+
 function SpatialUI:draw_dependencies()
     local app=self.app;local D=app.dependencies
     ImGui.Text('ASSET DEPENDENCIES')
@@ -1626,6 +1656,7 @@ end
 function SpatialUI:draw()
     local premise=self.app.model:get_premise(self.app.selected_premise_id)
     if ImGui.BeginTabBar('##spatial_tabs') then
+        if ImGui.BeginTabItem('Preflight') then self:draw_preflight();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Layers') then self:draw_layers();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Splines') then self:draw_splines();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Timeline') then self:draw_timeline();ImGui.EndTabItem() end

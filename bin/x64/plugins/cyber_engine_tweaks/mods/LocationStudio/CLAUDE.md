@@ -330,3 +330,12 @@ with the user's explicit approval. If `vanilla_index` is false, run
 `dependency_index_build` rather than treating `unknown` as vanilla.
 `unverified` records/events are assumptions: mention them, do not claim they exist.
 External requirements are other mods the user's players must install.
+
+## Shipping preflight
+
+Before calling anything shippable, run `preflight_run` with the game open (add
+`run_visual_regression=true` when cameras have an accepted baseline). Report
+the `blocking` checks and their issues, fix what you are allowed to, and rerun.
+Never describe an offline run (in-game checks `skipped`) as passing, and never
+treat warnings about unverifiable vanilla NodeRefs or unverified records as
+proof of a problem or of correctness.

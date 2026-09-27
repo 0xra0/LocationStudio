@@ -1,3 +1,12 @@
+## 0.70.0 - 2026-09-27
+
+- Added a full shipping preflight. `preflight_run` (MCP) merges the in-game checks (`modules/preflight.lua`, bridge op `preflight_run`, Spatial → Preflight) with the offline checks (`lsbuild/preflight.py`) into one report and verdict, saved to `exports/preflight-report.json`.
+  - **In-game checks:** project validation, broken resource paths (optional catalog lookup with `deep`), missing bounds, failed or missing spawns, malformed or duplicate NodeRefs, invalid quest facts across every fact-bearing feature, interactable setup, incomplete ambient areas, workspots with no route and routes to deleted workspots or NPCs, device-logic links, unexportable CET entities.
+  - **Offline checks:** missing dependencies, sector problems from the latest export (plus unresolved NodeRefs under the export's own root and links to missing devices), native interactable artifacts, the NPC population export, and the latest visual-regression run (or a new capture).
+  - **Verdict:** `ready` only when the in-game checks ran and nothing failed; `strict` also blocks on warnings. `blocking` lists what to fix.
+- In game you can run the checks, load the full report, and select the object behind an issue.
+- Added one MCP tool, `PREFLIGHT.md`, and Lua/Python tests. Bumped to v0.70.0.
+
 ## 0.69.0 - 2026-09-27
 
 - Added an asset dependency resolver (`mcp_server/lsbuild/dependencies.py`). Starting from every exported object's depot paths, TweakDB records and audio events, it recursively follows:

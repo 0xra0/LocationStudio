@@ -10,6 +10,13 @@
 The upgrade archive does not contain project/config JSON, logs, exports,
 thumbnails, or bridge state.
 
+## v0.70 Shipping preflight smoke check
+
+1. Open **Spatial → Preflight** in a finished location and click **RUN CHECKS**. Every check lists pass/warn/fail. Open **Spawns** or **Exportable objects** and **SELECT** an issue: its object is selected.
+2. Break things on purpose: delete the NPC of a route, give a volume the fact `bad fact!`, and remove an ambient area's outline marker. **RUN CHECKS** fails the workspot, quest-fact and ambient checks with those objects named.
+3. With the game open, run `preflight_run(strict=true)` from MCP. The report adds dependencies, sectors, native interactables, NPC population and visual regression. **LOAD FULL REPORT** in game shows the same verdict.
+4. Close the game and run `preflight_run` again: the in-game checks are `skipped` and `ready` is false.
+
 ## v0.69 Asset dependency smoke check
 
 1. Run `dependency_index_build` against your game folder: it reports the content archives and roughly a million-plus hashes.
