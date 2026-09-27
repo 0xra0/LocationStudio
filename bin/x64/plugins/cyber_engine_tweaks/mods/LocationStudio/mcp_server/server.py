@@ -3591,7 +3591,7 @@ def status_resource() -> str:
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from mod_inventory import scan_mod_installation as _scan_mod_installation  # noqa: E402
-from lsbuild import build as _lsb, native as _lsn, worker as _lsw, wiring as _lswire, rng as _lsrng, interactables as _lsip, population as _lsp  # noqa: E402
+from lsbuild import build as _lsb, native as _lsn, worker as _lsw, wiring as _lswire, rng as _lsrng, interactables as _lsip, population as _lsp, vfx as _lsvfx  # noqa: E402
 
 WORLD_BUILDER_ROOT = MOD_DIR.parent / "entSpawner"
 BUILD_ROOT = MOD_DIR / "exports" / "build"
@@ -3900,7 +3900,7 @@ def build_mod_from_project(
     cli: str | None = None,
     run: bool = False,
 ) -> str:
-    """Whole pipeline: WB export -> inspect -> workspace -> worker CR2W -> status -> pack -> package -> verify.
+    """Whole pipeline: WB export -> inspect -> workspace -> VFX scale -> worker CR2W -> status -> pack -> package -> verify.
 
     run=false only reports readiness (live WB exporter, worker, CLI) and the
     planned paths; nothing is written. run=true executes every stage and stops at
@@ -3945,6 +3945,11 @@ def build_mod_from_project(
         if not population_audit.get("ready"):
             stages["npc_population"]["error"] = "one or more saved population points did not become a matching native worldPopulationSpawnerNode"
             raise _StageFailed("npc_population")
+        vfx_report = stage("vfx", lambda: _lsvfx.apply_to_workspace(PROJECT, workspace,
+            workspace / "automation" / "vfx-export.json"))
+        if not vfx_report.get("ready"):
+            stages["vfx"]["error"] = "one or more saved VFX objects could not be written to a unique native particle/effect node"
+            raise _StageFailed("vfx")
         artifacts = stage("interactables", lambda: _lsip.generate(PROJECT, _export_file(name), workspace / "interactables"))
         if not artifacts.get("ready"):
             stages["interactables"]["error"] = "interactable artifacts are incomplete; fix loot item rows and retry"
@@ -3967,6 +3972,158 @@ def build_mod_from_project(
         return _json({"ran": True, "ok": False, "failed_stage": failed.stage, "stages": stages})
     return _json({"ran": True, "ok": True, "layout": str(layout), "zip": str(workspace / f"{name}.zip"),
                   "next": "build_deploy(layout, apply=true)", "stages": stages})
+
+
+@mcp.tool()
+def vfx_categories() -> str:
+    """List the VFX editor's keyword categories (smoke, steam, sparks, holograms, fire, dust, leaks, electrical, weather) and its Particles/Effects backends."""
+    return _json(_send("vfx_categories"))
+
+
+@mcp.tool()
+def vfx_search(query: str = "", category: str = "all", backend: str = "all", limit: int = 80,
+               refresh: bool = False) -> str:
+    """Search World Builder's loaded Particles (worldStaticParticleNode) and Effects (worldEffectNode) catalogs.
+
+    category is a keyword filter from vfx_categories (or 'other'); backend is particle, effect, or all.
+    Every returned path is a real catalog row; pass it unchanged as resource_path to vfx_create/vfx_preview.
+    """
+    if backend not in {"all", "particle", "effect"}:
+        raise ValueError("backend must be all, particle, or effect")
+    return _json(_send("vfx_search", {"query": query, "category": category, "backend": backend,
+                                      "limit": limit, "refresh": refresh}))
+
+
+def _vfx_args(resource_path: str, query: str, category: str, backend: str, source: str,
+              x: float | None, y: float | None, z: float | None, roll: float | None, pitch: float | None,
+              yaw: float | None, scale: float | None, scale_x: float | None, scale_y: float | None,
+              scale_z: float | None, emission_rate: float | None, respawn_on_move: bool | None,
+              align_to_surface: bool | None, distance: float | None) -> dict[str, Any]:
+    if source not in {"aim", "player", "origin"}:
+        raise ValueError("source must be aim, player, or origin")
+    if backend not in {"", "all", "particle", "effect"}:
+        raise ValueError("backend must be particle, effect, or empty")
+    args: dict[str, Any] = {"resource_path": resource_path or None, "query": query, "category": category or None,
+                            "backend": backend or None, "source": source}
+    for key, value in (("roll", roll), ("pitch", pitch), ("yaw", yaw), ("emission_rate", emission_rate),
+                       ("respawn_on_move", respawn_on_move), ("align_to_surface", align_to_surface),
+                       ("distance", distance)):
+        if value is not None:
+            args[key] = value
+    axes = (scale_x, scale_y, scale_z)
+    if any(v is not None for v in axes):
+        if any(v is None for v in axes):
+            raise ValueError("scale_x, scale_y, and scale_z must be supplied together")
+        args["scale"] = {"x": scale_x, "y": scale_y, "z": scale_z}
+    elif scale is not None:
+        args["scale"] = scale
+    if any(v is not None for v in (x, y, z)):
+        if any(v is None for v in (x, y, z)):
+            raise ValueError("x, y, and z must be supplied together")
+        args["transform"] = {"position": {"x": x, "y": y, "z": z, "w": 1},
+                             "rotation": {"roll": roll or 0, "pitch": pitch or 0, "yaw": yaw or 0}}
+    return args
+
+
+@mcp.tool()
+def vfx_create(resource_path: str = "", query: str = "", category: str = "", backend: str = "", name: str = "",
+               source: str = "aim", x: float | None = None, y: float | None = None, z: float | None = None,
+               roll: float | None = None, pitch: float | None = None, yaw: float | None = None,
+               scale: float | None = None, scale_x: float | None = None, scale_y: float | None = None,
+               scale_z: float | None = None, emission_rate: float | None = None, respawn_on_move: bool | None = None,
+               align_to_surface: bool = False, distance: float = 10.0, room_id: str = "", premise_id: str = "",
+               spawn: bool = True) -> str:
+    """Save and spawn a World Builder particle/effect node (smoke, steam, sparks, holograms, fire, dust, leaks...).
+
+    Prefer an exact resource_path from vfx_search; otherwise query/category picks the first match.
+    Orientation is roll/pitch/yaw in degrees (align_to_surface points the up axis along the aimed normal).
+    Scale (0.01-100, uniform or per-axis) is saved and written to the native node by build_mod_from_project;
+    World Builder's live preview stays 1:1. emission_rate/respawn_on_move apply to particles only.
+    """
+    args = _vfx_args(resource_path, query, category, backend, source, x, y, z, roll, pitch, yaw, scale,
+                     scale_x, scale_y, scale_z, emission_rate, respawn_on_move, align_to_surface, distance)
+    args.update({"name": name, "room_id": room_id or None, "premise_id": premise_id or None, "spawn": spawn})
+    return _json(_send("vfx_create", args))
+
+
+@mcp.tool()
+def vfx_update(object_id: str, resource_path: str = "", roll: float | None = None, pitch: float | None = None,
+               yaw: float | None = None, scale: float | None = None, scale_x: float | None = None,
+               scale_y: float | None = None, scale_z: float | None = None, emission_rate: float | None = None,
+               respawn_on_move: bool | None = None) -> str:
+    """Edit a saved VFX object. Rotation and particle emission update the live node when possible; a resource swap respawns it."""
+    patch: dict[str, Any] = {}
+    if resource_path:
+        patch["resource_path"] = resource_path
+    for key, value in (("roll", roll), ("pitch", pitch), ("yaw", yaw), ("emission_rate", emission_rate),
+                       ("respawn_on_move", respawn_on_move)):
+        if value is not None:
+            patch[key] = value
+    axes = (scale_x, scale_y, scale_z)
+    if any(v is not None for v in axes):
+        if any(v is None for v in axes):
+            raise ValueError("scale_x, scale_y, and scale_z must be supplied together")
+        patch["scale"] = {"x": scale_x, "y": scale_y, "z": scale_z}
+    elif scale is not None:
+        patch["scale"] = scale
+    return _json(_send("vfx_update", {"object_id": object_id, "patch": patch}))
+
+
+@mcp.tool()
+def vfx_list(premise_id: str = "", category: str = "") -> str:
+    """List saved VFX objects with backend, category, resource path, transform, scale and live spawn state."""
+    return _json(_send("vfx_list", {"premise_id": premise_id or None, "category": category or None}))
+
+
+@mcp.tool()
+def vfx_preview(resource_path: str = "", query: str = "", category: str = "", backend: str = "",
+                source: str = "aim", follow: bool | None = None, update: bool = False,
+                x: float | None = None, y: float | None = None, z: float | None = None,
+                roll: float | None = None, pitch: float | None = None, yaw: float | None = None,
+                scale: float | None = None, emission_rate: float | None = None, respawn_on_move: bool | None = None,
+                align_to_surface: bool | None = None, distance: float | None = None) -> str:
+    """Spawn (or with update=true, adjust) one temporary live VFX preview. It is never saved; it follows the aim point unless follow=false.
+
+    With update=true only the arguments you pass change; omitted follow/alignment/distance keep their current values.
+
+    Call vfx_preview_commit to save it as a placed effect or vfx_preview_clear to remove it.
+    """
+    args = _vfx_args(resource_path, query, category, backend, source, x, y, z, roll, pitch, yaw, scale,
+                     None, None, None, emission_rate, respawn_on_move, align_to_surface, distance)
+    args["update"] = update
+    if follow is not None:
+        args["follow"] = follow
+    return _json(_send("vfx_preview", args))
+
+
+@mcp.tool()
+def vfx_preview_status() -> str:
+    """Report the live VFX preview: resource, transform, follow state and settings."""
+    return _json(_send("vfx_preview_status"))
+
+
+@mcp.tool()
+def vfx_preview_commit(name: str = "", scale: float | None = None, room_id: str = "", premise_id: str = "") -> str:
+    """Save the current VFX preview at its current transform as one undoable placed effect."""
+    args: dict[str, Any] = {"name": name, "room_id": room_id or None, "premise_id": premise_id or None}
+    if scale is not None:
+        args["scale"] = scale
+    return _json(_send("vfx_preview_commit", args))
+
+
+@mcp.tool()
+def vfx_preview_clear() -> str:
+    """Remove the temporary VFX preview without saving anything."""
+    return _json(_send("vfx_preview_clear"))
+
+
+@mcp.tool()
+def vfx_export_apply(export_file: str, write: bool = False) -> str:
+    """Offline: match saved VFX objects to a World Builder export and report (write=false) or write (write=true) their authored node scale.
+
+    build_mod_from_project already does this on its workspace copy; use this for a manual WolvenKit import.
+    """
+    return _json(_lsvfx.apply(PROJECT, _export_file(export_file), write=write))
 
 
 # ---------------------------------------------------------------------------

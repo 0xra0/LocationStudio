@@ -10,6 +10,15 @@
 The upgrade archive does not contain project/config JSON, logs, exports,
 thumbnails, or bridge state.
 
+## v0.57 VFX / particle editor smoke check
+
+1. Load World Builder and open its Spawn New tab once. In LocationStudio open **Advanced → Spatial → VFX** and click **SEARCH VFX CATALOG** with the category set to *Steam / vapor*. Rows must show `[P]`/`[E]` and real depot paths.
+2. Select a row, aim at a wall, enable **Align up axis to aimed surface**, and click **PREVIEW AT AIM**. The effect must appear and follow your aim; turn off *Follow aim* and press *UPDATE PREVIEW* to pin it.
+3. Change yaw and (for a particle) emission rate, press *UPDATE PREVIEW*, and confirm the live effect rotates and its density changes.
+4. Press *PLACE PREVIEW*. Exactly one effect remains, it is listed under *PLACED EFFECTS*, and **UNDO** removes it.
+5. Place an effect with scale 2, run Build Mod, deploy, and confirm the `vfx` stage reports the node as matched and the effect renders at the built location. Record whether that resource visibly honors scale.
+6. Close the CET overlay while a preview is active: the preview must disappear and no project object may be created.
+
 ## World Builder native Favorites smoke check
 
 1. Confirm `wb_favorites_list()` returns categories from the installed

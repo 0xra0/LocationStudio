@@ -21,6 +21,7 @@ function SpatialUI.new(app,notify)
         questsim_filter='',questsim_fact='',questsim_value=1,questsim_trigger_id='',questsim_pending=nil,questsim_catalog=nil,
         world_variant_id='',world_variant_name='before_quest',world_variant_fact='',world_variant_value=1,world_variant_operator='==',world_variant_priority=0,world_variant_object_visible=true,world_variant_auto=false,
         cover_name='Cover Node',cover_type='crouch',cover_exposure='medium',cover_spacing=1.5,cover_radius=8,cover_samples=24,cover_nodes_scan=nil,cover_selected_id='',cover_position={0,0,0},cover_yaw=0,
+        vfx_query='',vfx_category='all',vfx_backend='all',vfx_results=nil,vfx_selected=nil,vfx_name='',vfx_scale={1,1,1},vfx_rotation={0,0,0},vfx_emission=1,vfx_respawn_on_move=false,vfx_align=false,vfx_follow=true,vfx_distance=10,vfx_edit_id=nil,vfx_edit=nil,
         lighting_name='New Static Light',lighting_preset='warm',lighting_search='',lighting_hour=20,lighting_minute=0,
         audio_query='amb_',audio_results=nil,audio_selected_path='',audio_name='Room Tone',audio_radius=5,audio_metadata='',
         reverb_name='Room Reverb',reverb_bus='revb_interior_room_medium',reverb_sound_event='',reverb_priority=16,reverb_outer=10,reverb_vertical=1,
@@ -840,6 +841,107 @@ function SpatialUI:draw_lighting()
     ImGui.SameLine();if ImGui.Button('RESTORE PREVIEW TIME',190,30) then local result,err=app.lighting:restore_time();self:toast(err or (result and 'Original game time restored' or 'Restore failed')) end
 end
 
+function SpatialUI:_vfx_args(extra)
+    local args={name=self.vfx_name,scale={x=self.vfx_scale[1],y=self.vfx_scale[2],z=self.vfx_scale[3]},
+        roll=self.vfx_rotation[1],pitch=self.vfx_rotation[2],yaw=self.vfx_rotation[3],emission_rate=self.vfx_emission,respawn_on_move=self.vfx_respawn_on_move,
+        align_to_surface=self.vfx_align,follow=self.vfx_follow,distance=self.vfx_distance,premise_id=self.app.selected_premise_id,room_id=self.app.selected_room_id}
+    local item=self.vfx_selected
+    if item then args.resource_path=item.path;args.backend=item.backend;args.category=self.vfx_category~='all' and self.vfx_category or item.category
+    else args.query=self.vfx_query;args.category=self.vfx_category;args.backend=self.vfx_backend end
+    for k,v in pairs(extra or {}) do args[k]=v end
+    return args
+end
+
+function SpatialUI:draw_vfx()
+    local app=self.app;local vfx=app.vfx
+    ImGui.Text('VFX / PARTICLE EDITOR')
+    if not vfx then ImGui.TextDisabled('The VFX module failed to load. Check the debug log.');return end
+    ImGui.TextWrapped('Searches World Builder’s loaded Particles (worldStaticParticleNode) and Effects (worldEffectNode) catalogs. Categories are keyword filters over real catalog rows. Preview spawns one temporary node that is not saved; place it to keep it.')
+    self.vfx_query=select(1,ImGui.InputText('Search particles/effects',self.vfx_query,160))
+    local category_label='All categories'
+    for _,c in ipairs(vfx:categories()) do if c.id==self.vfx_category then category_label=c.name end end
+    if ImGui.BeginCombo('Category##vfx',category_label) then
+        if ImGui.Selectable('All categories',self.vfx_category=='all') then self.vfx_category='all' end
+        for _,c in ipairs(vfx:categories()) do if ImGui.Selectable(c.name..'##vfxcat_'..c.id,self.vfx_category==c.id) then self.vfx_category=c.id end end
+        ImGui.EndCombo()
+    end
+    local backend_label=self.vfx_backend=='particle' and 'Particles only' or self.vfx_backend=='effect' and 'Effects only' or 'Particles + Effects'
+    if ImGui.BeginCombo('Source##vfx',backend_label) then
+        if ImGui.Selectable('Particles + Effects',self.vfx_backend=='all') then self.vfx_backend='all' end
+        if ImGui.Selectable('Particles only',self.vfx_backend=='particle') then self.vfx_backend='particle' end
+        if ImGui.Selectable('Effects only',self.vfx_backend=='effect') then self.vfx_backend='effect' end
+        ImGui.EndCombo()
+    end
+    if ImGui.Button('SEARCH VFX CATALOG',190,28) then
+        local result,err=vfx:search({query=self.vfx_query,category=self.vfx_category,backend=self.vfx_backend,limit=200})
+        self.vfx_results=result;self.vfx_selected=nil
+        self:toast(err or ('Showing '..result.shown..' of '..result.total..' matching effects'))
+    end
+    if self.vfx_results and self.vfx_results.total>self.vfx_results.shown then ImGui.SameLine();ImGui.TextDisabled(self.vfx_results.total-self.vfx_results.shown..' more; refine the search') end
+    ImGui.BeginChild('##vfx_catalog',0,150,true)
+    for i,item in ipairs(self.vfx_results and self.vfx_results.items or {}) do
+        local tag=item.backend=='particle' and 'P' or 'E'
+        if ImGui.Selectable('['..tag..'] ['..item.category..'] '..item.name..'  '..tostring(item.path)..'##vfxrow_'..i,self.vfx_selected==item) then
+            self.vfx_selected=item;if self.vfx_name=='' then self.vfx_name=item.name end
+        end
+    end
+    ImGui.EndChild()
+    ImGui.TextDisabled(self.vfx_selected and ('Selected: '..self.vfx_selected.path) or 'No row selected; placement uses the first search match.')
+    self.vfx_name=select(1,ImGui.InputText('Name##vfx',self.vfx_name,128))
+    ImGui.Text('Orientation (degrees)')
+    self.vfx_rotation[1]=select(1,ImGui.InputFloat('Roll##vfx',self.vfx_rotation[1],1,15,'%.1f'))
+    self.vfx_rotation[2]=select(1,ImGui.InputFloat('Pitch##vfx',self.vfx_rotation[2],1,15,'%.1f'))
+    self.vfx_rotation[3]=select(1,ImGui.InputFloat('Yaw##vfx',self.vfx_rotation[3],1,15,'%.1f'))
+    self.vfx_align=select(1,ImGui.Checkbox('Align up axis to aimed surface',self.vfx_align))
+    ImGui.Text('Scale (saved; applied in native build)')
+    self.vfx_scale[1]=select(1,ImGui.InputFloat('Scale X##vfx',self.vfx_scale[1],0.05,0.5,'%.2f'))
+    self.vfx_scale[2]=select(1,ImGui.InputFloat('Scale Y##vfx',self.vfx_scale[2],0.05,0.5,'%.2f'))
+    self.vfx_scale[3]=select(1,ImGui.InputFloat('Scale Z##vfx',self.vfx_scale[3],0.05,0.5,'%.2f'))
+    self.vfx_emission=select(1,ImGui.InputFloat('Emission rate (particles)',self.vfx_emission,0.05,0.5,'%.2f'))
+    self.vfx_respawn_on_move=select(1,ImGui.Checkbox('Respawn on move (particles)',self.vfx_respawn_on_move))
+    self.vfx_distance=select(1,ImGui.InputFloat('Aim distance (m)',self.vfx_distance,0.5,2,'%.1f'))
+    ImGui.Separator();ImGui.Text('LIVE PREVIEW')
+    local status=vfx:preview_status()
+    ImGui.TextDisabled(status.active and ('Previewing '..tostring(status.resource_name)..(status.follow and ' (following aim)' or ' (pinned)')) or 'No preview active.')
+    self.vfx_follow=select(1,ImGui.Checkbox('Follow aim',self.vfx_follow))
+    if ImGui.Button('PREVIEW AT AIM##vfx',150,30) then local result,err=vfx:preview_start(self:_vfx_args({source='aim'}));self:toast(err or (result.warning or 'Preview spawned; it is not saved until placed')) end
+    ImGui.SameLine();if ImGui.Button('UPDATE PREVIEW##vfx',150,30) then local result,err=vfx:preview_update(self:_vfx_args());self:toast(err or 'Preview updated') end
+    if ImGui.Button('PLACE PREVIEW##vfx',150,30) then local result,err=vfx:preview_commit(self:_vfx_args());self:toast(err or (result.spawned and 'Effect saved and spawned' or ('Effect saved; live spawn failed: '..tostring(result.spawn_error)))) end
+    ImGui.SameLine();if ImGui.Button('CLEAR PREVIEW##vfx',150,30) then local ok,err=vfx:preview_clear();self:toast(err or 'Preview removed') end
+    ImGui.Separator();ImGui.Text('PLACE DIRECTLY')
+    if ImGui.Button('PLACE AT AIM##vfx',150,30) then local result,err=vfx:create(self:_vfx_args({source='aim'}));self:toast(err or result.warning or (result.spawned and 'Effect saved and spawned' or ('Effect saved; live spawn failed: '..tostring(result.spawn_error)))) end
+    ImGui.SameLine();if ImGui.Button('PLACE AT PLAYER##vfx',160,30) then local result,err=vfx:create(self:_vfx_args({source='player'}));self:toast(err or (result.spawned and 'Effect saved and spawned' or ('Effect saved; live spawn failed: '..tostring(result.spawn_error)))) end
+    ImGui.Separator();ImGui.Text('PLACED EFFECTS');ImGui.BeginChild('##vfx_list',245,230,true)
+    for _,row in ipairs(vfx:list().items) do if ImGui.Selectable('['..tostring(row.category)..'] '..row.name..'##vfxobj_'..row.id,app.selection:is('object',row.id)) then app.selection:set('object',row.id) end end
+    ImGui.EndChild();ImGui.SameLine();ImGui.BeginChild('##vfx_edit',0,230,true)
+    local obj=app.selected_object_id and app.model:get_object(app.selected_object_id);local cfg=obj and obj.metadata and obj.metadata.vfx
+    if obj and cfg then
+        if self.vfx_edit_id~=obj.id then
+            local r=obj.transform.rotation or {}
+            self.vfx_edit_id=obj.id;self.vfx_edit={scale={cfg.scale.x,cfg.scale.y,cfg.scale.z},rotation={r.roll or 0,r.pitch or 0,r.yaw or 0},emission=cfg.emission_rate or 1,respawn=cfg.respawn_on_move==true}
+        end
+        local e=self.vfx_edit;ImGui.Text(obj.name);ImGui.TextDisabled(tostring(cfg.backend)..' · '..tostring(cfg.resource_path))
+        e.rotation[1]=select(1,ImGui.InputFloat('Roll##vfxedit',e.rotation[1],1,15,'%.1f'))
+        e.rotation[2]=select(1,ImGui.InputFloat('Pitch##vfxedit',e.rotation[2],1,15,'%.1f'))
+        e.rotation[3]=select(1,ImGui.InputFloat('Yaw##vfxedit',e.rotation[3],1,15,'%.1f'))
+        e.scale[1]=select(1,ImGui.InputFloat('Scale X##vfxedit',e.scale[1],0.05,0.5,'%.2f'))
+        e.scale[2]=select(1,ImGui.InputFloat('Scale Y##vfxedit',e.scale[2],0.05,0.5,'%.2f'))
+        e.scale[3]=select(1,ImGui.InputFloat('Scale Z##vfxedit',e.scale[3],0.05,0.5,'%.2f'))
+        if cfg.backend=='particle' then
+            e.emission=select(1,ImGui.InputFloat('Emission rate##vfxedit',e.emission,0.05,0.5,'%.2f'))
+            e.respawn=select(1,ImGui.Checkbox('Respawn on move##vfxedit',e.respawn))
+        end
+        if ImGui.Button('APPLY VFX SETTINGS',190,30) then
+            local result,err=vfx:update(obj.id,{scale={x=e.scale[1],y=e.scale[2],z=e.scale[3]},roll=e.rotation[1],pitch=e.rotation[2],yaw=e.rotation[3],emission_rate=cfg.backend=='particle' and e.emission or nil,respawn_on_move=cfg.backend=='particle' and e.respawn or nil})
+            if result then self.vfx_edit_id=nil end
+            self:toast(err or result.warning or (result.respawned and 'Effect updated and respawned' or result.live_updated and 'Effect updated live' or 'Effect settings saved'))
+        end
+        ImGui.SameLine();if ImGui.Button('DELETE EFFECT') then app.selection:set('object',obj.id);local ok,err=app.actions:delete_selected();self:toast(err or (ok and 'Effect deleted' or 'Delete failed')) end
+    else ImGui.TextDisabled('Select a placed effect to edit it.') end
+    ImGui.EndChild()
+    ImGui.TextDisabled('World Builder previews particles/effects at 1:1. Scale is written to the native node by Build Mod; confirm the look in game after building.')
+end
+
 function SpatialUI:draw_ambient_audio()
     local app=self.app
     ImGui.Text('AMBIENT AUDIO — WORLD BUILDER NODES')
@@ -896,6 +998,7 @@ function SpatialUI:draw()
         if ImGui.BeginTabItem('Cover nodes') then if premise then self:draw_cover_nodes(premise) else ImGui.TextDisabled('Select a premise in Premises Builder first.') end;ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Combat encounters') then self:draw_combat_encounters(premise);ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Lighting') then self:draw_lighting();ImGui.EndTabItem() end
+        if ImGui.BeginTabItem('VFX') then self:draw_vfx();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Ambient Audio') then self:draw_ambient_audio();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Meshes + Decals') then self:draw_mesh_appearance();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Interactables') then self:draw_interactables();ImGui.EndTabItem() end

@@ -60,7 +60,9 @@ def test_mcp_operations_are_handled() -> None:
                       'link_volume_fact',
                       'get_history', 'history_undo', 'history_redo', 'checkpoint_create', 'checkpoint_list', 'checkpoint_diff', 'checkpoint_restore', 'get_runtime_sync_status', 'sync_runtime', 'import_catalog_asset',
                       'wb_favorite_prepare', 'wb_prefab_render', 'wb_prefab_render_status',
-                      'wb_generate_cable', 'wb_generate_fence', 'wb_generate_road', 'wb_generate_market', 'wb_generate_noderef'):
+                      'wb_generate_cable', 'wb_generate_fence', 'wb_generate_road', 'wb_generate_market', 'wb_generate_noderef',
+                      'vfx_categories', 'vfx_search', 'vfx_create', 'vfx_update', 'vfx_list', 'vfx_preview',
+                      'vfx_preview_status', 'vfx_preview_commit', 'vfx_preview_clear'):
         assert operation in sent
     for tool in ('wb_favorite_add', 'wb_favorites_list', 'wb_device_connect', 'wb_elevator_wire',
                  'wb_polygon_scatter', 'wb_volume_scatter', 'wb_live_surface_scatter', 'wb_rng_create'):
@@ -108,6 +110,11 @@ def test_v6_modules_are_packaged() -> None:
     assert (mod / 'modules' / 'project_browser.lua').is_file()
     assert (mod / 'modules' / 'world_builder_generators.lua').is_file()
     assert (mod / 'modules' / 'mesh_appearance.lua').is_file()
+    assert (mod / 'modules' / 'vfx.lua').is_file()
+    assert (mod / 'mcp_server' / 'lsbuild' / 'vfx.py').is_file()
+    assert (mod / 'mcp_server' / 'test_vfx.py').is_file()
+    assert (mod.parents[5] / 'VFX.md').is_file()
+    assert (mod.parents[5] / 'tests' / 'vfx_runtime_test.lua').is_file()
     assert (mod.parents[5] / 'MESH-APPEARANCES-AND-DECALS.md').is_file()
     assert (mod / 'mcp_server' / 'wbfavorites.py').is_file()
     assert (mod / 'mcp_server' / 'test_favorites.py').is_file()

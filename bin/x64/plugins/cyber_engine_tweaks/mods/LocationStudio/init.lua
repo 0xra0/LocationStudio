@@ -42,6 +42,7 @@ local DeviceLogic=safe_require('modules/device_logic')
 local QuestForgeSync=safe_require('modules/questforge_sync')
 local QuestSimulator=safe_require('modules/quest_simulator')
 local WorldStates=safe_require('modules/world_states')
+local Vfx=safe_require('modules/vfx')
 local BuildExport=safe_require('modules/build_export')
 local WbImport=safe_require('modules/wb_import')
 local AssetBounds=safe_require('modules/asset_bounds')
@@ -53,7 +54,7 @@ local Checkpoints=safe_require('modules/checkpoints')
 local Editor=safe_require('ui/editor')
 
 local LocationStudio={
-    version='0.56.0',ready=false,diagnostic_ready=true,init_failed=nil,ui_failed=nil,
+    version='0.57.0',ready=false,diagnostic_ready=true,init_failed=nil,ui_failed=nil,
     overlay_open=false,editor_visible=true,dirty=false,dirty_since=0,last_autosave=0,last_bridge_poll=0,
     selected_location_id=nil,selected_route_id=nil,selected_premise_id=nil,selected_room_id=nil,
     selected_object_id=nil,selected_volume_id=nil,selected_camera_id=nil,selected_scene_id=nil,editing_scene_id=nil,live_scene_id=nil,selected_asset_id=nil,last_asset_id=nil,selected_item_kind=nil,
@@ -190,6 +191,7 @@ function LocationStudio:initialize()
     self.questforge_sync=QuestForgeSync and construct('questforge_sync',function() return QuestForgeSync.new(self) end) or nil
     self.quest_simulator=QuestSimulator and construct('quest_simulator',function() return QuestSimulator.new(self) end) or nil
     self.world_states=WorldStates and construct('world_states',function() return WorldStates.new(self) end) or nil
+    self.vfx=Vfx and construct('vfx',function() return Vfx.new(self) end) or nil
     self.build_export=BuildExport and construct('build_export',function() return BuildExport.new(self) end) or nil
     self.wb_import=WbImport and construct('wb_import',function() return WbImport.new(self) end) or nil
     self.asset_bounds=AssetBounds and construct('asset_bounds',function() return AssetBounds.new(self) end) or nil
@@ -355,13 +357,14 @@ end)
 registerForEvent('onInit',guarded_callback('event:onInit',function() LocationStudio:initialize() end))
 registerForEvent('onOverlayOpen',guarded_callback('event:onOverlayOpen',function() LocationStudio.overlay_open=true;LocationStudio.editor_visible=true;LocationStudio.config.window_open=true;LocationStudio.logger:debug('overlay','opened',{editor_visible=true}) end))
 registerForEvent('onOverlayClose',guarded_callback('event:onOverlayClose',function()
-    LocationStudio.overlay_open=false;if LocationStudio.ready then if LocationStudio.transform_session:is_active() then LocationStudio.transform_session:cancel() end;if LocationStudio.stamp_session:is_active() then LocationStudio.stamp_session:cancel() end;if not LocationStudio.stamp_session:is_active() then LocationStudio.placement:clear_preview() end;LocationStudio:save(false);LocationStudio.storage:save_config(LocationStudio.config) end;LocationStudio.logger:debug('overlay','closed')
+    LocationStudio.overlay_open=false;if LocationStudio.ready then if LocationStudio.transform_session:is_active() then LocationStudio.transform_session:cancel() end;if LocationStudio.stamp_session:is_active() then LocationStudio.stamp_session:cancel() end;if not LocationStudio.stamp_session:is_active() then LocationStudio.placement:clear_preview() end;if LocationStudio.vfx then LocationStudio.vfx:preview_clear() end;LocationStudio:save(false);LocationStudio.storage:save_config(LocationStudio.config) end;LocationStudio.logger:debug('overlay','closed')
 end))
 registerForEvent('onUpdate',guarded_callback('event:onUpdate',function(delta)
     if not LocationStudio.ready then return end;local now=os.clock();local poll=tonumber(LocationStudio.config.bridge_poll_interval) or 0.15
     if now-LocationStudio.last_bridge_poll>=poll then LocationStudio.last_bridge_poll=now;LocationStudio.bridge:poll(now) end
     LocationStudio.placement:update(delta)
     if LocationStudio.world_states then LocationStudio.world_states:update(now) end
+    if LocationStudio.vfx then LocationStudio.vfx:update_tick(delta) end
     if LocationStudio.live_tools then LocationStudio.live_tools:update(delta) end
     if LocationStudio.transform_session:is_active() then LocationStudio.transform_session:update(delta,false) end
     LocationStudio.placement:update_preview(false)

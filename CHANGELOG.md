@@ -1,3 +1,11 @@
+## 0.57.0 - 2026-09-27
+
+- Added a VFX / particle editor (Spatial → VFX) that searches World Builder's loaded Particles (`worldStaticParticleNode`) and Effects (`worldEffectNode`) catalogs, with keyword categories for smoke, steam, sparks, holograms, fire, dust, leaks, electrical and weather effects. Paths outside the loaded catalogs are rejected.
+- Added a transient live preview that follows the aim point (optionally aligned to the hit surface), can be pinned and re-tuned, and commits as one undoable placed object. It is never saved and is cleared when the overlay closes or the mod reloads.
+- Placed effects store roll/pitch/yaw, per-axis scale (0.01–100), and particle emission rate/respawn-on-move. Rotation and emission edits update the live node where World Builder exposes it; otherwise the node respawns.
+- World Builder previews and exports these nodes at 1:1, so the new Build Mod `vfx` stage matches saved effects to exported nodes by resource and position and writes their scale into the workspace export copy. The stage fails on ambiguous matches, invalid scale, or emission mismatches.
+- Added MCP tools `vfx_categories`, `vfx_search`, `vfx_create`, `vfx_update`, `vfx_list`, `vfx_preview`, `vfx_preview_status`, `vfx_preview_commit`, `vfx_preview_clear`, and `vfx_export_apply`, plus `VFX.md`, mocked runtime/UI/bridge tests and export-patching tests. Bumped mod version to v0.57.0.
+
 ## 0.56.0 - 2026-09-27
 
 - Added persistent named world-state variants with one or more live quest-fact predicates, comparison operators, per-object show/hide memberships, priority conflict checks, previews, manual apply, and opt-in automatic fact polling.

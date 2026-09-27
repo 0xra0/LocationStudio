@@ -75,15 +75,15 @@ function Bridge:handle(command)
     local a = command.args or {}
     if app.logger then app.logger:info('bridge','command',{id=command.id,op=op}) end
     if app.authoring_plans and app.authoring_plans:status().recovery_required then
-        local allowed={ping=true,get_authoring_plan_status=true,get_scene_status=true,wb_find=true,wb_tree=true,wb_get=true,wb_refs=true,wb_frame_list=true,wb_frame_get=true,wb_frame_to_world=true,wb_world_to_frame=true,wb_bounds_info=true,wb_bounds_world_aabb=true,wb_bounds_overlap=true,wb_collisions=true,wb_clipcheck=true,wb_fixturecheck=true,wb_fitcheck=true,wb_compat_scan=true,wb_bounds_fit=true,wb_favorite_prepare=true,wb_prefab_render_status=true,retry_authoring_plan_rollback=true,keep_partial_authoring_plan=true,run_diagnostics=true,integration_status=true,rht_status=true,rht_crosshair=true,rht_scan=true,rht_node=true,vanilla_removal_status=true,list_vanilla_removals=true,get_history=true,build_export_status=true,walkability_check=true,cover_node_list=true}
+        local allowed={ping=true,get_authoring_plan_status=true,get_scene_status=true,wb_find=true,wb_tree=true,wb_get=true,wb_refs=true,wb_frame_list=true,wb_frame_get=true,wb_frame_to_world=true,wb_world_to_frame=true,wb_bounds_info=true,wb_bounds_world_aabb=true,wb_bounds_overlap=true,wb_collisions=true,wb_clipcheck=true,wb_fixturecheck=true,wb_fitcheck=true,wb_compat_scan=true,wb_bounds_fit=true,wb_favorite_prepare=true,wb_prefab_render_status=true,retry_authoring_plan_rollback=true,keep_partial_authoring_plan=true,run_diagnostics=true,integration_status=true,rht_status=true,rht_crosshair=true,rht_scan=true,rht_node=true,vanilla_removal_status=true,list_vanilla_removals=true,get_history=true,build_export_status=true,walkability_check=true,cover_node_list=true,vfx_categories=true,vfx_search=true,vfx_list=true,vfx_preview_status=true,vfx_preview_clear=true}
         if not allowed[op] then return nil,'Authoring-plan rollback needs attention. Retry rollback or keep the partial result before running '..tostring(op)..'.' end
     end
     if app.transform_session and app.transform_session:is_active() then
-        local allowed={ping=true,get_scene_status=true,wb_find=true,wb_tree=true,wb_get=true,wb_refs=true,wb_frame_list=true,wb_frame_get=true,wb_frame_to_world=true,wb_world_to_frame=true,wb_bounds_info=true,wb_bounds_world_aabb=true,wb_bounds_overlap=true,wb_collisions=true,wb_clipcheck=true,wb_fixturecheck=true,wb_fitcheck=true,wb_compat_scan=true,wb_bounds_fit=true,wb_favorite_prepare=true,wb_prefab_render_status=true,get_transform_grab_status=true,get_transform_session_status=true,configure_transform_grab=true,adjust_transform_edit=true,reset_transform_edit=true,commit_transform_grab=true,cancel_transform_grab=true,commit_transform_edit=true,cancel_transform_edit=true,aim_point=true,capture_player=true,capture_camera=true,integration_status=true,run_diagnostics=true,rht_status=true,rht_crosshair=true,rht_scan=true,rht_node=true,vanilla_removal_status=true,list_vanilla_removals=true,get_history=true,walkability_check=true,cover_node_list=true}
+        local allowed={ping=true,get_scene_status=true,wb_find=true,wb_tree=true,wb_get=true,wb_refs=true,wb_frame_list=true,wb_frame_get=true,wb_frame_to_world=true,wb_world_to_frame=true,wb_bounds_info=true,wb_bounds_world_aabb=true,wb_bounds_overlap=true,wb_collisions=true,wb_clipcheck=true,wb_fixturecheck=true,wb_fitcheck=true,wb_compat_scan=true,wb_bounds_fit=true,wb_favorite_prepare=true,wb_prefab_render_status=true,get_transform_grab_status=true,get_transform_session_status=true,configure_transform_grab=true,adjust_transform_edit=true,reset_transform_edit=true,commit_transform_grab=true,cancel_transform_grab=true,commit_transform_edit=true,cancel_transform_edit=true,aim_point=true,capture_player=true,capture_camera=true,integration_status=true,run_diagnostics=true,rht_status=true,rht_crosshair=true,rht_scan=true,rht_node=true,vanilla_removal_status=true,list_vanilla_removals=true,get_history=true,walkability_check=true,cover_node_list=true,vfx_categories=true,vfx_search=true,vfx_list=true,vfx_preview_status=true,vfx_preview_clear=true}
         if not allowed[op] then return nil,'Commit or cancel the active transform session before running '..tostring(op)..'.' end
     end
     if app.stamp_session and app.stamp_session:is_active() then
-        local allowed={ping=true,get_scene_status=true,wb_find=true,wb_tree=true,wb_get=true,wb_refs=true,wb_frame_list=true,wb_frame_get=true,wb_frame_to_world=true,wb_world_to_frame=true,wb_bounds_info=true,wb_bounds_world_aabb=true,wb_bounds_overlap=true,wb_collisions=true,wb_clipcheck=true,wb_fixturecheck=true,wb_fitcheck=true,wb_compat_scan=true,wb_bounds_fit=true,wb_favorite_prepare=true,wb_prefab_render_status=true,get_stamp_stroke_status=true,stamp_preview=true,commit_stamp_stroke=true,cancel_stamp_stroke=true,clear_asset_preview=true,aim_point=true,capture_player=true,capture_camera=true,integration_status=true,run_diagnostics=true,rht_status=true,rht_crosshair=true,rht_scan=true,rht_node=true,vanilla_removal_status=true,list_vanilla_removals=true,get_history=true,walkability_check=true,cover_node_list=true}
+        local allowed={ping=true,get_scene_status=true,wb_find=true,wb_tree=true,wb_get=true,wb_refs=true,wb_frame_list=true,wb_frame_get=true,wb_frame_to_world=true,wb_world_to_frame=true,wb_bounds_info=true,wb_bounds_world_aabb=true,wb_bounds_overlap=true,wb_collisions=true,wb_clipcheck=true,wb_fixturecheck=true,wb_fitcheck=true,wb_compat_scan=true,wb_bounds_fit=true,wb_favorite_prepare=true,wb_prefab_render_status=true,get_stamp_stroke_status=true,stamp_preview=true,commit_stamp_stroke=true,cancel_stamp_stroke=true,clear_asset_preview=true,aim_point=true,capture_player=true,capture_camera=true,integration_status=true,run_diagnostics=true,rht_status=true,rht_crosshair=true,rht_scan=true,rht_node=true,vanilla_removal_status=true,list_vanilla_removals=true,get_history=true,walkability_check=true,cover_node_list=true,vfx_categories=true,vfx_search=true,vfx_list=true,vfx_preview_status=true,vfx_preview_clear=true}
         if not allowed[op] then return nil,'Commit or cancel the active stamp stroke before running '..tostring(op)..'.' end
     end
 
@@ -457,6 +457,35 @@ function Bridge:handle(command)
         local result,err=app.lighting:preview_time(a.hour,a.minute);if not result then return nil,err end;return result
     elseif op == 'restore_time_of_day' then
         local result,err=app.lighting:restore_time();if not result then return nil,err end;return result
+    elseif op == 'vfx_categories' then
+        if not app.vfx then return nil,'VFX module is unavailable' end
+        return {categories=app.vfx:categories(),backends=app.vfx:backends()}
+    elseif op == 'vfx_search' then
+        if not app.vfx then return nil,'VFX module is unavailable' end
+        local result,err=app.vfx:search(a);if not result then return nil,err end;return result
+    elseif op == 'vfx_create' then
+        if not app.vfx then return nil,'VFX module is unavailable' end
+        local result,err=app.vfx:create(a);if not result then return nil,err end;return result
+    elseif op == 'vfx_update' then
+        if not app.vfx then return nil,'VFX module is unavailable' end
+        local result,err=app.vfx:update(a.object_id,a.patch or {});if not result then return nil,err end;return result
+    elseif op == 'vfx_list' then
+        if not app.vfx then return nil,'VFX module is unavailable' end
+        return app.vfx:list(a)
+    elseif op == 'vfx_preview' then
+        if not app.vfx then return nil,'VFX module is unavailable' end
+        local result,err
+        if a.update==true then result,err=app.vfx:preview_update(a) else result,err=app.vfx:preview_start(a) end
+        if not result then return nil,err end;return result
+    elseif op == 'vfx_preview_status' then
+        if not app.vfx then return nil,'VFX module is unavailable' end
+        return app.vfx:preview_status()
+    elseif op == 'vfx_preview_commit' then
+        if not app.vfx then return nil,'VFX module is unavailable' end
+        local result,err=app.vfx:preview_commit(a);if not result then return nil,err end;return result
+    elseif op == 'vfx_preview_clear' then
+        if not app.vfx then return nil,'VFX module is unavailable' end
+        local ok,err=app.vfx:preview_clear();if not ok then return nil,err end;return {cleared=true}
     elseif op == 'create_audio_emitter' then
         if not app.ambient_audio then return nil,'ambient audio module is unavailable' end
         local result,err=app.ambient_audio:create_emitter(a);if not result then return nil,err end;return result

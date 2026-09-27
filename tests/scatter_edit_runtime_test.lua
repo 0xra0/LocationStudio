@@ -1,6 +1,6 @@
 local env=dofile(arg[2]..'/support/cet_mock.lua')
 local app=env.app
-assert(app.version=='0.56.0')
+assert(app.version=='0.57.0')
 
 local premise=assert(app.actions:create_premise_from_player('Scatter Edit Test','exterior'))
 local function wb_metadata(path,name)

@@ -218,3 +218,14 @@ To find a depot path, search the offline catalog (`asset_catalog_search`, or
 If import reports the path is not in the loaded World Builder catalog, rebuild
 the catalog; never register the path by hand.
 
+
+## VFX / particles
+
+Use `vfx_search` (optionally with a `category` from `vfx_categories`) and pass
+the returned exact `resource_path` to `vfx_preview`/`vfx_create`; never invent
+`.particle`/`.effect` paths. Prefer `vfx_preview` followed by
+`vfx_preview_commit` when the user is looking at the spot, and always finish
+with commit or `vfx_preview_clear`. Report `placement_source=forward_fallback`
+as approximate. Scale is saved and applied to native nodes at build time only;
+do not claim the live preview shows it. Rotation and particle emission edits
+may update live; a resource swap respawns the node.

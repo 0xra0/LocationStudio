@@ -79,6 +79,8 @@ function Placement:compare_runtime()
     for id in pairs(self.entity_ids) do tracked[id]=true end
     for id in pairs((self.app.runtime_shell and self.app.runtime_shell.handles) or {}) do tracked[id]=true end
     for id in pairs(self.expected_live) do tracked[id]=true end
+    -- The VFX editor owns its transient preview node and removes it itself.
+    tracked['__vfx_preview']=nil
     local report={items={},counts={remove=0,update=0,missing=0},has_changes=false,checked=0}
     for id in pairs(tracked) do
         report.checked=report.checked+1
