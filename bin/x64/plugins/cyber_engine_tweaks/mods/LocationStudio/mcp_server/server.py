@@ -4254,6 +4254,88 @@ def environment_restore(blend_time: float = 0.0) -> str:
     return _json(_send("environment_restore", {"blend_time": blend_time}))
 
 
+_OCCLUDER_MESHES = {"box", "plane_one_sided", "plane_two_sided"}
+
+
+@mcp.tool()
+def visibility_capabilities() -> str:
+    """Report which visibility features exist: World Builder Static Occluders (box/one-sided/two-sided plane); visibility volumes are not exposed by World Builder."""
+    return _json(_send("visibility_capabilities"))
+
+
+@mcp.tool()
+def visibility_create_occluder(mesh: str = "box", size_x: float = 4.0, size_y: float = 4.0, size_z: float = 3.0,
+                               source: str = "aim", x: float | None = None, y: float | None = None, z: float | None = None,
+                               yaw: float | None = None, occluder_type: int = 0, name: str = "", visualize: bool = True,
+                               room_id: str = "", premise_id: str = "", spawn: bool = True) -> str:
+    """Place a World Builder Static Occluder (worldStaticOccluderMeshNode); size is full metres (planes ignore size_y)."""
+    if mesh not in _OCCLUDER_MESHES:
+        raise ValueError("mesh must be box, plane_one_sided, or plane_two_sided")
+    if source not in {"aim", "player"}:
+        raise ValueError("source must be aim or player")
+    args: dict[str, Any] = {"mesh": mesh, "size": {"x": size_x, "y": size_y, "z": size_z}, "source": source,
+                            "occluder_type": occluder_type, "name": name, "visualize": visualize,
+                            "room_id": room_id or None, "premise_id": premise_id or None, "spawn": spawn}
+    if yaw is not None:
+        args["yaw"] = yaw
+    if any(v is not None for v in (x, y, z)):
+        if any(v is None for v in (x, y, z)):
+            raise ValueError("x, y, and z must be supplied together")
+        args["transform"] = {"position": {"x": x, "y": y, "z": z, "w": 1}, "rotation": {"roll": 0, "pitch": 0, "yaw": yaw or 0}}
+    return _json(_send("visibility_create_occluder", args))
+
+
+@mcp.tool()
+def visibility_occlude_room(room_id: str, walls: list[str] | None = None, inset: float = 0.05, min_span: float = 0.5,
+                            visualize: bool = True, spawn: bool = True) -> str:
+    """Add two-sided plane occluders over every solid span of a room's walls; door and window openings stay clear."""
+    if walls and any(w not in {"north", "south", "east", "west"} for w in walls):
+        raise ValueError("walls must be north, south, east, or west")
+    return _json(_send("visibility_occlude_room", {"room_id": room_id, "walls": walls or [], "inset": inset,
+                                                   "min_span": min_span, "visualize": visualize, "spawn": spawn}))
+
+
+@mcp.tool()
+def visibility_update_occluder(object_id: str, mesh: str | None = None, size_x: float | None = None,
+                               size_y: float | None = None, size_z: float | None = None, yaw: float | None = None,
+                               occluder_type: int | None = None, visualize: bool | None = None) -> str:
+    """Edit an occluder's mesh, size, yaw, occluder type or visualization (undoable; live occluders respawn)."""
+    if mesh is not None and mesh not in _OCCLUDER_MESHES:
+        raise ValueError("mesh must be box, plane_one_sided, or plane_two_sided")
+    patch: dict[str, Any] = {k: v for k, v in (("mesh", mesh), ("yaw", yaw), ("occluder_type", occluder_type),
+                                                ("visualize", visualize)) if v is not None}
+    sizes = (size_x, size_y, size_z)
+    if any(v is not None for v in sizes):
+        if any(v is None for v in sizes):
+            raise ValueError("size_x, size_y, and size_z must be supplied together")
+        patch["size"] = {"x": size_x, "y": size_y, "z": size_z}
+    return _json(_send("visibility_update_occluder", {"id": object_id, "patch": patch}))
+
+
+@mcp.tool()
+def visibility_list_occluders(premise_id: str = "") -> str:
+    """List authored occluders with mesh, size, type, room-wall origin and spawn state."""
+    return _json(_send("visibility_list_occluders", {"premise_id": premise_id or None}))
+
+
+@mcp.tool()
+def visibility_pvs(premise_id: str = "", camera_ids: list[str] | None = None, max_distance: float = 150.0,
+                   live: bool = False) -> str:
+    """Potentially visible rooms per saved camera: sampled lines of sight through authored room walls
+    (door/window openings), authored occluders and a conservative view cone. Lists hidden rooms with the
+    walls/occluders blocking them, and rooms no camera sees. live=true adds collision-ray checks."""
+    return _json(_send("visibility_pvs", {"premise_id": premise_id or None, "camera_ids": camera_ids or [],
+                                          "max_distance": max_distance, "live": live}))
+
+
+@mcp.tool()
+def visibility_hidden_meshes(premise_id: str = "", min_dimension: float = 6.0, min_volume: float = 40.0,
+                             max_distance: float = 150.0) -> str:
+    """Flag large meshes (by imported bounds) that no saved camera can see but that are still enabled/spawned, with suggestions."""
+    return _json(_send("visibility_hidden_meshes", {"premise_id": premise_id or None, "min_dimension": min_dimension,
+                                                    "min_volume": min_volume, "max_distance": max_distance}))
+
+
 @mcp.tool()
 def performance_analyze(premise_id: str = "", include_meta: bool = True) -> str:
     """Estimate streaming cost of the saved project per room and premise: node, light, audio, decal, VFX,

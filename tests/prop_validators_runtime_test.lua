@@ -1,6 +1,6 @@
 local env=dofile(arg[2]..'/support/cet_mock.lua')
 local app=env.app
-assert(app.version=='0.62.0')
+assert(app.version=='0.63.0')
 local premise=assert(app.actions:create_premise_from_player('Prop Validator','interior'))
 local bounds={min={x=-0.5,y=-0.5,z=0},max={x=0.5,y=0.5,z=1},units='m',source='validator-test'}
 local function place(name,x)

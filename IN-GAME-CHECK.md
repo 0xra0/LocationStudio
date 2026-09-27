@@ -10,6 +10,13 @@
 The upgrade archive does not contain project/config JSON, logs, exports,
 thumbnails, or bridge state.
 
+## v0.63 Occlusion & visibility smoke check
+
+1. Select a room with a door and click **OCCLUDE SELECTED ROOM WALLS**. The occluder previews cover the walls, with the doorway left open.
+2. From outside, look at the room's wall: props inside should stop rendering. Look through the doorway: they must still render.
+3. Save cameras for the views you care about, then **COMPUTE VISIBLE ROOMS**. Confirm that each camera's visible rooms match what the shot shows.
+4. **FIND HIDDEN LARGE MESHES**. Check one flagged mesh in game from the saved cameras: it must not appear in any of them.
+
 ## v0.62 Performance analyzer smoke check
 
 1. Open **Spatial → Performance** in a furnished premise and click **ANALYZE STREAMING COST**. The rooms are listed by cost, with distances from V.

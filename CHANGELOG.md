@@ -1,3 +1,11 @@
+## 0.63.0 - 2026-09-27
+
+- Added occlusion and visibility helpers (`modules/visibility.lua`, Spatial → Visibility). They author World Builder Static Occluders (`worldStaticOccluderMeshNode`: box, one-sided plane, two-sided plane) with size, type and visualization, and add one-click two-sided plane occluders over a room's solid wall spans that leave door/window openings clear. Occluders are editable and undoable, and respawn when live.
+- Added potentially visible rooms per saved camera. Lines of sight are checked through room walls with their door/window openings and through authored occluders, within a conservative view cone. Each camera lists visible and hidden rooms (with their blockers), and the report lists rooms no camera sees; `live=true` adds collision rays.
+- Added a check that flags large meshes (by imported bounds) that no saved camera can see but that are still enabled or spawned, with suggestions.
+- Visibility volumes/portals are not exposed by World Builder and are reported as unsupported.
+- Added seven MCP tools, `OCCLUSION-VISIBILITY.md`, and Lua/Python tests. Bumped to v0.63.0.
+
 ## 0.62.0 - 2026-09-27
 
 - Added a streaming/performance analyzer (`modules/performance.lua`, Spatial → Performance). Per room and premise of the saved project it reports node, light, audio, decal, VFX, dynamic-entity, collision and expensive-resource counts, a weighted relative cost, budget overruns (editable room/premise budgets in project settings) and distance from V.

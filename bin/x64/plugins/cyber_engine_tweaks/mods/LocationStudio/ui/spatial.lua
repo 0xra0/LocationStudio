@@ -21,6 +21,7 @@ function SpatialUI.new(app,notify)
         questsim_filter='',questsim_fact='',questsim_value=1,questsim_trigger_id='',questsim_pending=nil,questsim_catalog=nil,
         world_variant_id='',world_variant_name='before_quest',world_variant_fact='',world_variant_value=1,world_variant_operator='==',world_variant_priority=0,world_variant_object_visible=true,world_variant_auto=false,
         cover_name='Cover Node',cover_type='crouch',cover_exposure='medium',cover_spacing=1.5,cover_radius=8,cover_samples=24,cover_nodes_scan=nil,cover_selected_id='',cover_position={0,0,0},cover_yaw=0,
+        vis_mesh='plane_two_sided',vis_size={4,1,3},vis_pvs=nil,vis_hidden=nil,vis_live=false,
         perf_report=nil,perf_scope='premise',
         sector_filter='',sector_severity='',
         col_shape='box',col_size={2,0.3,3},col_radius=0.5,col_height=1.8,col_preset=33,col_material='',col_visualize=true,col_name='Blocker',col_mesh_query='',col_mesh_results=nil,col_mesh_path='',col_edit_id=nil,col_edit=nil,
@@ -857,6 +858,50 @@ function SpatialUI:_vfx_args(extra)
     return args
 end
 
+function SpatialUI:draw_visibility()
+    local app=self.app;local vis=app.visibility
+    ImGui.Text('OCCLUSION & VISIBILITY')
+    if not vis then ImGui.TextDisabled('The visibility module failed to load.');return end
+    ImGui.TextWrapped('Author World Builder Static Occluders, see which rooms each saved camera can potentially see through doors and windows, and find large meshes no camera can see. World Builder exposes occluders only; REDengine visibility volumes are not authorable here.')
+    ImGui.Separator();ImGui.Text('OCCLUDERS')
+    if ImGui.BeginCombo('Occluder mesh',self.vis_mesh) then for _,m in ipairs({'box','plane_one_sided','plane_two_sided'}) do if ImGui.Selectable(m..'##vismesh_'..m,self.vis_mesh==m) then self.vis_mesh=m end end;ImGui.EndCombo() end
+    self.vis_size[1]=select(1,ImGui.InputFloat('Occluder width X (m)',self.vis_size[1],0.1,1,'%.2f'))
+    if self.vis_mesh=='box' then self.vis_size[2]=select(1,ImGui.InputFloat('Occluder depth Y (m)',self.vis_size[2],0.1,1,'%.2f')) end
+    self.vis_size[3]=select(1,ImGui.InputFloat('Occluder height Z (m)',self.vis_size[3],0.1,1,'%.2f'))
+    if ImGui.Button('PLACE OCCLUDER AT AIM',210,28) then local r,err=vis:create_occluder({mesh=self.vis_mesh,size={x=self.vis_size[1],y=self.vis_size[2],z=self.vis_size[3]},source='aim'});self:toast(err or (r.spawned and 'Occluder placed' or ('Occluder saved; spawn failed: '..tostring(r.spawn_error)))) end
+    ImGui.SameLine();if ImGui.Button('OCCLUDE SELECTED ROOM WALLS',250,28) then local r,err=vis:occlude_room({room_id=app.selected_room_id});self:toast(err or ('Added '..r.count..' wall occluder(s); openings left clear')) end
+    local list=vis:list_occluders({premise_id=app.selected_premise_id}).items
+    ImGui.TextDisabled(#list..' occluder(s) in the selected premise')
+    ImGui.Separator();ImGui.Text('POTENTIALLY VISIBLE ROOMS FROM SAVED CAMERAS')
+    self.vis_live=select(1,ImGui.Checkbox('Cross-check with live collision rays',self.vis_live))
+    if ImGui.Button('COMPUTE VISIBLE ROOMS',210,28) then local r,err=vis:pvs({premise_id=app.selected_premise_id,live=self.vis_live});self.vis_pvs=r;self:toast(err or (#r.cameras..' camera(s) checked; '..#r.rooms_never_visible..' room(s) never visible')) end
+    local r=self.vis_pvs
+    if r then
+        ImGui.BeginChild('##vis_pvs',0,170,true)
+        for _,cam in ipairs(r.cameras) do
+            local names={};for _,room in ipairs(cam.visible_rooms) do names[#names+1]=room.name..string.format(' (%d%%)',math.floor(room.visible_fraction*100)) end
+            ImGui.TextWrapped(cam.name..' ['..cam.direction_source..']: '..(#names>0 and table.concat(names,', ') or 'no rooms visible'))
+        end
+        if #r.rooms_never_visible>0 then
+            local names={};for _,room in ipairs(r.rooms_never_visible) do names[#names+1]=room.name end
+            ImGui.TextDisabled('Never visible from any camera: '..table.concat(names,', '))
+        end
+        ImGui.EndChild()
+    end
+    ImGui.Separator();ImGui.Text('LARGE HIDDEN MESHES')
+    if ImGui.Button('FIND HIDDEN LARGE MESHES',220,28) then local h,err=vis:hidden_meshes({premise_id=app.selected_premise_id});self.vis_hidden=h;self:toast(err or (h.count..' large mesh(es) hidden from every saved camera')) end
+    local h=self.vis_hidden
+    if h then
+        ImGui.BeginChild('##vis_hidden',0,130,true)
+        for i,m in ipairs(h.flagged) do
+            ImGui.TextWrapped(string.format('%s  %.0f×%.0f×%.0f m%s — %s',m.name,m.dimensions.x,m.dimensions.y,m.dimensions.z,m.spawned and ' (spawned)' or '',m.suggestion))
+            ImGui.SameLine();if ImGui.SmallButton('SELECT##vishidden_'..i) then app.selection:set('object',m.id) end
+        end
+        if h.meshes_without_bounds>0 then ImGui.TextDisabled(h.meshes_without_bounds..' mesh(es) have no imported bounds and were not checked (wb_bounds_import).') end
+        ImGui.EndChild()
+    end
+end
+
 local function perf_counts(c)
     return string.format('%d nodes · %d lights · %d audio · %d decals · %d VFX · %d dynamic · %d expensive · cost %.0f',
         c.nodes or 0,c.lights or 0,c.audio or 0,c.decals or 0,c.vfx or 0,c.dynamic or 0,c.expensive or 0,c.cost or 0)
@@ -1279,6 +1324,7 @@ function SpatialUI:draw()
         if ImGui.BeginTabItem('Collision') then self:draw_collision();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Sectors') then self:draw_sectors();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Performance') then self:draw_performance();ImGui.EndTabItem() end
+        if ImGui.BeginTabItem('Visibility') then self:draw_visibility();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Ambient Audio') then self:draw_ambient_audio();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Meshes + Decals') then self:draw_mesh_appearance();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Interactables') then self:draw_interactables();ImGui.EndTabItem() end
