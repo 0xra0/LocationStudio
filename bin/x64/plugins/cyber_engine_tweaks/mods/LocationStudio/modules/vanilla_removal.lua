@@ -62,7 +62,24 @@ function VanillaRemoval:_toggle(record, desired_hidden)
     return true
 end
 
+-- RedHotTools describe() reports camelCase fields; accept both spellings.
+local function snake(data)
+    if type(data) ~= 'table' then return data end
+    data.node_id = data.node_id or data.nodeID
+    data.node_ref = data.node_ref or data.nodeRef
+    data.node_type = data.node_type or data.nodeType
+    data.node_parent_id = data.node_parent_id or data.nodeParentID
+    data.sector_path = data.sector_path or data.sectorPath
+    data.mesh_path = data.mesh_path or data.meshPath
+    data.material_path = data.material_path or data.materialPath
+    data.template_path = data.template_path or data.templatePath
+    if data.is_node == nil then data.is_node = data.isNode end
+    if data.is_entity == nil then data.is_entity = data.isEntity end
+    return data
+end
+
 function VanillaRemoval:_record(data, source)
+    data = snake(data)
     if not data or not data.node_id then return nil,'target has no stable streamed node ID' end
     if data.is_entity and not data.node_id then return nil,'entity-only targets cannot be removed safely' end
     for _, existing in ipairs(self:_records()) do
@@ -94,6 +111,7 @@ function VanillaRemoval:remove_crosshair(args)
     if not result then return nil,cross_err end
     local target
     for _, candidate in ipairs(result.targets or {}) do
+        candidate=snake(candidate)
         if candidate.node_id and candidate.is_node then target=candidate;break end
     end
     if not target then return nil,'crosshair did not resolve a removable streamed world node; entity-only targets are not mutated' end
@@ -111,6 +129,7 @@ function VanillaRemoval:remove_nearby(args)
     if not scan then return nil,scan_err end
     local removed,failed={},{}
     for _, target in ipairs(scan.targets or {}) do
+        target=snake(target)
         if target.node_id and target.is_node then
             local record,remove_err=self:_record(target,'nearby')
             if record then table.insert(removed,record) else table.insert(failed,{target=target,error=remove_err}) end

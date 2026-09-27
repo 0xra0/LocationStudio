@@ -179,6 +179,8 @@ local function fill_entity(inspector, entity, component, data)
     -- Entities spawned by a worldEntityNode share the node's hash; this names their sector.
     if not data.sectorPath then fill_node(inspector, {nodeID=entityID}, data) end
     data.position = data.position or vec(entity:GetWorldPosition())
+    local ok, angles = pcall(function() return entity:GetWorldOrientation():ToEulerAngles() end)
+    if ok and angles and not data.rotation then data.rotation = {roll=angles.roll, pitch=angles.pitch, yaw=angles.yaw} end
 end
 
 function RhtInspector:describe(inspector, target)
@@ -188,6 +190,12 @@ function RhtInspector:describe(inspector, target)
     if defined(target.nodeInstance) or defined(target.nodeDefinition) or id(target.nodeID) then
         fill_node(inspector, target, data)
     end
+    -- Streamed-node targets report no orientation through the verified API; use one only if present.
+    local rok, angles = pcall(function()
+        local q = target.orientation
+        if q ~= nil and q.ToEulerAngles then return q:ToEulerAngles() end
+    end)
+    if rok and angles then data.rotation = {roll=angles.roll, pitch=angles.pitch, yaw=angles.yaw} end
     if entity then fill_entity(inspector, entity, target.component, data) end
     data.isEntity = entity ~= nil
     data.isNode = data.nodeType ~= nil

@@ -22,6 +22,7 @@ function SpatialUI.new(app,notify)
         world_variant_id='',world_variant_name='before_quest',world_variant_fact='',world_variant_value=1,world_variant_operator='==',world_variant_priority=0,world_variant_object_visible=true,world_variant_auto=false,
         cover_name='Cover Node',cover_type='crouch',cover_exposure='medium',cover_spacing=1.5,cover_radius=8,cover_samples=24,cover_nodes_scan=nil,cover_selected_id='',cover_position={0,0,0},cover_yaw=0,
         spline_id='',spline_name='New Spline',spline_point=1,spline_handle={2,0,0},spline_use_kind='distribute',spline_asset_id='',spline_spacing=2,spline_npc_id='',spline_sample=nil,
+        vc_radius=8,vc_term='',vc_hide=true,vc_approx=false,vc_group='',
         tl_id='',tl_name='New Timeline',tl_duration=30,tl_time=0,tl_track_id='',tl_speaker='V',tl_line='',tl_line_dur=3,tl_fact='',tl_fact_value=1,tl_marker='Beat',tl_move=2,tl_npc_key='',tl_validation=nil,
         layer_new_name='Set Dressing',layer_edit_id='',layer_auto=nil,
         vis_mesh='plane_two_sided',vis_size={4,1,3},vis_pvs=nil,vis_hidden=nil,vis_live=false,
@@ -912,6 +913,47 @@ function SpatialUI:draw_splines()
     end
 end
 
+function SpatialUI:draw_vanilla_clone()
+    local app=self.app;local V=app.vanilla_clone
+    ImGui.Text('VANILLA CLONE / IMPORT')
+    if not V then ImGui.TextDisabled('The vanilla clone importer failed to load.');return end
+    ImGui.TextWrapped('Import existing vanilla world nodes as editable project objects that keep their real resource, appearance and transform. Optionally hide the originals (reversible) so the clones replace them. RedHotTools picks know the position only; for exact rotation and scale, stage the same nodes from a WolvenKit-exported sector JSON through MCP (vanilla_clone_from_sector).')
+    local status=V:status()
+    if not status.rht.ready then ImGui.TextColored(1,0.6,0.2,1,'RedHotTools: '..tostring(status.rht.error or 'not ready')) end
+    if ImGui.Button('PICK CROSSHAIR##vc',150,28) then local r,err=V:pick_crosshair({append=true});self:toast(err or (r.added..' candidate(s) staged')) end
+    ImGui.SameLine();self.vc_radius=select(1,ImGui.InputFloat('Scan radius (m)',self.vc_radius,1,5,'%.1f'))
+    self.vc_term=select(1,ImGui.InputText('Filter (path, type, name)',self.vc_term,96))
+    if ImGui.Button('SCAN AREA##vc',150,28) then local r,err=V:scan({radius=self.vc_radius,term=self.vc_term});self:toast(err or (r.count..' candidate(s), '..r.supported..' cloneable')) end
+    ImGui.SameLine();if ImGui.Button('CLEAR##vc',90,28) then V:clear() end
+    local c=V:candidates()
+    ImGui.Text(string.format('%d staged · %d cloneable · %d selected',c.count,c.supported,c.selected))
+    ImGui.SameLine();if ImGui.SmallButton('ALL##vcsel') then V:set_selected('all') end
+    ImGui.SameLine();if ImGui.SmallButton('NONE##vcsel') then V:set_selected('none') end
+    ImGui.BeginChild('##vc_candidates',0,160,true)
+    for _,row in ipairs(c.items) do
+        local label=string.format('%s %s [%s] %s%s##vccand_%d',row.selected and '[x]' or '[ ]',row.name,tostring(row.node_type or 'entity'),row.confidence=='exact' and 'exact' or 'position only',row.already_cloned and ' · cloned' or '',row.index)
+        if ImGui.Selectable(label,row.selected) then
+            local _,err=V:set_selected(row.index,not row.selected);if err then self:toast(err) end
+        end
+        if not row.supported then ImGui.TextDisabled('   '..tostring(row.reason)) end
+        for _,w in ipairs(row.warnings or {}) do ImGui.TextDisabled('   ! '..w) end
+    end
+    ImGui.EndChild()
+    self.vc_hide=select(1,ImGui.Checkbox('Hide the originals (reversible)',self.vc_hide))
+    self.vc_approx=select(1,ImGui.Checkbox('Allow position-only picks (rotation 0, scale 1)',self.vc_approx))
+    self.vc_group=select(1,ImGui.InputText('Group name (optional)',self.vc_group,64))
+    if ImGui.Button('IMPORT SELECTED',170,30) then
+        local r,err=V:import({premise_id=app.selected_premise_id,hide_originals=self.vc_hide,allow_approximate=self.vc_approx,group_name=self.vc_group})
+        self:toast(err or string.format('Imported %d, skipped %d, hid %d original(s)',r.imported,#r.skipped,r.hidden))
+    end
+    ImGui.Separator();ImGui.Text('CLONES')
+    for _,row in ipairs(V:list({}).items) do
+        ImGui.BulletText(string.format('%s%s%s',row.name,row.modified and (' · changed: '..table.concat(row.changes,', ')) or '',row.original_hidden and ' · original hidden' or ''))
+        ImGui.SameLine();if ImGui.SmallButton('SELECT##vcobj_'..row.id) then app.selection:set('object',row.id) end
+        ImGui.SameLine();if ImGui.SmallButton('REVERT##vcrev_'..row.id) then local r,err=V:revert(row.id,{});self:toast(err or r.error or 'Clone removed and original shown') end
+    end
+end
+
 function SpatialUI:draw_timeline()
     local app=self.app;local T=app.timeline
     ImGui.Text('CINEMATIC TIMELINE')
@@ -1510,6 +1552,7 @@ function SpatialUI:draw()
         if ImGui.BeginTabItem('Layers') then self:draw_layers();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Splines') then self:draw_splines();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Timeline') then self:draw_timeline();ImGui.EndTabItem() end
+        if ImGui.BeginTabItem('Vanilla clone') then self:draw_vanilla_clone();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Volumes') then if premise then self:draw_volumes(premise) else ImGui.TextDisabled('Select a premise in Premises Builder first.') end;ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Cameras') then if premise then self:draw_cameras(premise) else ImGui.TextDisabled('Select a premise in Premises Builder first.') end;ImGui.EndTabItem() end
         if ImGui.BeginTabItem('NPC workspots') then if premise then self:draw_workspots(premise) else ImGui.TextDisabled('Select a premise in Premises Builder first.') end;ImGui.EndTabItem() end
