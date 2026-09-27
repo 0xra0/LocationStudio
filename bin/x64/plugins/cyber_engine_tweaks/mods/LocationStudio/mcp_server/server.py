@@ -3756,7 +3756,7 @@ def status_resource() -> str:
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from mod_inventory import scan_mod_installation as _scan_mod_installation  # noqa: E402
-from lsbuild import build as _lsb, native as _lsn, worker as _lsw, wiring as _lswire, rng as _lsrng, interactables as _lsip, population as _lsp, vfx as _lsvfx, sectors as _lssec, performance as _lsperf, vanilla as _lsvan, dependencies as _lsdep, preflight as _lspf  # noqa: E402
+from lsbuild import build as _lsb, native as _lsn, worker as _lsw, wiring as _lswire, rng as _lsrng, interactables as _lsip, population as _lsp, vfx as _lsvfx, sectors as _lssec, performance as _lsperf, vanilla as _lsvan, dependencies as _lsdep, preflight as _lspf, edl as _lsedl  # noqa: E402
 
 WORLD_BUILDER_ROOT = MOD_DIR.parent / "entSpawner"
 BUILD_ROOT = MOD_DIR / "exports" / "build"
@@ -4065,8 +4065,15 @@ def build_mod_from_project(
     cli: str | None = None,
     run: bool = False,
     allow_missing_dependencies: bool = False,
+    category: int | None = None,
+    level: int | None = None,
+    streaming_x: float | None = None,
+    streaming_y: float | None = None,
+    streaming_z: float | None = None,
 ) -> str:
     """Whole pipeline: WB export -> inspect -> workspace -> dependencies -> VFX scale -> worker CR2W -> status -> pack -> package -> verify.
+
+    category/level/streaming_x/y/z are passed to the World Builder export (sector category, level and streaming cell size).
 
     The dependencies stage resolves every resource the exported objects use, stages modded files into the
     workspace and stops the build on missing ones unless allow_missing_dependencies (tell the user which).
@@ -4100,8 +4107,10 @@ def build_mod_from_project(
         return stages[label]
 
     try:
-        stage("export", lambda: json.loads(build_export_world_builder(name, premise_id=premise_id, scene_id=scene_id,
-                                                                       allow_skipped=allow_skipped)))
+        export_tool = getattr(build_export_world_builder, "fn", build_export_world_builder)
+        stage("export", lambda: json.loads(export_tool(name, premise_id=premise_id, scene_id=scene_id, category=category, level=level,
+                                                       streaming_x=streaming_x, streaming_y=streaming_y, streaming_z=streaming_z,
+                                                       allow_skipped=allow_skipped)))
         report = stage("inspect", lambda: _lsb.inspect_export(_export_file(name)))
         if not report["valid"]:
             stages["inspect"]["error"] = f"{report['errors']} export error(s)"
@@ -4715,6 +4724,139 @@ def dependency_stage(workspace_name: str, premise_id: str = "", sources: list[st
                           report_file=ws / "automation" / "dependency-report.json")
     staged = _lsdep.stage(out["full"], ws)
     return _json({"ready": out["slim"]["ready"], "counts": out["slim"]["counts"], "missing": out["slim"]["missing"], "staged": staged})
+
+
+EDL_EXPORTS = MOD_DIR / "exports" / "edl"
+EDL_EXAMPLE = MOD_DIR / "edl" / "examples" / "ripperdoc_clinic.edl.yaml"
+
+
+def _edl_compile(source: str, document: dict[str, Any] | None, parameters: dict[str, Any] | None) -> dict[str, Any]:
+    if document is None and not str(source or "").strip():
+        raise ValueError("give an EDL file path, EDL text (JSON or YAML) or a document object")
+    src: Any = document if document is not None else source
+    if isinstance(src, str) and "\n" not in src:
+        p = Path(src).expanduser()
+        if not p.is_absolute() and not p.exists() and (MOD_DIR / p).exists():
+            src = str(MOD_DIR / p)
+    return _lsedl.compile_document(src, parameters=parameters)
+
+
+def _edl_summary(result: dict[str, Any]) -> dict[str, Any]:
+    return {k: result.get(k) for k in ("valid", "errors", "warnings", "doc", "name", "hash", "counts", "resources", "streaming", "step_count")}
+
+
+@mcp.tool()
+def edl_schema() -> str:
+    """The Environment Definition Language (EDL v1) JSON Schema, the path of a complete example document and the
+    authoring-plan v2 operations it compiles to. Read this before writing an EDL document."""
+    return _json({"schema": _lsedl.schema(), "example_file": str(EDL_EXAMPLE),
+                  "example": EDL_EXAMPLE.read_text(encoding="utf-8") if EDL_EXAMPLE.is_file() else None,
+                  "notes": ["Coordinates are metres in the location frame; inside a room they are relative to the room centre at floor level.",
+                            "Parameters: ${name} or ${expression}; quote expressions inside YAML [ ] or { }.",
+                            "Templates: templates.<name> merged with use: <name>. Repeat: repeat: {count, step: [x,y,z], yaw_step}.",
+                            "Resources must be real catalog paths (asset_catalog_search); the compiler never invents them.",
+                            "Applying the same document id replaces its previous build as one undo step."]})
+
+
+@mcp.tool()
+def edl_validate(source: str = "", document: dict[str, Any] | None = None, parameters: dict[str, Any] | None = None) -> str:
+    """Offline: validate an EDL document (file path, JSON/YAML text, or object) and report errors with their
+    locations, warnings, element counts and the resources it needs. Nothing is changed."""
+    return _json(_edl_summary(_edl_compile(source, document, parameters)))
+
+
+@mcp.tool()
+def edl_compile(source: str = "", document: dict[str, Any] | None = None, parameters: dict[str, Any] | None = None,
+                include_plan: bool = False) -> str:
+    """Offline: compile an EDL document into a version-2 authoring plan and save it as exports/edl/<id>.plan.json
+    (reviewable, and executable later with execute_authoring_plan)."""
+    result = _edl_compile(source, document, parameters)
+    out = _edl_summary(result)
+    if result.get("plan"):
+        EDL_EXPORTS.mkdir(parents=True, exist_ok=True)
+        target = EDL_EXPORTS / f"{result['doc']}.plan.json"
+        target.write_text(json.dumps(result["plan"], indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+        out["plan_file"] = str(target)
+        if include_plan:
+            out["plan"] = result["plan"]
+    return _json(out)
+
+
+def _edl_apply(source: str, document: dict[str, Any] | None, parameters: dict[str, Any] | None, save: bool) -> dict[str, Any]:
+    result = _edl_compile(source, document, parameters)
+    if not result.get("valid"):
+        raise ValueError("EDL document is invalid: " + "; ".join(result.get("errors", [])[:20]))
+    live = _send("execute_authoring_plan", {"plan": result["plan"], "save": save}, timeout=max(DEFAULT_TIMEOUT, 180.0))
+    return {"compiled": _edl_summary(result), "applied": live, "streaming": result.get("streaming") or {}}
+
+
+@mcp.tool()
+def edl_apply(source: str = "", document: dict[str, Any] | None = None, parameters: dict[str, Any] | None = None,
+              save: bool = True) -> str:
+    """Live: compile an EDL document and build it in the game as one undoable transaction (real World Builder rooms,
+    props, lights, collision, VFX, audio, devices, NPCs, triggers, cameras, navigation and logic). Re-applying the same
+    document id replaces its previous build; any failure rolls everything back. The origin comes from the document
+    (player, camera or explicit)."""
+    return _json(_edl_apply(source, document, parameters, save))
+
+
+@mcp.tool()
+def edl_build(source: str = "", document: dict[str, Any] | None = None, parameters: dict[str, Any] | None = None,
+              build_name: str = "", apply: bool = True, preflight: bool = True, strict: bool = False, run: bool = False,
+              worker: str | None = None, cli: str | None = None) -> str:
+    """Compile an EDL document all the way to game resources: apply it in game, run the shipping preflight, then
+    build_mod_from_project for its premise with the document's streaming settings (category, level, cell size).
+    run=false stops at the build readiness report; run=true packs the .archive. A failed preflight stops the build
+    (strict makes warnings block too). Deploying stays separate (build_deploy)."""
+    out: dict[str, Any] = {}
+    if apply:
+        applied = _edl_apply(source, document, parameters, True)
+        out["apply"] = applied
+        doc_id = applied["compiled"]["doc"]
+        streaming = applied["streaming"]
+    else:
+        compiled = _edl_compile(source, document, parameters)
+        if not compiled.get("valid"):
+            raise ValueError("EDL document is invalid: " + "; ".join(compiled.get("errors", [])[:20]))
+        doc_id, streaming = compiled["doc"], compiled.get("streaming") or {}
+    record = _send("edl_get", {"doc": doc_id})
+    premise_id = record.get("premise_id")
+    if not premise_id:
+        raise RuntimeError(f"EDL build {doc_id} has no premise in the project; apply it first")
+    if preflight:
+        report = json.loads(getattr(preflight_run, "fn", preflight_run)(premise_id=premise_id, strict=strict))
+        out["preflight"] = {k: report.get(k) for k in ("ready", "summary", "blocking", "live_error", "report_file")}
+        if not report.get("ready"):
+            out["built"] = False
+            out["stopped"] = "preflight"
+            return _json(out)
+    name = build_name or re.sub(r"[^a-z0-9_]+", "_", doc_id.lower()).strip("_")
+    cell = streaming.get("cell") or {}
+    build = getattr(build_mod_from_project, "fn", build_mod_from_project)
+    out["build"] = json.loads(build(name, premise_id=premise_id, run=run, worker=worker, cli=cli,
+                                    category=streaming.get("category"), level=streaming.get("level"),
+                                    streaming_x=cell.get("x"), streaming_y=cell.get("y"), streaming_z=cell.get("z")))
+    out["built"] = bool(run and out["build"].get("ok"))
+    return _json(out)
+
+
+@mcp.tool()
+def edl_list() -> str:
+    """EDL documents built into the project (id, name, source hash, premise, element count, streaming)."""
+    return _json(_send("edl_list"))
+
+
+@mcp.tool()
+def edl_get(doc: str) -> str:
+    """One EDL build: every element id mapped to the project item it created, plus its streaming settings."""
+    return _json(_send("edl_get", {"doc": doc}))
+
+
+@mcp.tool()
+def edl_remove(doc: str) -> str:
+    """Remove everything an EDL document built (premise, rooms, objects, NPC routes, logic, navigation, splines) as
+    one undo step. The document file itself is untouched."""
+    return _json(_send("edl_remove", {"doc": doc}))
 
 
 PREFLIGHT_REPORT = MOD_DIR / "exports" / "preflight-report.json"

@@ -8,7 +8,23 @@ local OP_KIND={
     register_asset='asset',create_premise='premise',create_room='room',add_opening='opening',place_asset='object',
     create_location='location',create_volume='volume',create_camera='camera',create_route='route',create_group='group',
     create_scene='scene',capture_scene='scene',edit_scene_members='scene',move='item',spawn='runtime',activate_scene='scene',deactivate_scene='scene',isolate_scene='scene',
+    -- Version 2 operations (used by the Environment Definition Language compiler).
+    edl_begin='edl',set_room_kit='settings',import_resource='asset',place_resource='object',create_light='object',create_collision='object',
+    create_vfx='object',create_audio_emitter='object',create_reverb_zone='object',create_occluder='object',create_interactable='object',
+    create_npc='object',create_workspot='location',create_npc_route='npc_route',add_route_waypoint='waypoint',create_device_graph='device_graph',
+    add_device_node='device_node',add_device_link='device_link',link_fact='volume',import_navigation='navigation_graph',create_spline='spline',
 }
+local V2_ONLY={}
+for _,op in ipairs({'edl_begin','set_room_kit','import_resource','place_resource','create_light','create_collision','create_vfx','create_audio_emitter',
+    'create_reverb_zone','create_occluder','create_interactable','create_npc','create_workspot','create_npc_route','add_route_waypoint','create_device_graph',
+    'add_device_node','add_device_link','link_fact','import_navigation','create_spline'}) do V2_ONLY[op]=true end
+local NEEDS_PREMISE={create_room=true,create_volume=true,create_camera=true,create_scene=true,capture_scene=true,place_asset=true,place_resource=true,
+    create_light=true,create_collision=true,create_vfx=true,create_audio_emitter=true,create_occluder=true,create_interactable=true,create_npc=true}
+-- Ops that do not need the World Builder runtime.
+local NO_RUNTIME={edl_begin=true,create_workspot=true,create_npc_route=true,add_route_waypoint=true,create_device_graph=true,add_device_node=true,
+    add_device_link=true,link_fact=true,import_navigation=true,create_spline=true}
+local MAX_STEPS={[1]=100,[2]=2000}
+local EDL_DOC='^[%a_][%w_%-]*$'
 
 local function number(value,fallback) return tonumber(value) or fallback or 0 end
 local function is_ref(value) return type(value)=='string' and value:sub(1,1)=='$' and #value>1 end
@@ -47,7 +63,7 @@ end
 
 function Plans:schema()
     return {
-        format='locationstudio-authoring-plan',version=1,max_steps=100,
+        format='locationstudio-authoring-plan',version=1,max_steps=100,versions={['1']='core operations, 100 steps',['2']='adds the Environment Definition Language operations, 2000 steps'},
         origin={'player','camera','explicit transform'},reference='Use $alias after a step with as="alias".',
         operations={
             register_asset={'name','template','category?','kind?','metadata?'},
@@ -65,6 +81,25 @@ function Plans:schema()
             edit_scene_members={'id','mode: add/remove/replace','room_ids?','object_ids?','location_ids?','volume_ids?','camera_ids?','route_ids?'},
             move={'kind','id','dx?','dy?','dz?','droll?','dpitch?','dyaw?','local_space? or transform'},
             spawn={'kind','id'},activate_scene={'id'},deactivate_scene={'id'},isolate_scene={'id'},
+        },
+        operations_v2={
+            edl_begin={'doc','name?','hash?','source?','streaming?'},set_room_kit={'preset?','roles? {role=asset_id}'},
+            import_resource={'as','definition_key','path','name?','allow_cet?'},
+            place_resource={'as','asset_id','premise_id','room_id?','offset','yaw?','roll?','pitch?','scale?','appearance?','layer?','stream_range?','spawn?'},
+            create_light={'as','premise_id','offset','config {color,intensity,radius,...}','preset_id?'},
+            create_collision={'as','premise_id','offset','shape','size?','radius?','height?','preset?','material?'},
+            create_vfx={'as','premise_id','offset','resource_path','scale?','emission_rate?'},
+            create_audio_emitter={'as','premise_id','offset','resource_path or query','radius?'},
+            create_reverb_zone={'as','room_id','preset_name?','sound_event?','reverb?'},
+            create_occluder={'as','premise_id','offset','mesh','size'},
+            create_interactable={'as','premise_id','asset_id','kind','offset','loot_table?','loot_items?','item_record?','fact_name?','fact_value?','lock_state?'},
+            create_npc={'as','premise_id','asset_id (entity_record)','record','offset','appearance?','conditions?'},
+            create_workspot={'as','name','offset','workspot_kind?','animation?'},create_npc_route={'as','npc_id','name?','loop?'},
+            add_route_waypoint={'route_id','offset','wait_seconds?','transition?','workspot_location_id?','variant?'},
+            create_device_graph={'as','name','premise_id?'},add_device_node={'as','graph_id','kind','name','object_id?','config?'},
+            add_device_link={'graph_id','from_id','to_id','trigger?','condition_fact?','condition_value?'},
+            link_fact={'volume_id','fact_name','value?'},import_navigation={'as','name','nodes [{id,offset}]','edges'},
+            create_spline={'as','premise_id','points [offset]','closed?'},
         },
     }
 end
@@ -141,14 +176,17 @@ function Plans:validate(plan)
     local errors,warnings,aliases={}, {},{}
     if type(plan)~='table' then return {valid=false,errors={'plan must be an object'},warnings={},steps={}} end
     if plan.format and plan.format~='locationstudio-authoring-plan' then table.insert(errors,'unsupported plan format: '..tostring(plan.format)) end
-    if plan.version and tonumber(plan.version)~=1 then table.insert(errors,'unsupported plan version: '..tostring(plan.version)) end
+    local version=tonumber(plan.version or 1)
+    if not MAX_STEPS[version] then table.insert(errors,'unsupported plan version: '..tostring(plan.version));version=1 end
     local steps=plan.steps
     if type(steps)~='table' or #steps==0 then table.insert(errors,'plan.steps must contain at least one operation');steps={} end
-    if #steps>100 then table.insert(errors,'authoring plans are limited to 100 steps') end
+    if #steps>MAX_STEPS[version] then table.insert(errors,'version '..version..' authoring plans are limited to '..MAX_STEPS[version]..' steps') end
     local normalized={}
     for index,raw in ipairs(steps) do
         local step=type(raw)=='table' and Util.deepcopy(raw) or {};local op=step.op
-        if not OP_KIND[op] then table.insert(errors,string.format('step %d has unsupported op: %s',index,tostring(op))) end
+        if not OP_KIND[op] then table.insert(errors,string.format('step %d has unsupported op: %s',index,tostring(op)))
+        elseif V2_ONLY[op] and version<2 then table.insert(errors,string.format('step %d: %s requires plan version 2',index,op)) end
+        if op=='edl_begin' and (index~=1 or not tostring(step.doc or ''):match(EDL_DOC)) then table.insert(errors,string.format('step %d: edl_begin must be the first step and needs a doc id',index)) end
         if step.as~=nil then
             if not alias_pattern(step.as) then table.insert(errors,string.format('step %d has invalid alias',index))
             elseif aliases[step.as] then table.insert(errors,string.format('step %d repeats alias %s',index,step.as)) end
@@ -158,7 +196,8 @@ function Plans:validate(plan)
         if op=='place_asset' and not is_ref(step.asset_id) then local _,err=self:resolve_asset(step.asset_id,step.asset_query);if err then table.insert(errors,string.format('step %d: %s',index,err)) end end
         if op=='create_room' then local ok,err=Builder.validate_size({width=step.width or 4,depth=step.depth or 4,height=step.height or 3},step.wall_thickness);if not ok then table.insert(errors,string.format('step %d: %s',index,err)) end end
         if op=='move' and not step.kind then table.insert(errors,string.format('step %d: move requires kind',index)) end
-        if (op=='create_room' or op=='create_volume' or op=='create_camera' or op=='create_scene' or op=='capture_scene' or op=='place_asset') and not step.premise_id then table.insert(errors,string.format('step %d: %s requires premise_id',index,op)) end
+        if NEEDS_PREMISE[op] and not step.premise_id then table.insert(errors,string.format('step %d: %s requires premise_id',index,op)) end
+        if (op=='place_resource' or op=='create_interactable' or op=='create_npc') and not step.asset_id then table.insert(errors,string.format('step %d: %s requires asset_id',index,op)) end
         if op=='edit_scene_members' then
             if not step.id then table.insert(errors,string.format('step %d: edit_scene_members requires id',index)) end
             if step.mode and step.mode~='add' and step.mode~='remove' and step.mode~='replace' then table.insert(errors,string.format('step %d: scene member mode must be add, remove, or replace',index)) end
@@ -186,6 +225,7 @@ function Plans:preflight(plan)
             local object=self.app.model:get_object(step.id)
             if object and object.metadata and type(object.metadata.world_builder)=='table' then needs_world_builder=true else needs_entities=true end
         elseif step.op=='spawn' and (step.kind=='room' or step.kind=='premise') then needs_world_builder=true end
+        if V2_ONLY[step.op] and not NO_RUNTIME[step.op] then needs_world_builder=true end
     end
     if needs_world_builder then local status=self.app.runtime_shell:status(true);if not status.available then return nil,'World Builder room/resource backend is not ready: '..tostring(status.reason or 'unavailable') end end
     if needs_entities and not self.app.placement:status().supported then return nil,'CET entity spawner is not ready for direct .ent assets.' end
@@ -212,7 +252,51 @@ end
 function Plans:_transform(origin,step)
     if type(step.transform)=='table' then return Util.deepcopy(step.transform) end
     local o=step.offset;if type(o)~='table' then return nil end
-    return Builder.local_transform(origin,number(o.x),number(o.y),number(o.z),number(step.yaw,o.yaw))
+    local t=Builder.local_transform(origin,number(o.x),number(o.y),number(o.z),number(step.yaw,o.yaw))
+    if t and (step.roll~=nil or step.pitch~=nil) then t.rotation.roll=number(step.roll);t.rotation.pitch=number(step.pitch) end
+    return t
+end
+
+-- World position of a plan-local offset (navigation nodes, spline points).
+function Plans:_point(origin,offset)
+    local t=Builder.local_transform(origin,number(offset.x),number(offset.y),number(offset.z),0)
+    return {x=t.position.x,y=t.position.y,z=t.position.z}
+end
+
+-- Environment Definition Language build registry (model.data.edl_builds).
+local function edl_record(app,doc)
+    for i,b in ipairs(app.model.data.edl_builds or {}) do if b.id==doc then return b,i end end
+end
+
+-- Remove everything a previous apply of the same document created.
+function Plans:_edl_clear(record)
+    local app,model=self.app,self.app.model
+    if record.premise_id and model:get_premise(record.premise_id) then
+        app.placement:despawn_premise(record.premise_id)
+        local ok,err=model:delete_premise(record.premise_id);if not ok then return nil,err end
+    end
+    local items=record.items or {}
+    for _,id in ipairs(items.object or {}) do
+        local o=model:get_object(id)
+        if o then if app.placement:is_tracked(o) then local ok,err=app.placement:despawn(o);if not ok then return nil,err end end;model:delete_object(id) end
+    end
+    for _,id in ipairs(items.location or {}) do if model:get_location(id) then model:delete_location(id) end end
+    for _,id in ipairs(items.route or {}) do if model:get_route(id) then model:delete_route(id) end end
+    local function drop(collection,ids)
+        local set={};for _,id in ipairs(ids or {}) do set[id]=true end
+        local list=model.data[collection] or {}
+        for i=#list,1,-1 do if set[list[i].id] then table.remove(list,i) end end
+    end
+    drop('npc_routes',items.npc_route);drop('device_logic_graphs',items.device_graph);drop('navigation_graphs',items.navigation_graph);drop('splines',items.spline)
+    return true
+end
+
+function Plans:_edl_note(step,result)
+    local rec=self._edl;if not rec or not result or not result.id or result.kind=='edl' then return end
+    local kind=result.kind
+    if kind=='premise' then rec.premise_id=result.id end
+    rec.items[kind]=rec.items[kind] or {};table.insert(rec.items[kind],result.id)
+    if step.edl_element then rec.elements[step.edl_element]={kind=kind,id=result.id} end
 end
 
 function Plans:_run_step(step,aliases,origin)
@@ -240,7 +324,9 @@ function Plans:_run_step(step,aliases,origin)
     elseif op=='create_volume' then
         a.transform=self:_transform(origin,a) or a.transform;item,warning=app.authoring:create_volume(a);kind='volume'
     elseif op=='create_camera' then
-        a.transform=self:_transform(origin,a) or a.transform;item,warning=app.authoring:create_camera(a);kind='camera'
+        a.transform=self:_transform(origin,a) or a.transform
+        if type(a.look_at_offset)=='table' then a.look_at=self:_point(origin,a.look_at_offset) end
+        item,warning=app.authoring:create_camera(a);kind='camera'
     elseif op=='create_route' then
         item=app.model:add_route({name=a.name,kind=a.kind,location_ids=a.location_ids,loop=a.loop,notes=a.notes});app.selection:set('route',item.id);app:mark_dirty();kind='route'
     elseif op=='create_group' then
@@ -271,6 +357,88 @@ function Plans:_run_step(step,aliases,origin)
         elseif a.kind=='scene' then item,warning=app.scenes:activate(a.id,true)
         else return nil,'spawn kind must be object, room, premise, or scene' end
         kind='runtime'
+    elseif op=='edl_begin' then
+        local previous,index=edl_record(app,a.doc)
+        if previous then local ok,clear_err=self:_edl_clear(previous);if not ok then return nil,'could not remove the previous build of '..a.doc..': '..tostring(clear_err) end;table.remove(app.model.data.edl_builds,index) end
+        local rec={id=a.doc,name=a.name or a.doc,hash=a.hash,source=a.source,streaming=Util.deepcopy(a.streaming or {}),applied_at=Util.now_iso(),
+            elements={},items={},premise_id=nil,replaced=previous~=nil,mod_version=app.version}
+        app.model.data.edl_builds=app.model.data.edl_builds or {};table.insert(app.model.data.edl_builds,rec)
+        self._edl=rec;item={id=a.doc,replaced=previous~=nil};kind='edl'
+    elseif op=='set_room_kit' then
+        if a.preset and a.preset~='' then local kit,kit_err=app.builder:set_room_kit_preset(a.preset);if not kit then return nil,kit_err end end
+        for role,asset_id in pairs(a.roles or {}) do local ok,role_err=app.builder:assign_room_kit_role(role,asset_id);if not ok then return nil,role_err end end
+        item={id='room_kit'};kind='settings'
+    elseif op=='import_resource' then
+        local def=app.world_builder and app.world_builder:definition(a.definition_key)
+        if not def then return nil,'unknown World Builder definition: '..tostring(a.definition_key) end
+        local imported,import_err=app.world_builder:import_catalog_record({category=def.category,variant=def.variant,spawn_data=a.path,name=a.name})
+        if imported then item=imported.asset
+        elseif a.allow_cet==true and tostring(a.path):lower():match('%.ent$') then
+            item=app.model:add_asset({name=a.name or a.path,template=a.path,kind='entity',category='EDL / CET entity',tags={'edl','cet'}})
+            warning='not in the World Builder catalog; registered as a direct CET entity (not exportable to sectors)'
+        else return nil,import_err end
+        kind='asset'
+    elseif op=='place_resource' then
+        local asset;asset,err=self:resolve_asset(a.asset_id,nil,aliases);if not asset then return nil,err end
+        local transform=self:_transform(origin,a) or a.transform
+        item,warning=app.actions:place_asset(asset.id,'preview',{premise_id=a.premise_id,room_id=a.room_id,name=a.name,transform=transform,spawn=false});kind='object'
+        if item then
+            if a.layer then item.layer=a.layer end
+            local wb=item.metadata and item.metadata.world_builder;local data=wb and wb.entry and wb.entry.data
+            if a.appearance then if data then data.app=a.appearance else item.appearance=a.appearance end end
+            if type(a.scale)=='table' then
+                if wb and wb.apply_scale then item.size={x=number(a.scale.x,1),y=number(a.scale.y,1),z=number(a.scale.z,1)} else warning='scale ignored: this resource has no live scale' end
+            end
+            if a.stream_range and data then data.primaryRange=number(a.stream_range);data.secondaryRange=number(a.stream_range_secondary,number(a.stream_range)*1.2) end
+            if a.spawn~=false then local id,spawn_err=app.placement:spawn(item);if not id and a.require_runtime~=false then return nil,spawn_err or 'resource did not spawn' end end
+        end
+    elseif op=='create_light' then
+        item,warning=app.lighting:create({premise_id=a.premise_id,room_id=a.room_id,name=a.name,transform=self:_transform(origin,a),config=a.config,preset_id=a.preset_id,resource_name=a.resource_name,spawn=a.spawn});kind='object'
+    elseif op=='create_collision' then
+        local r;r,warning=app.collision:create_primitive({premise_id=a.premise_id,room_id=a.room_id,name=a.name,shape=a.shape,size=a.size,radius=a.radius,height=a.height,
+            preset=a.preset,material=a.material,visualize=a.visualize,transform=self:_transform(origin,a),spawn=a.spawn});item=r and r.object;kind='object'
+    elseif op=='create_vfx' then
+        local r;r,warning=app.vfx:create({premise_id=a.premise_id,room_id=a.room_id,name=a.name,resource_path=a.resource_path,backend=a.backend,scale=a.scale,
+            emission_rate=a.emission_rate,respawn_on_move=a.respawn_on_move,transform=self:_transform(origin,a),spawn=a.spawn});item=r and r.object;kind='object'
+    elseif op=='create_audio_emitter' then
+        local r;r,warning=app.ambient_audio:create_emitter({premise_id=a.premise_id,room_id=a.room_id,name=a.name,resource_path=a.resource_path,query=a.query,
+            radius=a.radius,transform=self:_transform(origin,a),spawn=a.spawn});item=r and r.object;kind='object'
+    elseif op=='create_reverb_zone' then
+        local r;r,warning=app.ambient_audio:create_reverb_zone({premise_id=a.premise_id,room_id=a.room_id,name=a.name,preset_name=a.preset_name,sound_event=a.sound_event,
+            reverb=a.reverb,priority=a.priority,width=a.width,depth=a.depth,height=a.height,spawn=a.spawn});item=r and r.zone;kind='object'
+    elseif op=='create_occluder' then
+        local r;r,warning=app.visibility:create_occluder({premise_id=a.premise_id,room_id=a.room_id,name=a.name,mesh=a.mesh,size=a.size,transform=self:_transform(origin,a),spawn=a.spawn});item=r and r.object;kind='object'
+    elseif op=='create_interactable' then
+        local asset;asset,err=self:resolve_asset(a.asset_id,nil,aliases);if not asset then return nil,err end
+        item,warning=app.actions:create_interactable({kind=a.kind,asset_id=asset.id,premise_id=a.premise_id,room_id=a.room_id,name=a.name,transform=self:_transform(origin,a),
+            item_record=a.item_record,loot_table=a.loot_table,loot_items=a.loot_items,entity_record=a.entity_record,fact_name=a.fact_name,fact_value=a.fact_value,lock_state=a.lock_state,spawn=a.spawn});kind='object'
+    elseif op=='create_npc' then
+        local asset;asset,err=self:resolve_asset(a.asset_id,nil,aliases);if not asset then return nil,err end
+        item,warning=app.actions:create_npc_population({asset_id=asset.id,record=a.record,appearance=a.appearance,premise_id=a.premise_id,room_id=a.room_id,name=a.name,
+            transform=self:_transform(origin,a),spawn_on_start=a.spawn_on_start,always_spawned=a.always_spawned,primary_range=a.primary_range,secondary_range=a.secondary_range,
+            attitude=a.attitude,faction=a.faction,level=a.level,archetype=a.archetype,idle_behavior=a.idle_behavior,conditions=a.conditions,preview=a.preview});kind='object'
+    elseif op=='create_workspot' then
+        item=app.model:add_location({name=a.name or 'Workspot',type='workspot',category='NPC Workspots',tags={'npc',a.workspot_kind or 'sit'},radius=0.5,transform=self:_transform(origin,a) or origin,
+            metadata={source='edl',workspot={kind=a.workspot_kind or 'sit',record=a.record or '',appearance=a.appearance or '',animation=Util.deepcopy(a.animation or {})}}});app:mark_dirty();kind='location'
+    elseif op=='create_npc_route' then
+        item,warning=app.actions:create_npc_route({npc_id=a.npc_id,name=a.name,loop=a.loop,kind=a.route_kind,notes=a.notes});kind='npc_route'
+    elseif op=='add_route_waypoint' then
+        item,warning=app.actions:add_npc_route_waypoint({route_id=a.route_id,variant=a.variant,transform=self:_transform(origin,a),name=a.name,wait_seconds=a.wait_seconds,facing_yaw=a.facing_yaw,
+            speed=a.speed,transition=a.transition,workspot_location_id=a.workspot_location_id,branch_fact=a.branch_fact,branch_value=a.branch_value,branch_target_id=a.branch_target_id});kind='waypoint'
+    elseif op=='create_device_graph' then item,warning=app.device_logic:create({name=a.name,premise_id=a.premise_id});kind='device_graph'
+    elseif op=='add_device_node' then item,warning=app.device_logic:add_node({graph_id=a.graph_id,kind=a.kind,name=a.name,object_id=a.object_id,config=a.config,native=a.native});kind='device_node'
+    elseif op=='add_device_link' then item,warning=app.device_logic:add_link({graph_id=a.graph_id,from_id=a.from_id,to_id=a.to_id,trigger=a.trigger,condition_fact=a.condition_fact,condition_value=a.condition_value});kind='device_link'
+    elseif op=='link_fact' then
+        local volume=app.model:get_volume(a.volume_id);if not volume then return nil,'volume not found' end
+        local fact=Util.trim(a.fact_name or '');if not fact:match('^[%w_%.%-]+$') then return nil,'fact_name must use letters, numbers, underscore, dot, or hyphen' end
+        local metadata=Util.deepcopy(volume.metadata or {});metadata.questforge=metadata.questforge or {};metadata.questforge.fact_name=fact;metadata.questforge.value=tonumber(a.value) or 1
+        item,warning=app.model:update_volume(volume.id,{metadata=metadata});kind='volume'
+    elseif op=='import_navigation' then
+        local nodes={};for i,n in ipairs(a.nodes or {}) do nodes[i]={id=n.id,name=n.name,surface=n.surface,position=self:_point(origin,n.offset or {})} end
+        item,warning=app.navigation:import_graph({name=a.name,nodes=nodes,edges=a.edges or {},source_format='locationstudio-edl'});kind='navigation_graph'
+    elseif op=='create_spline' then
+        local points={};for i,p in ipairs(a.points or {}) do points[i]={position=self:_point(origin,p.offset or p),mode=p.mode} end
+        item,warning=app.splines:create({name=a.name,premise_id=a.premise_id,points=points,closed=a.closed,tension=a.tension,mode=a.mode});kind='spline'
     elseif op=='activate_scene' then item,warning=app.scenes:activate(a.id,a.spawn~=false);kind='scene'
     elseif op=='deactivate_scene' then item,warning=app.scenes:deactivate(a.id);kind='scene'
     elseif op=='isolate_scene' then item,warning=app.scenes:isolate(a.id);kind='scene'
@@ -304,12 +472,12 @@ function Plans:execute(plan,options)
     local origin,origin_source=self:_origin(plan);if not origin then return nil,origin_source end
     local live_ids={};for _,object in ipairs(self.app.model.data.objects) do if self.app.placement:is_tracked(object) then table.insert(live_ids,object.id) end end
     local snapshot={data=Util.deepcopy(self.app.model.data),undo=Util.deepcopy(self.app.model.undo_stack),redo=Util.deepcopy(self.app.model.redo_stack),dirty=self.app.dirty==true,dirty_since=self.app.dirty_since,selection=selection_snapshot(self.app),live_ids=live_ids,editing_scene_id=self.app.editing_scene_id,live_scene_id=self.app.live_scene_id}
-    self.running=true;local aliases,outputs={},{}
+    self.running=true;self._edl=nil;local aliases,outputs={},{}
     if self.app.logger then self.app.logger:info('authoring:plan','started',{name=validation.name,steps=validation.step_count,origin=origin_source}) end
     for index,step in ipairs(plan.steps) do
         local result,err=self:_run_step(step,aliases,origin)
         if not result then
-            self.running=false;local rolled,rollback_err,failed=self:_rollback_state(snapshot)
+            self.running=false;self._edl=nil;local rolled,rollback_err,failed=self:_rollback_state(snapshot)
             if not rolled then
                 self.recovery={snapshot=snapshot,plan_name=validation.name,step=index,error=tostring(err),cleanup_failed=failed};self.last_error='Plan failed at step '..index..' ('..tostring(step.op)..'): '..tostring(err)..'. Rollback is blocked: '..tostring(rollback_err)
                 self.last_result={executed=false,partial=true,recovery_required=true,failed_step=index,error=tostring(err),outputs=outputs}
@@ -322,15 +490,47 @@ function Plans:execute(plan,options)
             return nil,self.last_error
         end
         if step.as and result.id then aliases[step.as]=result.id end
+        self:_edl_note(step,result)
         table.insert(outputs,{index=index,op=step.op,alias=step.as,kind=result.kind,id=result.id,warning=result.warning})
     end
     self.running=false
+    local edl=self._edl;self._edl=nil
     self.app.model.undo_stack=Util.deepcopy(snapshot.undo);self.app.model.redo_stack={};self.app.model:push_history(snapshot.data,'Authoring plan '..tostring(validation.name or ''));self.app.model:touch();self.app:mark_dirty()
     local issues=self.app.model:validate();local result={executed=true,name=validation.name,step_count=#outputs,outputs=outputs,aliases=aliases,origin=origin,origin_source=origin_source,preflight=preflight,validation_issues=issues,one_undo=true}
+    if edl then result.edl={doc=edl.id,premise_id=edl.premise_id,elements=Util.deepcopy(edl.elements),replaced=edl.replaced} end
     self.last_result=Util.deepcopy(result);self.last_error=nil
     if options.save==true then local ok,save_err=self.app:save(true);result.saved=ok;if not ok then result.save_error=save_err end end
     if self.app.logger then self.app.logger:info('authoring:plan','committed',{name=validation.name,steps=#outputs,aliases=aliases,issues=#issues,saved=result.saved==true}) end
     return result
+end
+
+-- Environment Definition Language builds applied to this project.
+function Plans:edl_list()
+    local rows={}
+    for _,b in ipairs(self.app.model.data.edl_builds or {}) do
+        local elements=0;for _ in pairs(b.elements or {}) do elements=elements+1 end
+        rows[#rows+1]={id=b.id,name=b.name,hash=b.hash,source=b.source,applied_at=b.applied_at,premise_id=b.premise_id,elements=elements,streaming=Util.deepcopy(b.streaming)}
+    end
+    return {items=rows,count=#rows}
+end
+
+function Plans:edl_get(doc)
+    local b=edl_record(self.app,doc);if not b then return nil,'no EDL build with id '..tostring(doc) end
+    return Util.deepcopy(b)
+end
+
+-- Remove everything an EDL document built, as one undo step.
+function Plans:edl_remove(doc)
+    if self.running then return nil,'an authoring plan is running' end
+    if self.recovery then return nil,'Resolve the pending authoring-plan recovery first.' end
+    local b,index=edl_record(self.app,doc);if not b then return nil,'no EDL build with id '..tostring(doc) end
+    local before=Util.deepcopy(self.app.model.data);local undo=Util.deepcopy(self.app.model.undo_stack)
+    local ok,err=self:_edl_clear(b)
+    if not ok then self.app.model.data=before;self.app.model.undo_stack=undo;return nil,err end
+    table.remove(self.app.model.data.edl_builds,index)
+    self.app.model.undo_stack=undo;self.app.model.redo_stack={};self.app.model:push_history(before,'Remove EDL build '..tostring(doc))
+    self.app.model:touch();self.app:mark_dirty()
+    return {removed=true,doc=doc}
 end
 
 function Plans:retry_rollback()

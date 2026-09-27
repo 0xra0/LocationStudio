@@ -1,0 +1,4603 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://locationstudio/edl/1",
+  "title": "LocationStudio Environment Definition Language v1",
+  "description": "Declarative description of a whole location. Compiled by LocationStudio (edl_compile / edl_apply / edl_build) into one authoring-plan transaction and then into game archives. The compiler performs further checks (unique ids, fits, references).",
+  "type": "object",
+  "required": [
+    "edl",
+    "id"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "edl": {
+      "const": 1
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_-]*$"
+    },
+    "name": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "origin": {
+      "oneOf": [
+        {
+          "enum": [
+            "player",
+            "camera"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "position": {
+              "oneOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": [
+                      "number",
+                      "string"
+                    ]
+                  },
+                  "minItems": 2,
+                  "maxItems": 3
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "x": {},
+                    "y": {},
+                    "z": {}
+                  },
+                  "required": [
+                    "x",
+                    "y"
+                  ]
+                }
+              ]
+            },
+            "yaw": {
+              "type": "number"
+            },
+            "rotation": {
+              "type": "object"
+            }
+          },
+          "required": [
+            "position"
+          ]
+        }
+      ]
+    },
+    "parameters": {
+      "type": "object",
+      "description": "Named values used as ${name} or ${expression} anywhere",
+      "additionalProperties": {
+        "type": [
+          "number",
+          "string",
+          "boolean"
+        ]
+      }
+    },
+    "templates": {
+      "type": "object",
+      "description": "Reusable element fields merged by use: <name>",
+      "additionalProperties": {
+        "type": "object"
+      }
+    },
+    "materials": {
+      "type": "object",
+      "properties": {
+        "room_kit": {
+          "enum": [
+            "common_interior",
+            "kitsch_apartment"
+          ]
+        },
+        "roles": {
+          "type": "object",
+          "properties": {
+            "floor": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "description": "Depot path (.mesh .ent .mi .particle .effect) or a TweakDB record (Character.x)"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "enum": [
+                        "mesh_static",
+                        "mesh_rotating",
+                        "mesh_cloth",
+                        "mesh_dynamic",
+                        "mesh_proxy",
+                        "entity_template",
+                        "entity_amm",
+                        "entity_record",
+                        "device",
+                        "decal",
+                        "particle",
+                        "effect"
+                      ]
+                    },
+                    "path": {
+                      "type": "string"
+                    },
+                    "backend": {
+                      "enum": [
+                        "world_builder",
+                        "cet"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "path"
+                  ]
+                }
+              ]
+            },
+            "ceiling": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "description": "Depot path (.mesh .ent .mi .particle .effect) or a TweakDB record (Character.x)"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "enum": [
+                        "mesh_static",
+                        "mesh_rotating",
+                        "mesh_cloth",
+                        "mesh_dynamic",
+                        "mesh_proxy",
+                        "entity_template",
+                        "entity_amm",
+                        "entity_record",
+                        "device",
+                        "decal",
+                        "particle",
+                        "effect"
+                      ]
+                    },
+                    "path": {
+                      "type": "string"
+                    },
+                    "backend": {
+                      "enum": [
+                        "world_builder",
+                        "cet"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "path"
+                  ]
+                }
+              ]
+            },
+            "wall": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "description": "Depot path (.mesh .ent .mi .particle .effect) or a TweakDB record (Character.x)"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "enum": [
+                        "mesh_static",
+                        "mesh_rotating",
+                        "mesh_cloth",
+                        "mesh_dynamic",
+                        "mesh_proxy",
+                        "entity_template",
+                        "entity_amm",
+                        "entity_record",
+                        "device",
+                        "decal",
+                        "particle",
+                        "effect"
+                      ]
+                    },
+                    "path": {
+                      "type": "string"
+                    },
+                    "backend": {
+                      "enum": [
+                        "world_builder",
+                        "cet"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "path"
+                  ]
+                }
+              ]
+            },
+            "door": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "description": "Depot path (.mesh .ent .mi .particle .effect) or a TweakDB record (Character.x)"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "enum": [
+                        "mesh_static",
+                        "mesh_rotating",
+                        "mesh_cloth",
+                        "mesh_dynamic",
+                        "mesh_proxy",
+                        "entity_template",
+                        "entity_amm",
+                        "entity_record",
+                        "device",
+                        "decal",
+                        "particle",
+                        "effect"
+                      ]
+                    },
+                    "path": {
+                      "type": "string"
+                    },
+                    "backend": {
+                      "enum": [
+                        "world_builder",
+                        "cet"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "path"
+                  ]
+                }
+              ]
+            },
+            "window": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "description": "Depot path (.mesh .ent .mi .particle .effect) or a TweakDB record (Character.x)"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "enum": [
+                        "mesh_static",
+                        "mesh_rotating",
+                        "mesh_cloth",
+                        "mesh_dynamic",
+                        "mesh_proxy",
+                        "entity_template",
+                        "entity_amm",
+                        "entity_record",
+                        "device",
+                        "decal",
+                        "particle",
+                        "effect"
+                      ]
+                    },
+                    "path": {
+                      "type": "string"
+                    },
+                    "backend": {
+                      "enum": [
+                        "world_builder",
+                        "cet"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "path"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "premise": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "notes": {
+          "type": "string"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "defaults": {
+      "type": "object",
+      "properties": {
+        "spawn": {
+          "type": "boolean"
+        },
+        "layer": {
+          "type": "string"
+        },
+        "stream_range": {
+          "type": "number"
+        }
+      }
+    },
+    "streaming": {
+      "type": "object",
+      "properties": {
+        "category": {
+          "oneOf": [
+            {
+              "enum": [
+                "exterior",
+                "interior",
+                "quest",
+                "navigation",
+                "alwaysloaded"
+              ]
+            },
+            {
+              "type": "integer"
+            }
+          ]
+        },
+        "level": {
+          "type": "integer"
+        },
+        "cell": {
+          "oneOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": [
+                  "number",
+                  "string"
+                ]
+              },
+              "minItems": 2,
+              "maxItems": 3
+            },
+            {
+              "type": "object",
+              "properties": {
+                "x": {},
+                "y": {},
+                "z": {}
+              },
+              "required": [
+                "x",
+                "y"
+              ]
+            }
+          ]
+        },
+        "range": {
+          "type": "number"
+        }
+      }
+    },
+    "floors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_-]*$"
+          },
+          "level": {
+            "type": "integer"
+          },
+          "elevation": {
+            "type": "number"
+          },
+          "height": {
+            "type": "number"
+          },
+          "rooms": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z_][A-Za-z0-9_-]*$"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "at": {
+                  "oneOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": [
+                          "number",
+                          "string"
+                        ]
+                      },
+                      "minItems": 2,
+                      "maxItems": 3
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "x": {},
+                        "y": {},
+                        "z": {}
+                      },
+                      "required": [
+                        "x",
+                        "y"
+                      ]
+                    }
+                  ]
+                },
+                "yaw": {},
+                "use": {
+                  "type": "string",
+                  "description": "Name of a template to merge"
+                },
+                "repeat": {
+                  "type": "object",
+                  "properties": {
+                    "count": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 500
+                    },
+                    "step": {
+                      "oneOf": [
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": [
+                              "number",
+                              "string"
+                            ]
+                          },
+                          "minItems": 2,
+                          "maxItems": 3
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "x": {},
+                            "y": {},
+                            "z": {}
+                          },
+                          "required": [
+                            "x",
+                            "y"
+                          ]
+                        }
+                      ]
+                    },
+                    "yaw_step": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "count"
+                  ]
+                },
+                "size": {
+                  "oneOf": [
+                    {
+                      "oneOf": [
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": [
+                              "number",
+                              "string"
+                            ]
+                          },
+                          "minItems": 2,
+                          "maxItems": 3
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "x": {},
+                            "y": {},
+                            "z": {}
+                          },
+                          "required": [
+                            "x",
+                            "y"
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "width": {},
+                        "depth": {},
+                        "height": {}
+                      }
+                    }
+                  ]
+                },
+                "height": {
+                  "type": "number"
+                },
+                "walls": {
+                  "type": "object",
+                  "properties": {
+                    "thickness": {
+                      "type": "number"
+                    }
+                  }
+                },
+                "doors": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "wall": {
+                        "enum": [
+                          "north",
+                          "south",
+                          "east",
+                          "west"
+                        ]
+                      },
+                      "offset": {
+                        "type": "number"
+                      },
+                      "width": {
+                        "type": "number"
+                      },
+                      "height": {
+                        "type": "number"
+                      },
+                      "sill": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "wall"
+                    ]
+                  }
+                },
+                "windows": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "wall": {
+                        "enum": [
+                          "north",
+                          "south",
+                          "east",
+                          "west"
+                        ]
+                      },
+                      "offset": {
+                        "type": "number"
+                      },
+                      "width": {
+                        "type": "number"
+                      },
+                      "height": {
+                        "type": "number"
+                      },
+                      "sill": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "wall"
+                    ]
+                  }
+                },
+                "spawn": {
+                  "type": "boolean"
+                },
+                "reverb": {
+                  "type": "object",
+                  "properties": {
+                    "preset": {},
+                    "sound_event": {},
+                    "reverb": {},
+                    "priority": {}
+                  }
+                },
+                "audio": {
+                  "type": "object",
+                  "properties": {
+                    "emitters": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "pattern": "^[A-Za-z_][A-Za-z0-9_-]*$"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "at": {
+                            "oneOf": [
+                              {
+                                "type": "array",
+                                "items": {
+                                  "type": [
+                                    "number",
+                                    "string"
+                                  ]
+                                },
+                                "minItems": 2,
+                                "maxItems": 3
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "x": {},
+                                  "y": {},
+                                  "z": {}
+                                },
+                                "required": [
+                                  "x",
+                                  "y"
+                                ]
+                              }
+                            ]
+                          },
+                          "yaw": {
+                            "type": [
+                              "number",
+                              "string"
+                            ]
+                          },
+                          "rotation": {
+                            "type": "object",
+                            "properties": {
+                              "roll": {},
+                              "pitch": {},
+                              "yaw": {}
+                            }
+                          },
+                          "room": {
+                            "type": "string"
+                          },
+                          "floor": {
+                            "type": "string"
+                          },
+                          "spawn": {
+                            "type": "boolean"
+                          },
+                          "use": {
+                            "type": "string",
+                            "description": "Name of a template to merge"
+                          },
+                          "repeat": {
+                            "type": "object",
+                            "properties": {
+                              "count": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 500
+                              },
+                              "step": {
+                                "oneOf": [
+                                  {
+                                    "type": "array",
+                                    "items": {
+                                      "type": [
+                                        "number",
+                                        "string"
+                                      ]
+                                    },
+                                    "minItems": 2,
+                                    "maxItems": 3
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "x": {},
+                                      "y": {},
+                                      "z": {}
+                                    },
+                                    "required": [
+                                      "x",
+                                      "y"
+                                    ]
+                                  }
+                                ]
+                              },
+                              "yaw_step": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "count"
+                            ]
+                          },
+                          "resource": {
+                            "type": "string"
+                          },
+                          "query": {
+                            "type": "string"
+                          },
+                          "radius": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "id"
+                        ]
+                      }
+                    },
+                    "reverb": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {},
+                          "room": {
+                            "type": "string"
+                          },
+                          "preset": {
+                            "type": "string"
+                          },
+                          "sound_event": {
+                            "type": "string"
+                          },
+                          "reverb": {},
+                          "priority": {}
+                        },
+                        "required": [
+                          "room"
+                        ]
+                      }
+                    }
+                  }
+                },
+                "objects": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z_][A-Za-z0-9_-]*$"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "at": {
+                        "oneOf": [
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": [
+                                "number",
+                                "string"
+                              ]
+                            },
+                            "minItems": 2,
+                            "maxItems": 3
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "x": {},
+                              "y": {},
+                              "z": {}
+                            },
+                            "required": [
+                              "x",
+                              "y"
+                            ]
+                          }
+                        ]
+                      },
+                      "yaw": {
+                        "type": [
+                          "number",
+                          "string"
+                        ]
+                      },
+                      "rotation": {
+                        "type": "object",
+                        "properties": {
+                          "roll": {},
+                          "pitch": {},
+                          "yaw": {}
+                        }
+                      },
+                      "room": {
+                        "type": "string"
+                      },
+                      "floor": {
+                        "type": "string"
+                      },
+                      "spawn": {
+                        "type": "boolean"
+                      },
+                      "use": {
+                        "type": "string",
+                        "description": "Name of a template to merge"
+                      },
+                      "repeat": {
+                        "type": "object",
+                        "properties": {
+                          "count": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 500
+                          },
+                          "step": {
+                            "oneOf": [
+                              {
+                                "type": "array",
+                                "items": {
+                                  "type": [
+                                    "number",
+                                    "string"
+                                  ]
+                                },
+                                "minItems": 2,
+                                "maxItems": 3
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "x": {},
+                                  "y": {},
+                                  "z": {}
+                                },
+                                "required": [
+                                  "x",
+                                  "y"
+                                ]
+                              }
+                            ]
+                          },
+                          "yaw_step": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "count"
+                        ]
+                      },
+                      "resource": {
+                        "oneOf": [
+                          {
+                            "type": "string",
+                            "description": "Depot path (.mesh .ent .mi .particle .effect) or a TweakDB record (Character.x)"
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "type": {
+                                "enum": [
+                                  "mesh_static",
+                                  "mesh_rotating",
+                                  "mesh_cloth",
+                                  "mesh_dynamic",
+                                  "mesh_proxy",
+                                  "entity_template",
+                                  "entity_amm",
+                                  "entity_record",
+                                  "device",
+                                  "decal",
+                                  "particle",
+                                  "effect"
+                                ]
+                              },
+                              "path": {
+                                "type": "string"
+                              },
+                              "backend": {
+                                "enum": [
+                                  "world_builder",
+                                  "cet"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "type",
+                              "path"
+                            ]
+                          }
+                        ]
+                      },
+                      "asset": {
+                        "type": "string"
+                      },
+                      "scale": {
+                        "oneOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "oneOf": [
+                              {
+                                "type": "array",
+                                "items": {
+                                  "type": [
+                                    "number",
+                                    "string"
+                                  ]
+                                },
+                                "minItems": 2,
+                                "maxItems": 3
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "x": {},
+                                  "y": {},
+                                  "z": {}
+                                },
+                                "required": [
+                                  "x",
+                                  "y"
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "appearance": {
+                        "type": "string"
+                      },
+                      "layer": {
+                        "type": "string"
+                      },
+                      "stream_range": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "id"
+                    ]
+                  }
+                },
+                "lights": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z_][A-Za-z0-9_-]*$"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "at": {
+                        "oneOf": [
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": [
+                                "number",
+                                "string"
+                              ]
+                            },
+                            "minItems": 2,
+                            "maxItems": 3
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "x": {},
+                              "y": {},
+                              "z": {}
+                            },
+                            "required": [
+                              "x",
+                              "y"
+                            ]
+                          }
+                        ]
+                      },
+                      "yaw": {
+                        "type": [
+                          "number",
+                          "string"
+                        ]
+                      },
+                      "rotation": {
+                        "type": "object",
+                        "properties": {
+                          "roll": {},
+                          "pitch": {},
+                          "yaw": {}
+                        }
+                      },
+                      "room": {
+                        "type": "string"
+                      },
+                      "floor": {
+                        "type": "string"
+                      },
+                      "spawn": {
+                        "type": "boolean"
+                      },
+                      "use": {
+                        "type": "string",
+                        "description": "Name of a template to merge"
+                      },
+                      "repeat": {
+                        "type": "object",
+                        "properties": {
+                          "count": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 500
+                          },
+                          "step": {
+                            "oneOf": [
+                              {
+                                "type": "array",
+                                "items": {
+                                  "type": [
+                                    "number",
+                                    "string"
+                                  ]
+                                },
+                                "minItems": 2,
+                                "maxItems": 3
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "x": {},
+                                  "y": {},
+                                  "z": {}
+                                },
+                                "required": [
+                                  "x",
+                                  "y"
+                                ]
+                              }
+                            ]
+                          },
+                          "yaw_step": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "count"
+                        ]
+                      },
+                      "color": {
+                        "type": "array",
+                        "items": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "minItems": 3,
+                        "maxItems": 3
+                      },
+                      "intensity": {
+                        "type": "number"
+                      },
+                      "radius": {
+                        "type": "number"
+                      },
+                      "preset": {
+                        "type": "string"
+                      },
+                      "flicker": {
+                        "type": "object",
+                        "properties": {
+                          "strength": {},
+                          "period": {},
+                          "offset": {}
+                        }
+                      }
+                    },
+                    "required": [
+                      "id"
+                    ]
+                  }
+                },
+                "collisions": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z_][A-Za-z0-9_-]*$"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "at": {
+                        "oneOf": [
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": [
+                                "number",
+                                "string"
+                              ]
+                            },
+                            "minItems": 2,
+                            "maxItems": 3
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "x": {},
+                              "y": {},
+                              "z": {}
+                            },
+                            "required": [
+                              "x",
+                              "y"
+                            ]
+                          }
+                        ]
+                      },
+                      "yaw": {
+                        "type": [
+                          "number",
+                          "string"
+                        ]
+                      },
+                      "rotation": {
+                        "type": "object",
+                        "properties": {
+                          "roll": {},
+                          "pitch": {},
+                          "yaw": {}
+                        }
+                      },
+                      "room": {
+                        "type": "string"
+                      },
+                      "floor": {
+                        "type": "string"
+                      },
+                      "spawn": {
+                        "type": "boolean"
+                      },
+                      "use": {
+                        "type": "string",
+                        "description": "Name of a template to merge"
+                      },
+                      "repeat": {
+                        "type": "object",
+                        "properties": {
+                          "count": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 500
+                          },
+                          "step": {
+                            "oneOf": [
+                              {
+                                "type": "array",
+                                "items": {
+                                  "type": [
+                                    "number",
+                                    "string"
+                                  ]
+                                },
+                                "minItems": 2,
+                                "maxItems": 3
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "x": {},
+                                  "y": {},
+                                  "z": {}
+                                },
+                                "required": [
+                                  "x",
+                                  "y"
+                                ]
+                              }
+                            ]
+                          },
+                          "yaw_step": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "count"
+                        ]
+                      },
+                      "shape": {
+                        "enum": [
+                          "box",
+                          "capsule",
+                          "sphere"
+                        ]
+                      },
+                      "size": {
+                        "oneOf": [
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": [
+                                "number",
+                                "string"
+                              ]
+                            },
+                            "minItems": 2,
+                            "maxItems": 3
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "x": {},
+                              "y": {},
+                              "z": {}
+                            },
+                            "required": [
+                              "x",
+                              "y"
+                            ]
+                          }
+                        ]
+                      },
+                      "radius": {
+                        "type": "number"
+                      },
+                      "height": {
+                        "type": "number"
+                      },
+                      "preset": {},
+                      "material": {
+                        "type": "string"
+                      },
+                      "visualize": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "id"
+                    ]
+                  }
+                },
+                "devices": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z_][A-Za-z0-9_-]*$"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "at": {
+                        "oneOf": [
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": [
+                                "number",
+                                "string"
+                              ]
+                            },
+                            "minItems": 2,
+                            "maxItems": 3
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "x": {},
+                              "y": {},
+                              "z": {}
+                            },
+                            "required": [
+                              "x",
+                              "y"
+                            ]
+                          }
+                        ]
+                      },
+                      "yaw": {
+                        "type": [
+                          "number",
+                          "string"
+                        ]
+                      },
+                      "rotation": {
+                        "type": "object",
+                        "properties": {
+                          "roll": {},
+                          "pitch": {},
+                          "yaw": {}
+                        }
+                      },
+                      "room": {
+                        "type": "string"
+                      },
+                      "floor": {
+                        "type": "string"
+                      },
+                      "spawn": {
+                        "type": "boolean"
+                      },
+                      "use": {
+                        "type": "string",
+                        "description": "Name of a template to merge"
+                      },
+                      "repeat": {
+                        "type": "object",
+                        "properties": {
+                          "count": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 500
+                          },
+                          "step": {
+                            "oneOf": [
+                              {
+                                "type": "array",
+                                "items": {
+                                  "type": [
+                                    "number",
+                                    "string"
+                                  ]
+                                },
+                                "minItems": 2,
+                                "maxItems": 3
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "x": {},
+                                  "y": {},
+                                  "z": {}
+                                },
+                                "required": [
+                                  "x",
+                                  "y"
+                                ]
+                              }
+                            ]
+                          },
+                          "yaw_step": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "count"
+                        ]
+                      },
+                      "kind": {
+                        "enum": [
+                          "door",
+                          "loot_container",
+                          "shard",
+                          "item"
+                        ]
+                      },
+                      "resource": {
+                        "oneOf": [
+                          {
+                            "type": "string",
+                            "description": "Depot path (.mesh .ent .mi .particle .effect) or a TweakDB record (Character.x)"
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "type": {
+                                "enum": [
+                                  "mesh_static",
+                                  "mesh_rotating",
+                                  "mesh_cloth",
+                                  "mesh_dynamic",
+                                  "mesh_proxy",
+                                  "entity_template",
+                                  "entity_amm",
+                                  "entity_record",
+                                  "device",
+                                  "decal",
+                                  "particle",
+                                  "effect"
+                                ]
+                              },
+                              "path": {
+                                "type": "string"
+                              },
+                              "backend": {
+                                "enum": [
+                                  "world_builder",
+                                  "cet"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "type",
+                              "path"
+                            ]
+                          }
+                        ]
+                      },
+                      "asset": {
+                        "type": "string"
+                      },
+                      "loot_table": {
+                        "type": "string"
+                      },
+                      "item": {
+                        "type": "string"
+                      },
+                      "locked": {
+                        "type": "boolean"
+                      },
+                      "loot": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "item": {
+                              "type": "string"
+                            },
+                            "min": {
+                              "type": "integer"
+                            },
+                            "max": {
+                              "type": "integer"
+                            },
+                            "chance": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "item"
+                          ]
+                        }
+                      },
+                      "fact": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "value": {
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "name"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "kind"
+                    ]
+                  }
+                },
+                "npcs": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z_][A-Za-z0-9_-]*$"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "at": {
+                        "oneOf": [
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": [
+                                "number",
+                                "string"
+                              ]
+                            },
+                            "minItems": 2,
+                            "maxItems": 3
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "x": {},
+                              "y": {},
+                              "z": {}
+                            },
+                            "required": [
+                              "x",
+                              "y"
+                            ]
+                          }
+                        ]
+                      },
+                      "yaw": {
+                        "type": [
+                          "number",
+                          "string"
+                        ]
+                      },
+                      "rotation": {
+                        "type": "object",
+                        "properties": {
+                          "roll": {},
+                          "pitch": {},
+                          "yaw": {}
+                        }
+                      },
+                      "room": {
+                        "type": "string"
+                      },
+                      "floor": {
+                        "type": "string"
+                      },
+                      "spawn": {
+                        "type": "boolean"
+                      },
+                      "use": {
+                        "type": "string",
+                        "description": "Name of a template to merge"
+                      },
+                      "repeat": {
+                        "type": "object",
+                        "properties": {
+                          "count": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 500
+                          },
+                          "step": {
+                            "oneOf": [
+                              {
+                                "type": "array",
+                                "items": {
+                                  "type": [
+                                    "number",
+                                    "string"
+                                  ]
+                                },
+                                "minItems": 2,
+                                "maxItems": 3
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "x": {},
+                                  "y": {},
+                                  "z": {}
+                                },
+                                "required": [
+                                  "x",
+                                  "y"
+                                ]
+                              }
+                            ]
+                          },
+                          "yaw_step": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "count"
+                        ]
+                      },
+                      "record": {
+                        "type": "string",
+                        "pattern": "^Character\\."
+                      },
+                      "appearance": {
+                        "type": "string"
+                      },
+                      "spawn_on_start": {
+                        "type": "boolean"
+                      },
+                      "always_spawned": {
+                        "type": "boolean"
+                      },
+                      "attitude": {},
+                      "faction": {},
+                      "level": {},
+                      "archetype": {},
+                      "idle": {},
+                      "conditions": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "fact": {
+                              "type": "string"
+                            },
+                            "op": {
+                              "enum": [
+                                "==",
+                                "!=",
+                                ">",
+                                ">=",
+                                "<",
+                                "<="
+                              ]
+                            },
+                            "value": {
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "fact"
+                          ]
+                        }
+                      },
+                      "route": {
+                        "type": "object",
+                        "properties": {
+                          "name": {},
+                          "loop": {
+                            "type": "boolean"
+                          },
+                          "kind": {},
+                          "waypoints": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "at": {
+                                  "oneOf": [
+                                    {
+                                      "type": "array",
+                                      "items": {
+                                        "type": [
+                                          "number",
+                                          "string"
+                                        ]
+                                      },
+                                      "minItems": 2,
+                                      "maxItems": 3
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "x": {},
+                                        "y": {},
+                                        "z": {}
+                                      },
+                                      "required": [
+                                        "x",
+                                        "y"
+                                      ]
+                                    }
+                                  ]
+                                },
+                                "yaw": {},
+                                "wait": {
+                                  "type": "number"
+                                },
+                                "speed": {
+                                  "type": "number"
+                                },
+                                "facing": {
+                                  "type": "number"
+                                },
+                                "workspot": {
+                                  "type": "string"
+                                },
+                                "variant": {
+                                  "enum": [
+                                    "patrol",
+                                    "alert",
+                                    "combat"
+                                  ]
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "required": [
+                          "waypoints"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "record"
+                    ]
+                  }
+                },
+                "workspots": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z_][A-Za-z0-9_-]*$"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "at": {
+                        "oneOf": [
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": [
+                                "number",
+                                "string"
+                              ]
+                            },
+                            "minItems": 2,
+                            "maxItems": 3
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "x": {},
+                              "y": {},
+                              "z": {}
+                            },
+                            "required": [
+                              "x",
+                              "y"
+                            ]
+                          }
+                        ]
+                      },
+                      "yaw": {
+                        "type": [
+                          "number",
+                          "string"
+                        ]
+                      },
+                      "rotation": {
+                        "type": "object",
+                        "properties": {
+                          "roll": {},
+                          "pitch": {},
+                          "yaw": {}
+                        }
+                      },
+                      "room": {
+                        "type": "string"
+                      },
+                      "floor": {
+                        "type": "string"
+                      },
+                      "spawn": {
+                        "type": "boolean"
+                      },
+                      "use": {
+                        "type": "string",
+                        "description": "Name of a template to merge"
+                      },
+                      "repeat": {
+                        "type": "object",
+                        "properties": {
+                          "count": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 500
+                          },
+                          "step": {
+                            "oneOf": [
+                              {
+                                "type": "array",
+                                "items": {
+                                  "type": [
+                                    "number",
+                                    "string"
+                                  ]
+                                },
+                                "minItems": 2,
+                                "maxItems": 3
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "x": {},
+                                  "y": {},
+                                  "z": {}
+                                },
+                                "required": [
+                                  "x",
+                                  "y"
+                                ]
+                              }
+                            ]
+                          },
+                          "yaw_step": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "count"
+                        ]
+                      },
+                      "kind": {
+                        "type": "string"
+                      },
+                      "record": {
+                        "type": "string"
+                      },
+                      "appearance": {
+                        "type": "string"
+                      },
+                      "animation": {
+                        "type": "object",
+                        "properties": {
+                          "name": {},
+                          "comp": {},
+                          "ent": {},
+                          "rig": {}
+                        }
+                      }
+                    },
+                    "required": [
+                      "id"
+                    ]
+                  }
+                },
+                "vfx": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z_][A-Za-z0-9_-]*$"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "at": {
+                        "oneOf": [
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": [
+                                "number",
+                                "string"
+                              ]
+                            },
+                            "minItems": 2,
+                            "maxItems": 3
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "x": {},
+                              "y": {},
+                              "z": {}
+                            },
+                            "required": [
+                              "x",
+                              "y"
+                            ]
+                          }
+                        ]
+                      },
+                      "yaw": {
+                        "type": [
+                          "number",
+                          "string"
+                        ]
+                      },
+                      "rotation": {
+                        "type": "object",
+                        "properties": {
+                          "roll": {},
+                          "pitch": {},
+                          "yaw": {}
+                        }
+                      },
+                      "room": {
+                        "type": "string"
+                      },
+                      "floor": {
+                        "type": "string"
+                      },
+                      "spawn": {
+                        "type": "boolean"
+                      },
+                      "use": {
+                        "type": "string",
+                        "description": "Name of a template to merge"
+                      },
+                      "repeat": {
+                        "type": "object",
+                        "properties": {
+                          "count": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 500
+                          },
+                          "step": {
+                            "oneOf": [
+                              {
+                                "type": "array",
+                                "items": {
+                                  "type": [
+                                    "number",
+                                    "string"
+                                  ]
+                                },
+                                "minItems": 2,
+                                "maxItems": 3
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "x": {},
+                                  "y": {},
+                                  "z": {}
+                                },
+                                "required": [
+                                  "x",
+                                  "y"
+                                ]
+                              }
+                            ]
+                          },
+                          "yaw_step": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "count"
+                        ]
+                      },
+                      "resource": {
+                        "type": "string",
+                        "pattern": "\\.(particle|effect)$"
+                      },
+                      "scale": {
+                        "oneOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "oneOf": [
+                              {
+                                "type": "array",
+                                "items": {
+                                  "type": [
+                                    "number",
+                                    "string"
+                                  ]
+                                },
+                                "minItems": 2,
+                                "maxItems": 3
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "x": {},
+                                  "y": {},
+                                  "z": {}
+                                },
+                                "required": [
+                                  "x",
+                                  "y"
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "emission_rate": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "resource"
+                    ]
+                  }
+                },
+                "triggers": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z_][A-Za-z0-9_-]*$"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "at": {
+                        "oneOf": [
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": [
+                                "number",
+                                "string"
+                              ]
+                            },
+                            "minItems": 2,
+                            "maxItems": 3
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "x": {},
+                              "y": {},
+                              "z": {}
+                            },
+                            "required": [
+                              "x",
+                              "y"
+                            ]
+                          }
+                        ]
+                      },
+                      "yaw": {
+                        "type": [
+                          "number",
+                          "string"
+                        ]
+                      },
+                      "rotation": {
+                        "type": "object",
+                        "properties": {
+                          "roll": {},
+                          "pitch": {},
+                          "yaw": {}
+                        }
+                      },
+                      "room": {
+                        "type": "string"
+                      },
+                      "floor": {
+                        "type": "string"
+                      },
+                      "spawn": {
+                        "type": "boolean"
+                      },
+                      "use": {
+                        "type": "string",
+                        "description": "Name of a template to merge"
+                      },
+                      "repeat": {
+                        "type": "object",
+                        "properties": {
+                          "count": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 500
+                          },
+                          "step": {
+                            "oneOf": [
+                              {
+                                "type": "array",
+                                "items": {
+                                  "type": [
+                                    "number",
+                                    "string"
+                                  ]
+                                },
+                                "minItems": 2,
+                                "maxItems": 3
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "x": {},
+                                  "y": {},
+                                  "z": {}
+                                },
+                                "required": [
+                                  "x",
+                                  "y"
+                                ]
+                              }
+                            ]
+                          },
+                          "yaw_step": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "count"
+                        ]
+                      },
+                      "shape": {
+                        "enum": [
+                          "box",
+                          "sphere",
+                          "cylinder"
+                        ]
+                      },
+                      "size": {
+                        "oneOf": [
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": [
+                                "number",
+                                "string"
+                              ]
+                            },
+                            "minItems": 2,
+                            "maxItems": 3
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "x": {},
+                              "y": {},
+                              "z": {}
+                            },
+                            "required": [
+                              "x",
+                              "y"
+                            ]
+                          }
+                        ]
+                      },
+                      "radius": {
+                        "type": "number"
+                      },
+                      "height": {
+                        "type": "number"
+                      },
+                      "purpose": {
+                        "type": "string"
+                      },
+                      "fact": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "value": {
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "name"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "id"
+                    ]
+                  }
+                },
+                "cameras": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z_][A-Za-z0-9_-]*$"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "at": {
+                        "oneOf": [
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": [
+                                "number",
+                                "string"
+                              ]
+                            },
+                            "minItems": 2,
+                            "maxItems": 3
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "x": {},
+                              "y": {},
+                              "z": {}
+                            },
+                            "required": [
+                              "x",
+                              "y"
+                            ]
+                          }
+                        ]
+                      },
+                      "yaw": {
+                        "type": [
+                          "number",
+                          "string"
+                        ]
+                      },
+                      "rotation": {
+                        "type": "object",
+                        "properties": {
+                          "roll": {},
+                          "pitch": {},
+                          "yaw": {}
+                        }
+                      },
+                      "room": {
+                        "type": "string"
+                      },
+                      "floor": {
+                        "type": "string"
+                      },
+                      "spawn": {
+                        "type": "boolean"
+                      },
+                      "use": {
+                        "type": "string",
+                        "description": "Name of a template to merge"
+                      },
+                      "repeat": {
+                        "type": "object",
+                        "properties": {
+                          "count": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 500
+                          },
+                          "step": {
+                            "oneOf": [
+                              {
+                                "type": "array",
+                                "items": {
+                                  "type": [
+                                    "number",
+                                    "string"
+                                  ]
+                                },
+                                "minItems": 2,
+                                "maxItems": 3
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "x": {},
+                                  "y": {},
+                                  "z": {}
+                                },
+                                "required": [
+                                  "x",
+                                  "y"
+                                ]
+                              }
+                            ]
+                          },
+                          "yaw_step": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "count"
+                        ]
+                      },
+                      "look_at": {
+                        "oneOf": [
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": [
+                                "number",
+                                "string"
+                              ]
+                            },
+                            "minItems": 2,
+                            "maxItems": 3
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "x": {},
+                              "y": {},
+                              "z": {}
+                            },
+                            "required": [
+                              "x",
+                              "y"
+                            ]
+                          }
+                        ]
+                      },
+                      "fov": {
+                        "type": "number"
+                      },
+                      "kind": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id"
+                    ]
+                  }
+                },
+                "occluders": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z_][A-Za-z0-9_-]*$"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "at": {
+                        "oneOf": [
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": [
+                                "number",
+                                "string"
+                              ]
+                            },
+                            "minItems": 2,
+                            "maxItems": 3
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "x": {},
+                              "y": {},
+                              "z": {}
+                            },
+                            "required": [
+                              "x",
+                              "y"
+                            ]
+                          }
+                        ]
+                      },
+                      "yaw": {
+                        "type": [
+                          "number",
+                          "string"
+                        ]
+                      },
+                      "rotation": {
+                        "type": "object",
+                        "properties": {
+                          "roll": {},
+                          "pitch": {},
+                          "yaw": {}
+                        }
+                      },
+                      "room": {
+                        "type": "string"
+                      },
+                      "floor": {
+                        "type": "string"
+                      },
+                      "spawn": {
+                        "type": "boolean"
+                      },
+                      "use": {
+                        "type": "string",
+                        "description": "Name of a template to merge"
+                      },
+                      "repeat": {
+                        "type": "object",
+                        "properties": {
+                          "count": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 500
+                          },
+                          "step": {
+                            "oneOf": [
+                              {
+                                "type": "array",
+                                "items": {
+                                  "type": [
+                                    "number",
+                                    "string"
+                                  ]
+                                },
+                                "minItems": 2,
+                                "maxItems": 3
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "x": {},
+                                  "y": {},
+                                  "z": {}
+                                },
+                                "required": [
+                                  "x",
+                                  "y"
+                                ]
+                              }
+                            ]
+                          },
+                          "yaw_step": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "count"
+                        ]
+                      },
+                      "mesh": {
+                        "enum": [
+                          "box",
+                          "plane",
+                          "plane_two_sided"
+                        ]
+                      },
+                      "size": {
+                        "oneOf": [
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": [
+                                "number",
+                                "string"
+                              ]
+                            },
+                            "minItems": 2,
+                            "maxItems": 3
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "x": {},
+                              "y": {},
+                              "z": {}
+                            },
+                            "required": [
+                              "x",
+                              "y"
+                            ]
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "id"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "id",
+                "size"
+              ]
+            }
+          }
+        },
+        "required": [
+          "id"
+        ]
+      }
+    },
+    "audio": {
+      "type": "object",
+      "properties": {
+        "emitters": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z_][A-Za-z0-9_-]*$"
+              },
+              "name": {
+                "type": "string"
+              },
+              "at": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": [
+                        "number",
+                        "string"
+                      ]
+                    },
+                    "minItems": 2,
+                    "maxItems": 3
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "x": {},
+                      "y": {},
+                      "z": {}
+                    },
+                    "required": [
+                      "x",
+                      "y"
+                    ]
+                  }
+                ]
+              },
+              "yaw": {
+                "type": [
+                  "number",
+                  "string"
+                ]
+              },
+              "rotation": {
+                "type": "object",
+                "properties": {
+                  "roll": {},
+                  "pitch": {},
+                  "yaw": {}
+                }
+              },
+              "room": {
+                "type": "string"
+              },
+              "floor": {
+                "type": "string"
+              },
+              "spawn": {
+                "type": "boolean"
+              },
+              "use": {
+                "type": "string",
+                "description": "Name of a template to merge"
+              },
+              "repeat": {
+                "type": "object",
+                "properties": {
+                  "count": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 500
+                  },
+                  "step": {
+                    "oneOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": [
+                            "number",
+                            "string"
+                          ]
+                        },
+                        "minItems": 2,
+                        "maxItems": 3
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "x": {},
+                          "y": {},
+                          "z": {}
+                        },
+                        "required": [
+                          "x",
+                          "y"
+                        ]
+                      }
+                    ]
+                  },
+                  "yaw_step": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "count"
+                ]
+              },
+              "resource": {
+                "type": "string"
+              },
+              "query": {
+                "type": "string"
+              },
+              "radius": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "id"
+            ]
+          }
+        },
+        "reverb": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {},
+              "room": {
+                "type": "string"
+              },
+              "preset": {
+                "type": "string"
+              },
+              "sound_event": {
+                "type": "string"
+              },
+              "reverb": {},
+              "priority": {}
+            },
+            "required": [
+              "room"
+            ]
+          }
+        }
+      }
+    },
+    "splines": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_-]*$"
+          },
+          "name": {},
+          "points": {
+            "type": "array",
+            "items": {
+              "oneOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": [
+                      "number",
+                      "string"
+                    ]
+                  },
+                  "minItems": 2,
+                  "maxItems": 3
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "x": {},
+                    "y": {},
+                    "z": {}
+                  },
+                  "required": [
+                    "x",
+                    "y"
+                  ]
+                }
+              ]
+            },
+            "minItems": 2
+          },
+          "closed": {
+            "type": "boolean"
+          },
+          "tension": {
+            "type": "number"
+          },
+          "room": {},
+          "floor": {}
+        },
+        "required": [
+          "id",
+          "points"
+        ]
+      }
+    },
+    "navigation": {
+      "type": "object",
+      "properties": {
+        "name": {},
+        "nodes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "at": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": [
+                        "number",
+                        "string"
+                      ]
+                    },
+                    "minItems": 2,
+                    "maxItems": 3
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "x": {},
+                      "y": {},
+                      "z": {}
+                    },
+                    "required": [
+                      "x",
+                      "y"
+                    ]
+                  }
+                ]
+              },
+              "name": {},
+              "surface": {},
+              "room": {},
+              "floor": {}
+            },
+            "required": [
+              "id",
+              "at"
+            ]
+          }
+        },
+        "edges": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "from": {},
+              "to": {},
+              "kind": {
+                "enum": [
+                  "walk",
+                  "door",
+                  "stairs",
+                  "elevator",
+                  "jump",
+                  "off_mesh",
+                  "custom"
+                ]
+              },
+              "one_way": {
+                "type": "boolean"
+              },
+              "cost": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "from",
+              "to"
+            ]
+          }
+        }
+      },
+      "required": [
+        "nodes"
+      ]
+    },
+    "logic": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_-]*$"
+          },
+          "name": {},
+          "nodes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {},
+                "kind": {
+                  "enum": [
+                    "terminal",
+                    "door",
+                    "elevator",
+                    "switch",
+                    "camera",
+                    "security_system",
+                    "fact",
+                    "action"
+                  ]
+                },
+                "name": {},
+                "element": {
+                  "type": "string"
+                },
+                "config": {
+                  "type": "object"
+                }
+              },
+              "required": [
+                "id",
+                "kind"
+              ]
+            }
+          },
+          "links": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "from": {},
+                "to": {},
+                "trigger": {
+                  "type": "string"
+                },
+                "when": {
+                  "type": "object",
+                  "properties": {
+                    "fact": {},
+                    "value": {}
+                  }
+                }
+              },
+              "required": [
+                "from",
+                "to"
+              ]
+            }
+          }
+        },
+        "required": [
+          "id"
+        ]
+      }
+    },
+    "scene": {
+      "oneOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "name": {},
+            "activate": {
+              "type": "boolean"
+            }
+          }
+        }
+      ]
+    },
+    "objects": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_-]*$"
+          },
+          "name": {
+            "type": "string"
+          },
+          "at": {
+            "oneOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": [
+                    "number",
+                    "string"
+                  ]
+                },
+                "minItems": 2,
+                "maxItems": 3
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "x": {},
+                  "y": {},
+                  "z": {}
+                },
+                "required": [
+                  "x",
+                  "y"
+                ]
+              }
+            ]
+          },
+          "yaw": {
+            "type": [
+              "number",
+              "string"
+            ]
+          },
+          "rotation": {
+            "type": "object",
+            "properties": {
+              "roll": {},
+              "pitch": {},
+              "yaw": {}
+            }
+          },
+          "room": {
+            "type": "string"
+          },
+          "floor": {
+            "type": "string"
+          },
+          "spawn": {
+            "type": "boolean"
+          },
+          "use": {
+            "type": "string",
+            "description": "Name of a template to merge"
+          },
+          "repeat": {
+            "type": "object",
+            "properties": {
+              "count": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 500
+              },
+              "step": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": [
+                        "number",
+                        "string"
+                      ]
+                    },
+                    "minItems": 2,
+                    "maxItems": 3
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "x": {},
+                      "y": {},
+                      "z": {}
+                    },
+                    "required": [
+                      "x",
+                      "y"
+                    ]
+                  }
+                ]
+              },
+              "yaw_step": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "count"
+            ]
+          },
+          "resource": {
+            "oneOf": [
+              {
+                "type": "string",
+                "description": "Depot path (.mesh .ent .mi .particle .effect) or a TweakDB record (Character.x)"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "enum": [
+                      "mesh_static",
+                      "mesh_rotating",
+                      "mesh_cloth",
+                      "mesh_dynamic",
+                      "mesh_proxy",
+                      "entity_template",
+                      "entity_amm",
+                      "entity_record",
+                      "device",
+                      "decal",
+                      "particle",
+                      "effect"
+                    ]
+                  },
+                  "path": {
+                    "type": "string"
+                  },
+                  "backend": {
+                    "enum": [
+                      "world_builder",
+                      "cet"
+                    ]
+                  }
+                },
+                "required": [
+                  "type",
+                  "path"
+                ]
+              }
+            ]
+          },
+          "asset": {
+            "type": "string"
+          },
+          "scale": {
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": [
+                        "number",
+                        "string"
+                      ]
+                    },
+                    "minItems": 2,
+                    "maxItems": 3
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "x": {},
+                      "y": {},
+                      "z": {}
+                    },
+                    "required": [
+                      "x",
+                      "y"
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          "appearance": {
+            "type": "string"
+          },
+          "layer": {
+            "type": "string"
+          },
+          "stream_range": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      }
+    },
+    "lights": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_-]*$"
+          },
+          "name": {
+            "type": "string"
+          },
+          "at": {
+            "oneOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": [
+                    "number",
+                    "string"
+                  ]
+                },
+                "minItems": 2,
+                "maxItems": 3
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "x": {},
+                  "y": {},
+                  "z": {}
+                },
+                "required": [
+                  "x",
+                  "y"
+                ]
+              }
+            ]
+          },
+          "yaw": {
+            "type": [
+              "number",
+              "string"
+            ]
+          },
+          "rotation": {
+            "type": "object",
+            "properties": {
+              "roll": {},
+              "pitch": {},
+              "yaw": {}
+            }
+          },
+          "room": {
+            "type": "string"
+          },
+          "floor": {
+            "type": "string"
+          },
+          "spawn": {
+            "type": "boolean"
+          },
+          "use": {
+            "type": "string",
+            "description": "Name of a template to merge"
+          },
+          "repeat": {
+            "type": "object",
+            "properties": {
+              "count": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 500
+              },
+              "step": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": [
+                        "number",
+                        "string"
+                      ]
+                    },
+                    "minItems": 2,
+                    "maxItems": 3
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "x": {},
+                      "y": {},
+                      "z": {}
+                    },
+                    "required": [
+                      "x",
+                      "y"
+                    ]
+                  }
+                ]
+              },
+              "yaw_step": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "count"
+            ]
+          },
+          "color": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "minItems": 3,
+            "maxItems": 3
+          },
+          "intensity": {
+            "type": "number"
+          },
+          "radius": {
+            "type": "number"
+          },
+          "preset": {
+            "type": "string"
+          },
+          "flicker": {
+            "type": "object",
+            "properties": {
+              "strength": {},
+              "period": {},
+              "offset": {}
+            }
+          }
+        },
+        "required": [
+          "id"
+        ]
+      }
+    },
+    "collisions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_-]*$"
+          },
+          "name": {
+            "type": "string"
+          },
+          "at": {
+            "oneOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": [
+                    "number",
+                    "string"
+                  ]
+                },
+                "minItems": 2,
+                "maxItems": 3
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "x": {},
+                  "y": {},
+                  "z": {}
+                },
+                "required": [
+                  "x",
+                  "y"
+                ]
+              }
+            ]
+          },
+          "yaw": {
+            "type": [
+              "number",
+              "string"
+            ]
+          },
+          "rotation": {
+            "type": "object",
+            "properties": {
+              "roll": {},
+              "pitch": {},
+              "yaw": {}
+            }
+          },
+          "room": {
+            "type": "string"
+          },
+          "floor": {
+            "type": "string"
+          },
+          "spawn": {
+            "type": "boolean"
+          },
+          "use": {
+            "type": "string",
+            "description": "Name of a template to merge"
+          },
+          "repeat": {
+            "type": "object",
+            "properties": {
+              "count": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 500
+              },
+              "step": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": [
+                        "number",
+                        "string"
+                      ]
+                    },
+                    "minItems": 2,
+                    "maxItems": 3
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "x": {},
+                      "y": {},
+                      "z": {}
+                    },
+                    "required": [
+                      "x",
+                      "y"
+                    ]
+                  }
+                ]
+              },
+              "yaw_step": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "count"
+            ]
+          },
+          "shape": {
+            "enum": [
+              "box",
+              "capsule",
+              "sphere"
+            ]
+          },
+          "size": {
+            "oneOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": [
+                    "number",
+                    "string"
+                  ]
+                },
+                "minItems": 2,
+                "maxItems": 3
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "x": {},
+                  "y": {},
+                  "z": {}
+                },
+                "required": [
+                  "x",
+                  "y"
+                ]
+              }
+            ]
+          },
+          "radius": {
+            "type": "number"
+          },
+          "height": {
+            "type": "number"
+          },
+          "preset": {},
+          "material": {
+            "type": "string"
+          },
+          "visualize": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      }
+    },
+    "devices": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_-]*$"
+          },
+          "name": {
+            "type": "string"
+          },
+          "at": {
+            "oneOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": [
+                    "number",
+                    "string"
+                  ]
+                },
+                "minItems": 2,
+                "maxItems": 3
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "x": {},
+                  "y": {},
+                  "z": {}
+                },
+                "required": [
+                  "x",
+                  "y"
+                ]
+              }
+            ]
+          },
+          "yaw": {
+            "type": [
+              "number",
+              "string"
+            ]
+          },
+          "rotation": {
+            "type": "object",
+            "properties": {
+              "roll": {},
+              "pitch": {},
+              "yaw": {}
+            }
+          },
+          "room": {
+            "type": "string"
+          },
+          "floor": {
+            "type": "string"
+          },
+          "spawn": {
+            "type": "boolean"
+          },
+          "use": {
+            "type": "string",
+            "description": "Name of a template to merge"
+          },
+          "repeat": {
+            "type": "object",
+            "properties": {
+              "count": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 500
+              },
+              "step": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": [
+                        "number",
+                        "string"
+                      ]
+                    },
+                    "minItems": 2,
+                    "maxItems": 3
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "x": {},
+                      "y": {},
+                      "z": {}
+                    },
+                    "required": [
+                      "x",
+                      "y"
+                    ]
+                  }
+                ]
+              },
+              "yaw_step": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "count"
+            ]
+          },
+          "kind": {
+            "enum": [
+              "door",
+              "loot_container",
+              "shard",
+              "item"
+            ]
+          },
+          "resource": {
+            "oneOf": [
+              {
+                "type": "string",
+                "description": "Depot path (.mesh .ent .mi .particle .effect) or a TweakDB record (Character.x)"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "enum": [
+                      "mesh_static",
+                      "mesh_rotating",
+                      "mesh_cloth",
+                      "mesh_dynamic",
+                      "mesh_proxy",
+                      "entity_template",
+                      "entity_amm",
+                      "entity_record",
+                      "device",
+                      "decal",
+                      "particle",
+                      "effect"
+                    ]
+                  },
+                  "path": {
+                    "type": "string"
+                  },
+                  "backend": {
+                    "enum": [
+                      "world_builder",
+                      "cet"
+                    ]
+                  }
+                },
+                "required": [
+                  "type",
+                  "path"
+                ]
+              }
+            ]
+          },
+          "asset": {
+            "type": "string"
+          },
+          "loot_table": {
+            "type": "string"
+          },
+          "item": {
+            "type": "string"
+          },
+          "locked": {
+            "type": "boolean"
+          },
+          "loot": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "item": {
+                  "type": "string"
+                },
+                "min": {
+                  "type": "integer"
+                },
+                "max": {
+                  "type": "integer"
+                },
+                "chance": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "item"
+              ]
+            }
+          },
+          "fact": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "value": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "name"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "kind"
+        ]
+      }
+    },
+    "npcs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_-]*$"
+          },
+          "name": {
+            "type": "string"
+          },
+          "at": {
+            "oneOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": [
+                    "number",
+                    "string"
+                  ]
+                },
+                "minItems": 2,
+                "maxItems": 3
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "x": {},
+                  "y": {},
+                  "z": {}
+                },
+                "required": [
+                  "x",
+                  "y"
+                ]
+              }
+            ]
+          },
+          "yaw": {
+            "type": [
+              "number",
+              "string"
+            ]
+          },
+          "rotation": {
+            "type": "object",
+            "properties": {
+              "roll": {},
+              "pitch": {},
+              "yaw": {}
+            }
+          },
+          "room": {
+            "type": "string"
+          },
+          "floor": {
+            "type": "string"
+          },
+          "spawn": {
+            "type": "boolean"
+          },
+          "use": {
+            "type": "string",
+            "description": "Name of a template to merge"
+          },
+          "repeat": {
+            "type": "object",
+            "properties": {
+              "count": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 500
+              },
+              "step": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": [
+                        "number",
+                        "string"
+                      ]
+                    },
+                    "minItems": 2,
+                    "maxItems": 3
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "x": {},
+                      "y": {},
+                      "z": {}
+                    },
+                    "required": [
+                      "x",
+                      "y"
+                    ]
+                  }
+                ]
+              },
+              "yaw_step": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "count"
+            ]
+          },
+          "record": {
+            "type": "string",
+            "pattern": "^Character\\."
+          },
+          "appearance": {
+            "type": "string"
+          },
+          "spawn_on_start": {
+            "type": "boolean"
+          },
+          "always_spawned": {
+            "type": "boolean"
+          },
+          "attitude": {},
+          "faction": {},
+          "level": {},
+          "archetype": {},
+          "idle": {},
+          "conditions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "fact": {
+                  "type": "string"
+                },
+                "op": {
+                  "enum": [
+                    "==",
+                    "!=",
+                    ">",
+                    ">=",
+                    "<",
+                    "<="
+                  ]
+                },
+                "value": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "fact"
+              ]
+            }
+          },
+          "route": {
+            "type": "object",
+            "properties": {
+              "name": {},
+              "loop": {
+                "type": "boolean"
+              },
+              "kind": {},
+              "waypoints": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "at": {
+                      "oneOf": [
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": [
+                              "number",
+                              "string"
+                            ]
+                          },
+                          "minItems": 2,
+                          "maxItems": 3
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "x": {},
+                            "y": {},
+                            "z": {}
+                          },
+                          "required": [
+                            "x",
+                            "y"
+                          ]
+                        }
+                      ]
+                    },
+                    "yaw": {},
+                    "wait": {
+                      "type": "number"
+                    },
+                    "speed": {
+                      "type": "number"
+                    },
+                    "facing": {
+                      "type": "number"
+                    },
+                    "workspot": {
+                      "type": "string"
+                    },
+                    "variant": {
+                      "enum": [
+                        "patrol",
+                        "alert",
+                        "combat"
+                      ]
+                    }
+                  }
+                }
+              }
+            },
+            "required": [
+              "waypoints"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "record"
+        ]
+      }
+    },
+    "workspots": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_-]*$"
+          },
+          "name": {
+            "type": "string"
+          },
+          "at": {
+            "oneOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": [
+                    "number",
+                    "string"
+                  ]
+                },
+                "minItems": 2,
+                "maxItems": 3
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "x": {},
+                  "y": {},
+                  "z": {}
+                },
+                "required": [
+                  "x",
+                  "y"
+                ]
+              }
+            ]
+          },
+          "yaw": {
+            "type": [
+              "number",
+              "string"
+            ]
+          },
+          "rotation": {
+            "type": "object",
+            "properties": {
+              "roll": {},
+              "pitch": {},
+              "yaw": {}
+            }
+          },
+          "room": {
+            "type": "string"
+          },
+          "floor": {
+            "type": "string"
+          },
+          "spawn": {
+            "type": "boolean"
+          },
+          "use": {
+            "type": "string",
+            "description": "Name of a template to merge"
+          },
+          "repeat": {
+            "type": "object",
+            "properties": {
+              "count": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 500
+              },
+              "step": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": [
+                        "number",
+                        "string"
+                      ]
+                    },
+                    "minItems": 2,
+                    "maxItems": 3
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "x": {},
+                      "y": {},
+                      "z": {}
+                    },
+                    "required": [
+                      "x",
+                      "y"
+                    ]
+                  }
+                ]
+              },
+              "yaw_step": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "count"
+            ]
+          },
+          "kind": {
+            "type": "string"
+          },
+          "record": {
+            "type": "string"
+          },
+          "appearance": {
+            "type": "string"
+          },
+          "animation": {
+            "type": "object",
+            "properties": {
+              "name": {},
+              "comp": {},
+              "ent": {},
+              "rig": {}
+            }
+          }
+        },
+        "required": [
+          "id"
+        ]
+      }
+    },
+    "vfx": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_-]*$"
+          },
+          "name": {
+            "type": "string"
+          },
+          "at": {
+            "oneOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": [
+                    "number",
+                    "string"
+                  ]
+                },
+                "minItems": 2,
+                "maxItems": 3
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "x": {},
+                  "y": {},
+                  "z": {}
+                },
+                "required": [
+                  "x",
+                  "y"
+                ]
+              }
+            ]
+          },
+          "yaw": {
+            "type": [
+              "number",
+              "string"
+            ]
+          },
+          "rotation": {
+            "type": "object",
+            "properties": {
+              "roll": {},
+              "pitch": {},
+              "yaw": {}
+            }
+          },
+          "room": {
+            "type": "string"
+          },
+          "floor": {
+            "type": "string"
+          },
+          "spawn": {
+            "type": "boolean"
+          },
+          "use": {
+            "type": "string",
+            "description": "Name of a template to merge"
+          },
+          "repeat": {
+            "type": "object",
+            "properties": {
+              "count": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 500
+              },
+              "step": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": [
+                        "number",
+                        "string"
+                      ]
+                    },
+                    "minItems": 2,
+                    "maxItems": 3
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "x": {},
+                      "y": {},
+                      "z": {}
+                    },
+                    "required": [
+                      "x",
+                      "y"
+                    ]
+                  }
+                ]
+              },
+              "yaw_step": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "count"
+            ]
+          },
+          "resource": {
+            "type": "string",
+            "pattern": "\\.(particle|effect)$"
+          },
+          "scale": {
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": [
+                        "number",
+                        "string"
+                      ]
+                    },
+                    "minItems": 2,
+                    "maxItems": 3
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "x": {},
+                      "y": {},
+                      "z": {}
+                    },
+                    "required": [
+                      "x",
+                      "y"
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          "emission_rate": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "resource"
+        ]
+      }
+    },
+    "triggers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_-]*$"
+          },
+          "name": {
+            "type": "string"
+          },
+          "at": {
+            "oneOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": [
+                    "number",
+                    "string"
+                  ]
+                },
+                "minItems": 2,
+                "maxItems": 3
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "x": {},
+                  "y": {},
+                  "z": {}
+                },
+                "required": [
+                  "x",
+                  "y"
+                ]
+              }
+            ]
+          },
+          "yaw": {
+            "type": [
+              "number",
+              "string"
+            ]
+          },
+          "rotation": {
+            "type": "object",
+            "properties": {
+              "roll": {},
+              "pitch": {},
+              "yaw": {}
+            }
+          },
+          "room": {
+            "type": "string"
+          },
+          "floor": {
+            "type": "string"
+          },
+          "spawn": {
+            "type": "boolean"
+          },
+          "use": {
+            "type": "string",
+            "description": "Name of a template to merge"
+          },
+          "repeat": {
+            "type": "object",
+            "properties": {
+              "count": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 500
+              },
+              "step": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": [
+                        "number",
+                        "string"
+                      ]
+                    },
+                    "minItems": 2,
+                    "maxItems": 3
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "x": {},
+                      "y": {},
+                      "z": {}
+                    },
+                    "required": [
+                      "x",
+                      "y"
+                    ]
+                  }
+                ]
+              },
+              "yaw_step": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "count"
+            ]
+          },
+          "shape": {
+            "enum": [
+              "box",
+              "sphere",
+              "cylinder"
+            ]
+          },
+          "size": {
+            "oneOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": [
+                    "number",
+                    "string"
+                  ]
+                },
+                "minItems": 2,
+                "maxItems": 3
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "x": {},
+                  "y": {},
+                  "z": {}
+                },
+                "required": [
+                  "x",
+                  "y"
+                ]
+              }
+            ]
+          },
+          "radius": {
+            "type": "number"
+          },
+          "height": {
+            "type": "number"
+          },
+          "purpose": {
+            "type": "string"
+          },
+          "fact": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "value": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "name"
+            ]
+          }
+        },
+        "required": [
+          "id"
+        ]
+      }
+    },
+    "cameras": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_-]*$"
+          },
+          "name": {
+            "type": "string"
+          },
+          "at": {
+            "oneOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": [
+                    "number",
+                    "string"
+                  ]
+                },
+                "minItems": 2,
+                "maxItems": 3
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "x": {},
+                  "y": {},
+                  "z": {}
+                },
+                "required": [
+                  "x",
+                  "y"
+                ]
+              }
+            ]
+          },
+          "yaw": {
+            "type": [
+              "number",
+              "string"
+            ]
+          },
+          "rotation": {
+            "type": "object",
+            "properties": {
+              "roll": {},
+              "pitch": {},
+              "yaw": {}
+            }
+          },
+          "room": {
+            "type": "string"
+          },
+          "floor": {
+            "type": "string"
+          },
+          "spawn": {
+            "type": "boolean"
+          },
+          "use": {
+            "type": "string",
+            "description": "Name of a template to merge"
+          },
+          "repeat": {
+            "type": "object",
+            "properties": {
+              "count": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 500
+              },
+              "step": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": [
+                        "number",
+                        "string"
+                      ]
+                    },
+                    "minItems": 2,
+                    "maxItems": 3
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "x": {},
+                      "y": {},
+                      "z": {}
+                    },
+                    "required": [
+                      "x",
+                      "y"
+                    ]
+                  }
+                ]
+              },
+              "yaw_step": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "count"
+            ]
+          },
+          "look_at": {
+            "oneOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": [
+                    "number",
+                    "string"
+                  ]
+                },
+                "minItems": 2,
+                "maxItems": 3
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "x": {},
+                  "y": {},
+                  "z": {}
+                },
+                "required": [
+                  "x",
+                  "y"
+                ]
+              }
+            ]
+          },
+          "fov": {
+            "type": "number"
+          },
+          "kind": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      }
+    },
+    "occluders": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_-]*$"
+          },
+          "name": {
+            "type": "string"
+          },
+          "at": {
+            "oneOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": [
+                    "number",
+                    "string"
+                  ]
+                },
+                "minItems": 2,
+                "maxItems": 3
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "x": {},
+                  "y": {},
+                  "z": {}
+                },
+                "required": [
+                  "x",
+                  "y"
+                ]
+              }
+            ]
+          },
+          "yaw": {
+            "type": [
+              "number",
+              "string"
+            ]
+          },
+          "rotation": {
+            "type": "object",
+            "properties": {
+              "roll": {},
+              "pitch": {},
+              "yaw": {}
+            }
+          },
+          "room": {
+            "type": "string"
+          },
+          "floor": {
+            "type": "string"
+          },
+          "spawn": {
+            "type": "boolean"
+          },
+          "use": {
+            "type": "string",
+            "description": "Name of a template to merge"
+          },
+          "repeat": {
+            "type": "object",
+            "properties": {
+              "count": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 500
+              },
+              "step": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": [
+                        "number",
+                        "string"
+                      ]
+                    },
+                    "minItems": 2,
+                    "maxItems": 3
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "x": {},
+                      "y": {},
+                      "z": {}
+                    },
+                    "required": [
+                      "x",
+                      "y"
+                    ]
+                  }
+                ]
+              },
+              "yaw_step": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "count"
+            ]
+          },
+          "mesh": {
+            "enum": [
+              "box",
+              "plane",
+              "plane_two_sided"
+            ]
+          },
+          "size": {
+            "oneOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": [
+                    "number",
+                    "string"
+                  ]
+                },
+                "minItems": 2,
+                "maxItems": 3
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "x": {},
+                  "y": {},
+                  "z": {}
+                },
+                "required": [
+                  "x",
+                  "y"
+                ]
+              }
+            ]
+          }
+        },
+        "required": [
+          "id"
+        ]
+      }
+    }
+  }
+}

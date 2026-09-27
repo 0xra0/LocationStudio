@@ -1,0 +1,563 @@
+{
+ "format": "locationstudio-authoring-plan",
+ "version": 2,
+ "name": "EDL Ripperdoc Clinic",
+ "origin": {
+  "position": {
+   "x": 100,
+   "y": 200,
+   "z": 10,
+   "w": 1
+  },
+  "rotation": {
+   "roll": 0,
+   "pitch": 0,
+   "yaw": 0
+  }
+ },
+ "steps": [
+  {
+   "op": "edl_begin",
+   "doc": "ripperdoc_clinic",
+   "name": "Ripperdoc Clinic",
+   "hash": "a9a4dec9e26a0093",
+   "streaming": {
+    "category": 1,
+    "level": 1,
+    "cell": {
+     "x": 64.0,
+     "y": 64.0,
+     "z": 32.0
+    },
+    "range": 80.0
+   }
+  },
+  {
+   "op": "import_resource",
+   "as": "r1",
+   "definition_key": "mesh_static",
+   "path": "base\\environment\\decoration\\furniture\\bench\\bench_metal_a.mesh"
+  },
+  {
+   "op": "import_resource",
+   "as": "r2",
+   "definition_key": "mesh_static",
+   "path": "base\\environment\\decoration\\medical\\medical_chair\\medical_chair_a.mesh"
+  },
+  {
+   "op": "import_resource",
+   "as": "r3",
+   "definition_key": "entity_template",
+   "path": "base\\gameplay\\devices\\containers\\medical_cabinet\\medical_cabinet_a.ent"
+  },
+  {
+   "op": "import_resource",
+   "as": "r4",
+   "definition_key": "entity_record",
+   "path": "Character.ripperdoc_nurse"
+  },
+  {
+   "op": "set_room_kit",
+   "preset": "common_interior"
+  },
+  {
+   "op": "create_premise",
+   "as": "premise",
+   "name": "Ripperdoc Clinic",
+   "kind": "interior",
+   "levels": 1,
+   "floor_height": 3.2,
+   "tags": [
+    "edl",
+    "ripperdoc_clinic"
+   ]
+  },
+  {
+   "op": "create_room",
+   "as": "e_waiting",
+   "premise_id": "$premise",
+   "name": "Waiting Room",
+   "width": 6.0,
+   "depth": 5.0,
+   "height": 3.2,
+   "x": 0.0,
+   "y": 0.0,
+   "z": 0.0,
+   "level": 0,
+   "yaw": 0.0,
+   "spawn": false,
+   "edl_element": "waiting"
+  },
+  {
+   "op": "add_opening",
+   "room_id": "$e_waiting",
+   "kind": "door",
+   "wall": "south",
+   "offset": 0.0,
+   "width": 1.2,
+   "height": 2.2,
+   "sill": 0.0,
+   "spawn": false
+  },
+  {
+   "op": "add_opening",
+   "room_id": "$e_waiting",
+   "kind": "door",
+   "wall": "east",
+   "offset": 0.0,
+   "width": 1.0,
+   "height": 2.2,
+   "sill": 0.0,
+   "spawn": false
+  },
+  {
+   "op": "add_opening",
+   "room_id": "$e_waiting",
+   "kind": "window",
+   "wall": "west",
+   "offset": 0.0,
+   "width": 2.0,
+   "height": 1.2,
+   "sill": 1.0,
+   "spawn": false
+  },
+  {
+   "op": "spawn",
+   "kind": "room",
+   "id": "$e_waiting"
+  },
+  {
+   "op": "place_resource",
+   "as": "e_bench_1",
+   "asset_id": "$r1",
+   "premise_id": "$premise",
+   "offset": {
+    "x": -2.0,
+    "y": 1.8,
+    "z": 0.0
+   },
+   "yaw": 180.0,
+   "name": "bench_1",
+   "room_id": "$e_waiting",
+   "stream_range": 80.0,
+   "edl_element": "bench_1"
+  },
+  {
+   "op": "place_resource",
+   "as": "e_bench_2",
+   "asset_id": "$r1",
+   "premise_id": "$premise",
+   "offset": {
+    "x": -0.2,
+    "y": 1.8,
+    "z": 0.0
+   },
+   "yaw": 180.0,
+   "name": "bench_2",
+   "room_id": "$e_waiting",
+   "stream_range": 80.0,
+   "edl_element": "bench_2"
+  },
+  {
+   "op": "create_light",
+   "as": "e_waiting_light",
+   "premise_id": "$premise",
+   "offset": {
+    "x": 0.0,
+    "y": 0.0,
+    "z": 3.0
+   },
+   "yaw": 0.0,
+   "name": "waiting_light",
+   "room_id": "$e_waiting",
+   "config": {
+    "color": [
+     0.85,
+     0.95,
+     1.0
+    ],
+    "intensity": 60.0,
+    "radius": 6.0,
+    "flickerStrength": 0.0,
+    "flickerPeriod": 0.2,
+    "flickerOffset": 0.0
+   },
+   "edl_element": "waiting_light"
+  },
+  {
+   "op": "create_reverb_zone",
+   "as": "e_waiting_reverb",
+   "premise_id": "$premise",
+   "room_id": "$e_waiting",
+   "preset_name": "Interior Muffling Area",
+   "sound_event": "amb_int_clinic_room_tone",
+   "edl_element": "waiting_reverb"
+  },
+  {
+   "op": "create_room",
+   "as": "e_surgery",
+   "premise_id": "$premise",
+   "name": "Surgery",
+   "width": 7.0,
+   "depth": 5.0,
+   "height": 3.2,
+   "x": 6.5,
+   "y": 0.0,
+   "z": 0.0,
+   "level": 0,
+   "yaw": 0.0,
+   "spawn": false,
+   "edl_element": "surgery"
+  },
+  {
+   "op": "add_opening",
+   "room_id": "$e_surgery",
+   "kind": "door",
+   "wall": "west",
+   "offset": 0.0,
+   "width": 1.0,
+   "height": 2.2,
+   "sill": 0.0,
+   "spawn": false
+  },
+  {
+   "op": "spawn",
+   "kind": "room",
+   "id": "$e_surgery"
+  },
+  {
+   "op": "place_resource",
+   "as": "e_surgery_chair",
+   "asset_id": "$r2",
+   "premise_id": "$premise",
+   "offset": {
+    "x": 6.5,
+    "y": 0.0,
+    "z": 0.0
+   },
+   "yaw": 90.0,
+   "name": "surgery_chair",
+   "room_id": "$e_surgery",
+   "appearance": "default",
+   "stream_range": 80.0,
+   "edl_element": "surgery_chair"
+  },
+  {
+   "op": "create_light",
+   "as": "e_surgery_light",
+   "premise_id": "$premise",
+   "offset": {
+    "x": 6.5,
+    "y": 0.0,
+    "z": 3.0
+   },
+   "yaw": 0.0,
+   "name": "surgery_light",
+   "room_id": "$e_surgery",
+   "config": {
+    "color": [
+     1,
+     1,
+     1
+    ],
+    "intensity": 140.0,
+    "radius": 6.0,
+    "flickerStrength": 0.0,
+    "flickerPeriod": 0.2,
+    "flickerOffset": 0.0
+   },
+   "edl_element": "surgery_light"
+  },
+  {
+   "op": "create_collision",
+   "as": "e_counter_block",
+   "premise_id": "$premise",
+   "offset": {
+    "x": 4.0,
+    "y": 1.2,
+    "z": 0.55
+   },
+   "yaw": 0.0,
+   "name": "counter_block",
+   "room_id": "$e_surgery",
+   "shape": "box",
+   "size": {
+    "x": 2.0,
+    "y": 0.6,
+    "z": 1.1
+   },
+   "edl_element": "counter_block"
+  },
+  {
+   "op": "create_interactable",
+   "as": "e_supply_cabinet",
+   "asset_id": "$r3",
+   "premise_id": "$premise",
+   "offset": {
+    "x": 9.3,
+    "y": -2.0,
+    "z": 0.0
+   },
+   "yaw": 180.0,
+   "name": "supply_cabinet",
+   "room_id": "$e_surgery",
+   "kind": "loot_container",
+   "loot_table": "LootTables.ripperdoc_clinic_supplies",
+   "loot_items": [
+    {
+     "item_record": "Items.FirstAidWhiffV0",
+     "count_min": 1,
+     "count_max": 2,
+     "drop_chance": 0.8
+    }
+   ],
+   "fact_name": "clinic_cabinet_opened",
+   "fact_value": 1,
+   "lock_state": "locked",
+   "edl_element": "supply_cabinet"
+  },
+  {
+   "op": "create_workspot",
+   "as": "e_nurse_desk",
+   "name": "Nurse desk",
+   "offset": {
+    "x": 4.0,
+    "y": 1.8,
+    "z": 0.0
+   },
+   "yaw": 0.0,
+   "workspot_kind": "stand",
+   "edl_element": "nurse_desk"
+  },
+  {
+   "op": "create_vfx",
+   "as": "e_steam",
+   "premise_id": "$premise",
+   "offset": {
+    "x": 9.5,
+    "y": 2.0,
+    "z": 0.1
+   },
+   "yaw": 0.0,
+   "name": "steam",
+   "room_id": "$e_surgery",
+   "resource_path": "base\\fx\\environment\\steam\\steam_vent_small.particle",
+   "scale": {
+    "x": 0.6,
+    "y": 0.6,
+    "z": 0.6
+   },
+   "edl_element": "steam"
+  },
+  {
+   "op": "create_volume",
+   "as": "e_entry_trigger",
+   "premise_id": "$premise",
+   "offset": {
+    "x": 0.0,
+    "y": -2.0,
+    "z": 1.0
+   },
+   "yaw": 0.0,
+   "name": "entry_trigger",
+   "room_id": "$e_waiting",
+   "shape": "box",
+   "purpose": "trigger",
+   "size_x": 2.0,
+   "size_y": 1.0,
+   "size_z": 2.0,
+   "edl_element": "entry_trigger"
+  },
+  {
+   "op": "link_fact",
+   "volume_id": "$e_entry_trigger",
+   "fact_name": "clinic_entered",
+   "value": 1
+  },
+  {
+   "op": "create_camera",
+   "as": "e_overview",
+   "premise_id": "$premise",
+   "offset": {
+    "x": -2.5,
+    "y": -6.0,
+    "z": 2.4
+   },
+   "yaw": 0.0,
+   "name": "overview",
+   "look_at_offset": {
+    "x": 3.0,
+    "y": 0.0,
+    "z": 1.0
+   },
+   "fov": 60,
+   "edl_element": "overview"
+  },
+  {
+   "op": "create_audio_emitter",
+   "as": "e_fridge_hum",
+   "premise_id": "$premise",
+   "offset": {
+    "x": 9.5,
+    "y": 2.0,
+    "z": 0.5
+   },
+   "yaw": 0.0,
+   "name": "fridge_hum",
+   "room_id": "$e_surgery",
+   "resource_path": "amb_int_fridge_hum",
+   "radius": 4,
+   "edl_element": "fridge_hum"
+  },
+  {
+   "op": "create_npc",
+   "as": "e_nurse",
+   "asset_id": "$r4",
+   "record": "Character.ripperdoc_nurse",
+   "premise_id": "$premise",
+   "offset": {
+    "x": 5.5,
+    "y": 0.0,
+    "z": 0.0
+   },
+   "yaw": 0.0,
+   "name": "nurse",
+   "room_id": "$e_surgery",
+   "edl_element": "nurse"
+  },
+  {
+   "op": "create_npc_route",
+   "as": "e_nurse_route",
+   "npc_id": "$e_nurse",
+   "name": "nurse route",
+   "loop": true
+  },
+  {
+   "op": "add_route_waypoint",
+   "route_id": "$e_nurse_route",
+   "wait_seconds": 4,
+   "offset": {
+    "x": 5.5,
+    "y": 0.0,
+    "z": 0.0
+   },
+   "yaw": 0.0
+  },
+  {
+   "op": "add_route_waypoint",
+   "route_id": "$e_nurse_route",
+   "wait_seconds": 20,
+   "transition": "workspot",
+   "workspot_location_id": "$e_nurse_desk",
+   "offset": {
+    "x": 4.0,
+    "y": 1.5,
+    "z": 0.0
+   },
+   "yaw": 0.0
+  },
+  {
+   "op": "import_navigation",
+   "as": "navigation",
+   "name": "ripperdoc_clinic navigation",
+   "nodes": [
+    {
+     "id": "entry",
+     "offset": {
+      "x": 0.0,
+      "y": -2.4,
+      "z": 0.0
+     }
+    },
+    {
+     "id": "waiting",
+     "offset": {
+      "x": 0.0,
+      "y": 0.0,
+      "z": 0.0
+     }
+    },
+    {
+     "id": "doorway",
+     "offset": {
+      "x": 3.0,
+      "y": 0.0,
+      "z": 0.0
+     }
+    },
+    {
+     "id": "surgery",
+     "offset": {
+      "x": 6.5,
+      "y": 0.0,
+      "z": 0.0
+     }
+    }
+   ],
+   "edges": [
+    {
+     "from": "entry",
+     "to": "waiting",
+     "kind": "walk",
+     "one_way": false,
+     "cost": 1
+    },
+    {
+     "from": "waiting",
+     "to": "doorway",
+     "kind": "door",
+     "one_way": false,
+     "cost": 1
+    },
+    {
+     "from": "doorway",
+     "to": "surgery",
+     "kind": "walk",
+     "one_way": false,
+     "cost": 1
+    }
+   ]
+  },
+  {
+   "op": "create_device_graph",
+   "as": "e_cabinet_logic",
+   "name": "Cabinet opens the back room",
+   "premise_id": "$premise",
+   "edl_element": "cabinet_logic"
+  },
+  {
+   "op": "add_device_node",
+   "as": "e_cabinet_logic__cabinet",
+   "graph_id": "$e_cabinet_logic",
+   "kind": "switch",
+   "name": "cabinet",
+   "object_id": "$e_supply_cabinet"
+  },
+  {
+   "op": "add_device_node",
+   "as": "e_cabinet_logic__opened",
+   "graph_id": "$e_cabinet_logic",
+   "kind": "action",
+   "name": "opened",
+   "config": {
+    "operation": "set_fact",
+    "fact_name": "clinic_backroom_open",
+    "value": 1
+   }
+  },
+  {
+   "op": "add_device_link",
+   "graph_id": "$e_cabinet_logic",
+   "from_id": "$e_cabinet_logic__cabinet",
+   "to_id": "$e_cabinet_logic__opened",
+   "trigger": "activate"
+  },
+  {
+   "op": "capture_scene",
+   "as": "scene",
+   "name": "Ripperdoc Clinic",
+   "premise_id": "$premise",
+   "activate": false
+  }
+ ]
+}

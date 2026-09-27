@@ -1,6 +1,6 @@
 local env=dofile(arg[2]..'/support/cet_mock.lua')
 local app=env.app
-assert(app.version=='0.70.0')
+assert(app.version=='0.71.0')
 local premise=assert(app.model:add_premise({name='Scatter Area Test'}))
 local asset=app.model:add_asset({name='Area Scatter Asset',kind='mesh',template='base\\props\\area_scatter.mesh',size={x=1,y=1,z=1}})
 env.aim_x=40;env.aim_y=50;env.aim_z=30;env.ground_z=5;env.aim_normal={x=0,y=0,z=1}

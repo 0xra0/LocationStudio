@@ -52,7 +52,7 @@ collision, areas, AI nodes, and other World Builder entries keep their full
 resource metadata and use World Builder. Rooms never use blank white debug
 primitives: their visible shell is composed from the configured room kit.
 
-The engine limits plans to 100 steps. A failed step triggers runtime cleanup and
+The engine limits version-1 plans to 100 steps. Version-2 plans (`"version": 2`, up to 2000 steps) add the operations the [Environment Definition Language](ENVIRONMENT-DEFINITION-LANGUAGE.md) compiles to: `import_resource`, `place_resource`, lights, collision, VFX, audio emitters and reverb, occluders, interactables, NPCs, workspots, NPC routes and waypoints, device-logic graphs, fact links, navigation, splines, room-kit settings and `edl_begin`, which replaces a previous build of the same document. Most authors should write EDL rather than version-2 plans by hand. A failed step triggers runtime cleanup and
 restores model/history/selection/dirty state. If cleanup itself is refused, the
 project remains owned and enters explicit recovery rather than silently losing
 track of a live object.

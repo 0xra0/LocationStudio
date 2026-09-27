@@ -1,0 +1,121 @@
+# yaml-language-server: $schema=../locationstudio-edl-1.schema.json
+# A two-room ripperdoc clinic with a waiting room, a surgery, lights, a locked
+# supply cabinet, a nurse with a patrol that uses a workspot, a quest trigger,
+# ambience, steam, navigation and a camera. Paths are vanilla World Builder
+# catalog resources; replace them with what your catalog search returns.
+edl: 1
+id: ripperdoc_clinic
+name: Ripperdoc Clinic
+origin: player
+parameters:
+  ceiling: 3.2
+  surgery_width: 7
+templates:
+  ceiling_light:
+    color: [0.85, 0.95, 1.0]
+    intensity: 60
+    radius: 6
+materials:
+  room_kit: common_interior
+streaming:
+  category: interior
+  level: 1
+  cell: [64, 64, 32]
+  range: 80
+floors:
+  - id: ground
+    height: ${ceiling}
+    rooms:
+      - id: waiting
+        name: Waiting Room
+        at: [0, 0]
+        size: [6, 5]
+        doors:
+          - {wall: south, offset: 0, width: 1.2}
+          - {wall: east, offset: 0, width: 1.0}
+        windows:
+          - {wall: west, offset: 0, width: 2, height: 1.2, sill: 1.0}
+        objects:
+          - id: bench
+            resource: base\environment\decoration\furniture\bench\bench_metal_a.mesh
+            at: [-2, 1.8, 0]
+            yaw: 180
+            repeat: {count: 2, step: [1.8, 0, 0]}
+        lights:
+          - {id: waiting_light, use: ceiling_light, at: [0, 0, 3.0]}
+        reverb: {preset: Interior Muffling Area, sound_event: amb_int_clinic_room_tone}
+      - id: surgery
+        name: Surgery
+        at: ["${surgery_width / 2 + 3}", 0]
+        size: ["${surgery_width}", 5]
+        doors:
+          - {wall: west, offset: 0, width: 1.0}
+        objects:
+          - id: surgery_chair
+            resource: base\environment\decoration\medical\medical_chair\medical_chair_a.mesh
+            appearance: default
+            at: [0, 0, 0]
+            yaw: 90
+        lights:
+          - {id: surgery_light, use: ceiling_light, at: [0, 0, 3.0], intensity: 140, color: [1, 1, 1]}
+        devices:
+          - id: supply_cabinet
+            kind: loot_container
+            resource: base\gameplay\devices\containers\medical_cabinet\medical_cabinet_a.ent
+            at: [2.8, -2, 0]
+            yaw: 180
+            locked: true
+            loot_table: LootTables.ripperdoc_clinic_supplies
+            loot:
+              - {item: Items.FirstAidWhiffV0, min: 1, max: 2, chance: 0.8}
+            fact: {name: clinic_cabinet_opened, value: 1}
+        workspots:
+          - id: nurse_desk
+            name: Nurse desk
+            kind: stand
+            at: [-2.5, 1.8, 0]
+            yaw: 0
+        vfx:
+          - {id: steam, resource: base\fx\environment\steam\steam_vent_small.particle, at: [3, 2, 0.1], scale: 0.6}
+        collisions:
+          - {id: counter_block, shape: box, size: [2, 0.6, 1.1], at: [-2.5, 1.2, 0.55]}
+npcs:
+  - id: nurse
+    room: surgery
+    record: Character.ripperdoc_nurse
+    at: [-1, 0, 0]
+    route:
+      loop: true
+      waypoints:
+        - {at: [-1, 0, 0], wait: 4}
+        - {workspot: nurse_desk, at: [-2.5, 1.5, 0], wait: 20}
+triggers:
+  - id: entry_trigger
+    room: waiting
+    at: [0, -2, 1]
+    size: [2, 1, 2]
+    fact: {name: clinic_entered, value: 1}
+cameras:
+  - {id: overview, at: [-2.5, -6, 2.4], look_at: [3, 0, 1], fov: 60}
+audio:
+  emitters:
+    - {id: fridge_hum, room: surgery, resource: amb_int_fridge_hum, at: [3, 2, 0.5], radius: 4}
+navigation:
+  nodes:
+    - {id: entry, at: [0, -2.4, 0]}
+    - {id: waiting, at: [0, 0, 0]}
+    - {id: doorway, at: [3, 0, 0]}
+    - {id: surgery, at: [6.5, 0, 0]}
+  edges:
+    - {from: entry, to: waiting}
+    - {from: waiting, to: doorway, kind: door}
+    - {from: doorway, to: surgery}
+logic:
+  - id: cabinet_logic
+    name: Cabinet opens the back room
+    nodes:
+      - {id: cabinet, kind: switch, element: supply_cabinet}
+      - {id: opened, kind: action, config: {operation: set_fact, fact_name: clinic_backroom_open, value: 1}}
+    links:
+      - {from: cabinet, to: opened, trigger: activate}
+scene: {name: Ripperdoc Clinic, activate: false}

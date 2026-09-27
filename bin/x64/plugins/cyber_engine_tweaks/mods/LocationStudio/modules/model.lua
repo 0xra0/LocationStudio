@@ -11,7 +11,7 @@ local function blank_project()
             id = 'default', name = 'Night City Location Project', description = '', author = '', tags = {},
             created_at = Util.now_iso(), updated_at = Util.now_iso(),
         },
-        locations = {}, routes = {}, npc_routes = {}, combat_encounters = {}, cover_nodes = {}, navigation_graphs = {}, device_logic_graphs = {}, world_state_variants = {}, environments = {}, splines = {}, timelines = {}, reference_areas = {}, premises = {}, rooms = {}, objects = {}, object_groups = {}, object_prefabs = {}, volumes = {}, cameras = {}, scenes = {}, assets = {}, vanilla_removals = {}, room_frames = {},
+        locations = {}, routes = {}, npc_routes = {}, combat_encounters = {}, cover_nodes = {}, navigation_graphs = {}, device_logic_graphs = {}, world_state_variants = {}, environments = {}, splines = {}, timelines = {}, reference_areas = {}, edl_builds = {}, premises = {}, rooms = {}, objects = {}, object_groups = {}, object_prefabs = {}, volumes = {}, cameras = {}, scenes = {}, assets = {}, vanilla_removals = {}, room_frames = {},
         -- Layer ids 'shell' and 'decoration' are kept for compatibility; they are
         -- shown as Architecture and Props.
         layers = {
@@ -407,7 +407,7 @@ function Model.blank() return blank_project() end
 
 function Model:normalize()
     if type(self.data) ~= 'table' then self.data=blank_project() end
-    local defaults=blank_project(); self.data.schema_version=20
+    local defaults=blank_project(); self.data.schema_version=21
     self.data.project=self.data.project or defaults.project; self.data.locations=self.data.locations or {}; self.data.routes=self.data.routes or {}
     self.data.npc_routes=type(self.data.npc_routes)=='table' and self.data.npc_routes or {}
     self.data.combat_encounters=type(self.data.combat_encounters)=='table' and self.data.combat_encounters or {}
@@ -418,6 +418,7 @@ function Model:normalize()
     for i,v in ipairs(self.data.world_state_variants) do self.data.world_state_variants[i]=normalize_world_state_variant(v) end
     self.data.environments=type(self.data.environments)=='table' and self.data.environments or {}
     self.data.splines=type(self.data.splines)=='table' and self.data.splines or {}
+    self.data.edl_builds=type(self.data.edl_builds)=='table' and self.data.edl_builds or {}
     self.data.reference_areas=type(self.data.reference_areas)=='table' and self.data.reference_areas or {}
     for i,v in ipairs(self.data.reference_areas) do self.data.reference_areas[i]=normalize_reference_area(v) end
     self.data.timelines=type(self.data.timelines)=='table' and self.data.timelines or {}
@@ -774,6 +775,7 @@ function Model:delete_premise(id)
     for _,environment in ipairs(self.data.environments or {}) do if environment.premise_id==id then environment.premise_id=nil end end
     for _,spline in ipairs(self.data.splines or {}) do if spline.premise_id==id then spline.premise_id=nil end end
     for _,area in ipairs(self.data.reference_areas or {}) do if area.premise_id==id then area.premise_id=nil end end
+    for _,build in ipairs(self.data.edl_builds or {}) do if build.premise_id==id then build.premise_id=nil end end
     for _,timeline in ipairs(self.data.timelines or {}) do if timeline.premise_id==id then timeline.premise_id=nil end end
     self:touch(); return true
 end
