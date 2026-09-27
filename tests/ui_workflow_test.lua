@@ -19,8 +19,8 @@ env.inputs['Name']='Renamed chair';env.clicks['APPLY NAME']=true;env:draw()
 assert(placed.name=='Renamed chair','simple name edit was not applied')
 env.clicks['SAVE PROJECT']=true;env:draw()
 env.clicks['SAVE DEBUG REPORT']=true;env:draw()
-local report=assert(io.open('logs/LocationStudio-v0.69.0-support.txt','r'));local report_text=report:read('*a');report:close()
-assert(report_text:find('v0.69.0',1,true))
+local report=assert(io.open('logs/LocationStudio-v0.70.0-support.txt','r'));local report_text=report:read('*a');report:close()
+assert(report_text:find('v0.70.0',1,true))
 env.collapsed=true;env:draw();env.collapsed=false
 -- Exercise all advanced panels, not just a frame with no selection.
 app.model.data.settings.workspace.beginner_mode=false

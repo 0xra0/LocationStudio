@@ -12,6 +12,7 @@ import os
 import re
 import shutil
 import sys
+import tempfile
 import threading
 import time
 import uuid
@@ -3755,7 +3756,7 @@ def status_resource() -> str:
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from mod_inventory import scan_mod_installation as _scan_mod_installation  # noqa: E402
-from lsbuild import build as _lsb, native as _lsn, worker as _lsw, wiring as _lswire, rng as _lsrng, interactables as _lsip, population as _lsp, vfx as _lsvfx, sectors as _lssec, performance as _lsperf, vanilla as _lsvan, dependencies as _lsdep  # noqa: E402
+from lsbuild import build as _lsb, native as _lsn, worker as _lsw, wiring as _lswire, rng as _lsrng, interactables as _lsip, population as _lsp, vfx as _lsvfx, sectors as _lssec, performance as _lsperf, vanilla as _lsvan, dependencies as _lsdep, preflight as _lspf  # noqa: E402
 
 WORLD_BUILDER_ROOT = MOD_DIR.parent / "entSpawner"
 BUILD_ROOT = MOD_DIR / "exports" / "build"
@@ -4714,6 +4715,94 @@ def dependency_stage(workspace_name: str, premise_id: str = "", sources: list[st
                           report_file=ws / "automation" / "dependency-report.json")
     staged = _lsdep.stage(out["full"], ws)
     return _json({"ready": out["slim"]["ready"], "counts": out["slim"]["counts"], "missing": out["slim"]["missing"], "staged": staged})
+
+
+PREFLIGHT_REPORT = MOD_DIR / "exports" / "preflight-report.json"
+
+
+def _latest_export() -> Path | None:
+    folder = WORLD_BUILDER_ROOT / "export"
+    files = sorted(folder.glob("*_exported.json"), key=lambda p: p.stat().st_mtime) if folder.is_dir() else []
+    return files[-1] if files else None
+
+
+@mcp.tool()
+def preflight_run(export_name: str = "", premise_id: str = "", deep: bool = False, strict: bool = False,
+                  run_visual_regression: bool = False, sources: list[str] | None = None, game_root: str | None = None,
+                  write_report: bool = True) -> str:
+    """Full shipping preflight in one call. In game (requires the running game): project data, broken resource
+    paths, missing bounds, failed spawns, NodeRefs, quest facts, interactable setup, ambient areas, workspots
+    without routes, device links and unexportable CET entities. Offline: missing asset dependencies, sector
+    problems, unresolved NodeRefs and device links in the export, native interactable artifacts, NPC population
+    export and the latest visual-regression run (or a new capture with run_visual_regression).
+
+    export_name picks the World Builder export (default: the most recent). deep looks every resource path up in
+    the World Builder catalogs. strict makes warnings block. ready is true only when every in-game check ran and
+    nothing failed. Writes exports/preflight-report.json for the in-game Preflight tab."""
+    scope = {"premise_id": premise_id or None, "export": None}
+    live, live_error = None, None
+    try:
+        live = _send("preflight_run", {"premise_id": premise_id or None, "deep": deep}, timeout=60.0)
+    except Exception as exc:  # noqa: BLE001 - offline is a valid preflight state
+        live_error = f"{type(exc).__name__}: {exc}"
+    offline: list[Any] = []
+    try:
+        deps = _dependency_run(premise_id=premise_id or None, sources=sources, game_root=game_root)["slim"]
+        offline.append(_lspf.dependencies_check(deps))
+    except Exception as exc:  # noqa: BLE001
+        offline.append(_lspf.dependencies_check(None, f"dependency scan failed: {type(exc).__name__}: {exc}"))
+    export = _export_file(export_name) if export_name else _latest_export()
+    noderefs: list[dict[str, Any]] = []
+    device_links: list[dict[str, Any]] = []
+    if export is not None and export.is_file():
+        scope["export"] = str(export)
+        try:
+            report = _lssec.inspect(export, PROJECT if PROJECT.is_file() else None, include_nodes=True)
+            sectors, noderefs, device_links = _lspf.sectors_check(report)
+        except Exception as exc:  # noqa: BLE001
+            sectors, _, _ = _lspf.sectors_check(None, f"sector inspection failed: {type(exc).__name__}: {exc}")
+        offline.append(sectors)
+        if PROJECT.is_file():
+            with tempfile.TemporaryDirectory() as tmp:
+                try:
+                    offline.append(_lspf.interactables_check(_lsip.generate(PROJECT, export, Path(tmp))))
+                except Exception as exc:  # noqa: BLE001
+                    offline.append(_lspf.interactables_check(None, f"interactable generation failed: {type(exc).__name__}: {exc}"))
+            try:
+                offline.append(_lspf.population_check(_lsp.audit(PROJECT, export)))
+            except Exception as exc:  # noqa: BLE001
+                offline.append(_lspf.population_check(None, f"population audit failed: {type(exc).__name__}: {exc}"))
+    else:
+        missing = f"export {export} not found" if export is not None else None
+        offline.append(_lspf.sectors_check(None, missing)[0])
+        offline.append(_lspf.interactables_check(None, missing))
+        offline.append(_lspf.population_check(None, missing))
+    capture = None
+    if run_visual_regression:
+        try:
+            capture = json.loads(getattr(visual_regression_capture, "fn", visual_regression_capture)())
+        except Exception as exc:  # noqa: BLE001
+            capture = {"status": "incomplete", "run_id": None, "error": str(exc)}
+    updated = None
+    if PROJECT.is_file():
+        try:
+            updated = (json.loads(PROJECT.read_text(encoding="utf-8")).get("project") or {}).get("updated_at")
+        except (OSError, ValueError):
+            updated = None
+    offline.append(_lspf.visual_check(REGRESSION_DIR, project_updated_at=updated, capture=capture))
+    result = _lspf.merge(live if isinstance(live, dict) else None, offline, live_error=live_error,
+                         noderef_issues=noderefs, device_issues=device_links, strict=strict, scope=scope)
+    result["generated_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    if write_report:
+        PREFLIGHT_REPORT.parent.mkdir(parents=True, exist_ok=True)
+        PREFLIGHT_REPORT.write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        result["report_file"] = str(PREFLIGHT_REPORT)
+        if live is not None:
+            try:
+                _send("preflight_load")
+            except Exception:  # noqa: BLE001
+                pass
+    return _json(result)
 
 
 _TIMELINE_TRACKS = {"camera", "npc", "look_at", "dialogue", "event", "fact", "marker"}
