@@ -98,9 +98,10 @@ class Sandbox:
         self.sent: list[tuple[str, dict]] = []
 
     def __enter__(self):
-        self.saved = (server.WORLD_BUILDER_ROOT, server.BUILD_ROOT, server._send)
+        self.saved = (server.WORLD_BUILDER_ROOT, server.BUILD_ROOT, server._send, server.SECTOR_REPORT)
         server.WORLD_BUILDER_ROOT = self.root / "entSpawner"
         server.BUILD_ROOT = self.root / "build"
+        server.SECTOR_REPORT = self.root / "exports" / "sector-inspection.json"
 
         def fake_send(op, args=None, timeout=None):
             self.sent.append((op, args or {}))
@@ -123,7 +124,7 @@ class Sandbox:
         return self
 
     def __exit__(self, *exc):
-        server.WORLD_BUILDER_ROOT, server.BUILD_ROOT, server._send = self.saved
+        server.WORLD_BUILDER_ROOT, server.BUILD_ROOT, server._send, server.SECTOR_REPORT = self.saved
 
 
 class HeadlessBuildTests(unittest.TestCase):

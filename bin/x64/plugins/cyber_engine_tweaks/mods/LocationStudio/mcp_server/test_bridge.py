@@ -28,7 +28,7 @@ def test_mcp_operations_are_handled() -> None:
     handled.update(re.findall(r"or op == '([a-z_]+)'", bridge))
     handled.update(re.findall(r"'((?:wb_)?(?:clipcheck|fixturecheck|fitcheck))'", bridge))
     assert sent <= handled, f'MCP operations missing in CET bridge: {sorted(sent - handled)}'
-    assert len(re.findall(r'@mcp\.tool\(\)', server)) == 378
+    assert len(re.findall(r'@mcp\.tool\(\)', server)) == 380
     for operation in ('register_asset', 'update_asset', 'delete_asset', 'place_asset', 'clear_debug_log', 'run_diagnostics',
                       'capture_camera', 'copy_transform', 'paste_transform', 'move_item_to_aim',
                       'drop_item_to_ground', 'aim_item_at_target', 'scatter_at_aim',
@@ -71,7 +71,9 @@ def test_mcp_operations_are_handled() -> None:
                       'collision_fit_to_object', 'collision_update', 'collision_list', 'collision_layers',
                       'collision_visualization', 'collision_passability'):
         assert operation in sent
-    for tool in ('wb_favorite_add', 'wb_favorites_list', 'wb_device_connect', 'wb_elevator_wire',
+    for operation in ('sector_report_load', 'sector_report_flags', 'sector_report_select'):
+        assert operation in handled, operation
+    for tool in ('sector_inspect', 'sector_node', 'wb_favorite_add', 'wb_favorites_list', 'wb_device_connect', 'wb_elevator_wire',
                  'wb_polygon_scatter', 'wb_volume_scatter', 'wb_live_surface_scatter', 'wb_rng_create'):
         assert re.search(rf'def {tool}\(', server), tool
     assert re.search(r'def hotcycle_rebuild\(', server)
@@ -121,6 +123,11 @@ def test_v6_modules_are_packaged() -> None:
     assert (mod / 'modules' / 'environment.lua').is_file()
     assert (mod / 'modules' / 'screenshot_mode.lua').is_file()
     assert (mod / 'modules' / 'collision.lua').is_file()
+    assert (mod / 'modules' / 'sector_inspector.lua').is_file()
+    assert (mod / 'mcp_server' / 'lsbuild' / 'sectors.py').is_file()
+    assert (mod / 'mcp_server' / 'test_sectors.py').is_file()
+    assert (mod.parents[5] / 'SECTOR-INSPECTOR.md').is_file()
+    assert (mod.parents[5] / 'tests' / 'sector_inspector_runtime_test.lua').is_file()
     assert (mod / 'mcp_server' / 'test_collision.py').is_file()
     assert (mod.parents[5] / 'COLLISION-AUTHORING.md').is_file()
     assert (mod.parents[5] / 'tests' / 'collision_authoring_runtime_test.lua').is_file()

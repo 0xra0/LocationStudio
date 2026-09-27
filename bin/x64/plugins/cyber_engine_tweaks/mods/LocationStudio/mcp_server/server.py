@@ -3755,7 +3755,7 @@ def status_resource() -> str:
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from mod_inventory import scan_mod_installation as _scan_mod_installation  # noqa: E402
-from lsbuild import build as _lsb, native as _lsn, worker as _lsw, wiring as _lswire, rng as _lsrng, interactables as _lsip, population as _lsp, vfx as _lsvfx  # noqa: E402
+from lsbuild import build as _lsb, native as _lsn, worker as _lsw, wiring as _lswire, rng as _lsrng, interactables as _lsip, population as _lsp, vfx as _lsvfx, sectors as _lssec  # noqa: E402
 
 WORLD_BUILDER_ROOT = MOD_DIR.parent / "entSpawner"
 BUILD_ROOT = MOD_DIR / "exports" / "build"
@@ -4104,6 +4104,8 @@ def build_mod_from_project(
         wb_root = WORLD_BUILDER_ROOT if WORLD_BUILDER_ROOT.is_dir() else None
         stage("prepare", lambda: _lsb.prepare_build_workspace(_export_file(name), BUILD_ROOT, world_builder_root=wb_root,
                                                               description="Built with LocationStudio", force=True))
+        # Advisory only: the sector report never blocks a build, but it is always written.
+        stage("sectors", lambda: _sector_report_safe(_export_file(name), workspace / "automation" / "sector-inspection.json"))
         population_audit = stage("npc_population", lambda: _lsp.audit(PROJECT, _export_file(name),
             workspace / "automation" / "npc-population-audit.json"))
         if not population_audit.get("ready"):
@@ -4250,6 +4252,63 @@ def environment_status() -> str:
 def environment_restore(blend_time: float = 0.0) -> str:
     """End the environment preview: restore the original game time, return weather to the game's normal cycle, remove the fog volume."""
     return _json(_send("environment_restore", {"blend_time": blend_time}))
+
+
+SECTOR_REPORT = MOD_DIR / "exports" / "sector-inspection.json"
+
+
+def _sector_summary(report: dict[str, Any]) -> dict[str, Any]:
+    return {key: report.get(key) for key in ("report_file", "sector_count", "node_count", "device_count", "flag_counts",
+                                              "matched_objects", "error")}
+
+
+def _sector_report_safe(export_file: Path, workspace_copy: Path) -> dict[str, Any]:
+    """Build-pipeline wrapper: write the report for the workspace and the in-game Sectors tab, never raise."""
+    try:
+        report = _lssec.inspect(export_file, PROJECT if PROJECT.is_file() else None, include_nodes=False, output=workspace_copy)
+        SECTOR_REPORT.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(workspace_copy, SECTOR_REPORT)
+        summary = _sector_summary(report)
+        summary["likely_wrong_sector"] = len(report["likely_wrong_sector"])
+        return summary
+    except Exception as exc:  # advisory stage
+        return {"advisory_error": f"{type(exc).__name__}: {exc}"}
+
+
+@mcp.tool()
+def sector_inspect(export_file: str, sector: str = "", include_nodes: bool = False, write_report: bool = True,
+                   flags_limit: int = 200) -> str:
+    """Inspect a World Builder export's streaming sectors (name or path of *_exported.json).
+
+    Reports each sector's bounds, category/level, node types, NodeRef/device/persistent-ID counts; every
+    flagged node (outside its sector box, inside another sector, outlier from its sector, streaming reference
+    point outside, beyond streaming range), duplicate PSIDs, devices without a node, cross-sector NodeRef and
+    device references, and the LocationStudio object each flagged node came from. include_nodes lists every
+    node (optionally one sector). write_report also saves exports/sector-inspection.json for the in-game
+    Sectors tab. Read-only: the export is not modified.
+    """
+    output = SECTOR_REPORT if write_report else None
+    report = _lssec.inspect(_export_file(export_file), PROJECT if PROJECT.is_file() else None,
+                            sector=sector or None, include_nodes=include_nodes, output=output)
+    limit = max(1, int(flags_limit))
+    if len(report["flags"]) > limit:
+        report["flags_truncated"] = len(report["flags"]) - limit
+        report["flags"] = report["flags"][:limit]
+    return _json(report)
+
+
+@mcp.tool()
+def sector_node(export_file: str, node_ref: str = "", name: str = "", object_id: str = "") -> str:
+    """Find exported nodes by NodeRef, name substring, or LocationStudio object ID and show their sector, variant, device/PSID, references and flags."""
+    if not (node_ref or name or object_id):
+        raise ValueError("give node_ref, name, or object_id")
+    report = _lssec.inspect(_export_file(export_file), PROJECT if PROJECT.is_file() else None, include_nodes=True)
+    matches = [n for n in report["nodes"]
+               if (node_ref and n.get("node_ref") == node_ref) or (name and name.lower() in str(n.get("name") or "").lower())
+               or (object_id and n.get("object_id") == object_id)]
+    flags = [f for f in report["flags"] if any(f.get("sector") == n["sector"] and f.get("node_index") == n["index"] for n in matches)]
+    refs = [r for r in report["cross_sector_references"] if any(r.get("from_node_ref") and r.get("from_node_ref") == n.get("node_ref") for n in matches)]
+    return _json({"matches": matches[:50], "match_count": len(matches), "flags": flags, "cross_sector_references": refs})
 
 
 _COLLISION_SHAPES = {"box", "capsule", "sphere"}

@@ -10,6 +10,12 @@
 The upgrade archive does not contain project/config JSON, logs, exports,
 thumbnails, or bridge state.
 
+## v0.61 Sector inspector smoke check
+
+1. Export a small premise with `build_export_world_builder`, then run `sector_inspect("<name>")`. The sector count and bounds must match World Builder's Export tab.
+2. Move one placed object far outside its premise, export again and re-inspect. That node must be flagged `sector_outlier` or `outside_sector_inside_other`.
+3. Open **Spatial → Sectors**, click **LOAD LATEST REPORT**, then **SELECT** on the flag. The moved object must become selected.
+
 ## v0.60 Collision authoring smoke check
 
 1. Open **Spatial → Collision**. Place a 4 × 0.4 × 3 m box with preset **Player Blocker** across a corridor. The wireframe must appear, and V must be unable to walk through it.
