@@ -1,5 +1,6 @@
 local Util=require('modules/util')
 local Csg=require('modules/csg')
+local Surfaces=require('modules/surfaces')
 
 -- Procedural geometry. Generators turn dimensions and parameters into a list
 -- of solid "parts" (box, wedge, cylinder, sphere, prism) in the object's local
@@ -73,7 +74,7 @@ G.wall={label='Wall with openings',params={length='m',height='m',thickness='m',o
     table.sort(ops,function(x,y) return x.a<y.a end)
     for i=2,#ops do if ops[i].a<ops[i-1].b-1e-6 then return nil,'openings overlap' end end
     local parts={};local cursor=-L/2
-    local function solid(a,b,z0,z1) if b-a>1e-4 and z1-z0>1e-4 then parts[#parts+1]=box((a+b)/2,0,(z0+z1)/2,b-a,T,z1-z0) end end
+    local function solid(a,b,z0,z1) if b-a>1e-4 and z1-z0>1e-4 then local q=box((a+b)/2,0,(z0+z1)/2,b-a,T,z1-z0);q.surface={py='wall',ny='wall'};parts[#parts+1]=q end end
     for _,o in ipairs(ops) do
         solid(cursor,o.a,0,H)
         solid(o.a,o.b,o.s+o.h,H)
@@ -84,21 +85,22 @@ G.wall={label='Wall with openings',params={length='m',height='m',thickness='m',o
     return parts
 end}
 
-local function slab(p,z_top)
+local function slab(p,z_top,face)
     local T,err=range(p,'thickness',0.2,0.01,5);if not T then return nil,err end
     if p.points then
         local pts;pts,err=points(p,'points',3,true);if not pts then return nil,err end
         local flat={};for i,q in ipairs(pts) do flat[i]={x=q.x,y=q.y} end
-        return {{shape='prism',points=flat,z0=z_top-T,z1=z_top,material='main'}}
+        return {{shape='prism',points=flat,z0=z_top-T,z1=z_top,material='main',surface=face}}
     end
     local W;W,err=range(p,'width',4,0.1,200);if not W then return nil,err end
     local D;D,err=range(p,'depth',4,0.1,200);if not D then return nil,err end
-    return {box(0,0,z_top-T/2,W,D,T)}
+    local q=box(0,0,z_top-T/2,W,D,T);q.surface=face
+    return {q}
 end
-G.floor={label='Floor slab',params={width='m',depth='m',thickness='m',points='optional polygon [[x,y],...] instead of width/depth'},fn=function(p) return slab(p,0) end}
+G.floor={label='Floor slab',params={width='m',depth='m',thickness='m',points='optional polygon [[x,y],...] instead of width/depth'},fn=function(p) return slab(p,0,{top='floor'}) end}
 G.ceiling={label='Ceiling slab',params={width='m',depth='m',thickness='m',height='underside height (m)',points='optional polygon'},fn=function(p)
     local h,err=range(p,'height',3,0,50);if not h then return nil,err end
-    local T=num(p.thickness,0.2);return slab(p,h+T)
+    local T=num(p.thickness,0.2);return slab(p,h+T,{bottom='ceiling'})
 end}
 
 G.column={label='Column (box or round, with base and cap)',params={shape='box | round',width='m',depth='m',radius='m',height='m',base='{height, overhang}',cap='{height, overhang}',sides='round sides'},fn=function(p)
@@ -131,8 +133,9 @@ G.stairs={label='Straight stairs',params={width='m',height='total rise (m)',leng
     for i=0,N-1 do
         local top=(i+1)*r
         if solid then parts[#parts+1]=box(0,(i+0.5)*d,top/2,W,d,top) else parts[#parts+1]=box(0,(i+0.5)*d,top-t/2,W,d,t) end
+        parts[#parts].surface='stairs'
     end
-    if landing>0 then if solid then parts[#parts+1]=box(0,L+landing/2,H/2,W,landing,H) else parts[#parts+1]=box(0,L+landing/2,H-t/2,W,landing,t) end end
+    if landing>0 then if solid then parts[#parts+1]=box(0,L+landing/2,H/2,W,landing,H) else parts[#parts+1]=box(0,L+landing/2,H-t/2,W,landing,t) end;parts[#parts].surface='platform' end
     if p.stringers==true then
         local s=num(p.stringer_width,0.06);local depth=num(p.stringer_depth,0.25)
         local len,rot,mid=segment({x=0,y=0,z=0},{x=0,y=L,z=H})
@@ -145,9 +148,10 @@ G.ramp={label='Ramp',params={width='m',length='m',height='rise (m)',solid='true 
     local W,err=range(p,'width',1.5,0.2,50);if not W then return nil,err end
     local L;L,err=range(p,'length',4,0.2,100);if not L then return nil,err end
     local H;H,err=range(p,'height',0.5,0.01,20);if not H then return nil,err end
-    if p.solid~=false then return {{shape='wedge',center={x=0,y=L/2,z=H/2},size={x=W,y=L,z=H},rotation={roll=0,pitch=0,yaw=0},material='main'}} end
+    if p.solid~=false then return {{shape='wedge',center={x=0,y=L/2,z=H/2},size={x=W,y=L,z=H},rotation={roll=0,pitch=0,yaw=0},material='main',surface={slope='ramp'}}} end
     local T=num(p.thickness,0.15);local len,rot,mid=segment({x=0,y=0,z=0},{x=0,y=L,z=H})
-    return {box(0,mid.y,mid.z-T/2,W,len,T,rot)}
+    local q=box(0,mid.y,mid.z-T/2,W,len,T,rot);q.surface='ramp'
+    return {q}
 end}
 
 G.door_frame={label='Door frame',params={width='opening width (m)',height='opening height (m)',frame='profile width (m)',depth='frame depth (m)',threshold='add a threshold'},fn=function(p)
@@ -170,7 +174,7 @@ G.window={label='Window frame with mullions and glass',params={width='m',height=
     local m=f*0.6
     for i=1,mx do parts[#parts+1]=box(-W/2+W*i/(mx+1),0,S+H/2,m,d*0.8,H) end
     for i=1,my do parts[#parts+1]=box(0,0,S+H*i/(my+1),W,d*0.8,m) end
-    if p.glass~=false then parts[#parts+1]=box(0,0,S+H/2,W,0.01,H,nil,'glass') end
+    if p.glass~=false then parts[#parts+1]=box(0,0,S+H/2,W,0.01,H,nil,'glass');parts[#parts].surface={py='glass',ny='glass'} end
     return parts
 end}
 
@@ -237,6 +241,7 @@ G.compound={label='Compound (explicit parts)',params={parts='[{shape, center, si
         out[#out+1]=q
     end
     if #out==0 then return nil,'compound geometry needs at least one part' end
+    out.surfaces=p.surfaces
     return out
 end}
 
@@ -299,8 +304,22 @@ local function bounds(parts)
     return {min=lo,max=hi}
 end
 
--- Run a generator: parts, bounds and stats, or nil plus an error.
-function Procedural.generate(generator,params)
+-- Normalize an object's surface option (modules/surfaces.lua): a tag or
+-- {tag, traits, retag, surfaces}. The tag goes on visible top faces that the
+-- generator did not tag; surfaces are explicit rectangles.
+function Procedural.surface_option(value,extra)
+    local explicit={}
+    if type(value)=='table' and value.surfaces~=nil then local err;explicit,err=Surfaces.normalize_explicit(value.surfaces,'surface.surfaces');if not explicit then return nil,err end end
+    if extra~=nil then local more,err=Surfaces.normalize_explicit(extra);if not more then return nil,err end;for _,q in ipairs(more) do explicit[#explicit+1]=q end end
+    local base=value;if type(value)=='table' then base=Util.deepcopy(value);base.surfaces=nil end
+    local option,err=Surfaces.normalize_option(base);if err then return nil,err end
+    if #explicit>0 then option=option or {};option.surfaces=explicit end
+    return option or false
+end
+
+-- Run a generator: parts, bounds, semantic surfaces and stats, or nil plus an error.
+-- surface: optional object surface option (see Procedural.surface_option).
+function Procedural.generate(generator,params,surface)
     local g=G[generator];if not g then return nil,'unknown generator: '..tostring(generator) end
     local ok,parts,err=pcall(g.fn,type(params)=='table' and params or {})
     if not ok then return nil,'generator '..generator..' failed: '..tostring(parts) end
@@ -308,7 +327,12 @@ function Procedural.generate(generator,params)
     if #parts==0 then return nil,'the parameters produce no geometry' end
     if #parts>MAX_PARTS then return nil,'the parameters produce '..#parts..' parts; the limit is '..MAX_PARTS end
     local csg=parts.csg;parts.csg=nil
-    local info={parts=parts,bounds=bounds(parts),stats={parts=#parts},csg=csg}
+    local explicit=parts.surfaces;parts.surfaces=nil
+    local option;option,err=Procedural.surface_option(surface);if option==nil then return nil,err end
+    local list;list,err=Surfaces.normalize_explicit(explicit,'params.surfaces');if not list then return nil,err end
+    for _,q in ipairs(option and option.surfaces or {}) do list[#list+1]=q end
+    local surfaces,warnings=Surfaces.from_parts(parts,{option=option or nil,explicit=list});if not surfaces then return nil,warnings end
+    local info={parts=parts,bounds=bounds(parts),stats={parts=#parts,surfaces=#surfaces},csg=csg,surfaces=surfaces,surface_warnings=#warnings>0 and warnings or nil}
     if csg then info.stats.csg={approximate=csg.approximate,resolution=csg.resolution,boxes=csg.boxes} end
     return info
 end
@@ -454,7 +478,8 @@ end
 function Procedural:create(args)
     args=args or {}
     local busy=self:_busy();if busy then return nil,busy end
-    local info,err=Procedural.generate(args.generator,args.params);if not info then return nil,err end
+    local surface,serr=Procedural.surface_option(args.surface,args.surfaces);if surface==nil then return nil,serr end
+    local info,err=Procedural.generate(args.generator,args.params,surface);if not info then return nil,err end
     local material;material,err=clean_material(args.material,nil,self.app.material_library);if not material then return nil,err end
     local transform;transform,err=self:_transform(args);if not transform then return nil,err end
     local rules
@@ -470,7 +495,7 @@ function Procedural:create(args)
         name=Util.trim(args.name or '')~='' and Util.trim(args.name) or (G[args.generator].label),kind='procedural',template='',
         layer=args.layer or 'shell',transform=transform,size={x=1,y=1,z=1},enabled=true,
         metadata={source='LocationStudio procedural geometry',procedural={generator=args.generator,params=Util.deepcopy(args.params or {}),parts=info.parts,
-            bounds=info.bounds,stats=info.stats,csg=info.csg,material=material,collision=args.collision==true,collision_rules=rules,collision_preset=args.collision_preset,collider_ids={},
+            bounds=info.bounds,stats=info.stats,csg=info.csg,surface=surface or nil,surfaces=info.surfaces,material=material,collision=args.collision==true,collision_rules=rules,collision_preset=args.collision_preset,collider_ids={},
             stream_range=num(args.stream_range,nil)},asset_bounds={min=Util.deepcopy(info.bounds.min),max=Util.deepcopy(info.bounds.max),source='procedural'}}})
     if not object then self:_abort(before,mark);return nil,'project model rejected the procedural object' end
     object.metadata.procedural.mesh_path=args.mesh_path or self:_mesh_path(object)
@@ -480,7 +505,8 @@ function Procedural:create(args)
     collapse(model,mark)
     model:touch();self.app:mark_dirty()
     if self.app.selection then self.app.selection:set('object',object.id) end
-    local result={object=object,parts=#info.parts,bounds=info.bounds,mesh_path=object.metadata.procedural.mesh_path,colliders=#object.metadata.procedural.collider_ids}
+    local result={object=object,parts=#info.parts,bounds=info.bounds,mesh_path=object.metadata.procedural.mesh_path,colliders=#object.metadata.procedural.collider_ids,
+        surfaces=Surfaces.summary(info.surfaces),surface_warnings=info.surface_warnings}
     if args.spawn~=false then local shown,show_err=self:show(object);result.proxies=shown and shown.proxies or 0;result.preview_error=show_err end
     return result
 end
@@ -495,7 +521,14 @@ function Procedural:update(object_id,patch)
     if type(patch.params)=='table' then for k,v in pairs(patch.params) do params[k]=Util.deepcopy(v) end end
     if patch.replace_params==true then params=Util.deepcopy(patch.params or {}) end
     local generator=patch.generator or cfg.generator
-    local info,err=Procedural.generate(generator,params);if not info then return nil,err end
+    local surface=cfg.surface
+    if patch.surface~=nil or patch.surfaces~=nil then
+        local base=patch.surface;if base==nil then base=cfg.surface end
+        if patch.surfaces~=nil and type(base)=='table' then base=Util.deepcopy(base);base.surfaces=nil end
+        local serr;surface,serr=Procedural.surface_option(base,patch.surfaces);if surface==nil then return nil,serr end
+        surface=surface or nil
+    end
+    local info,err=Procedural.generate(generator,params,surface);if not info then return nil,err end
     local material=cfg.material
     if patch.material~=nil then material,err=clean_material(patch.material,cfg.material,self.app.material_library);if not material then return nil,err end end
     local rules=cfg.collision_rules
@@ -514,6 +547,7 @@ function Procedural:update(object_id,patch)
     self:hide(object)
     model:snapshot('Edit procedural geometry');local mark=#model.undo_stack
     cfg.generator=generator;cfg.params=params;cfg.parts=info.parts;cfg.bounds=info.bounds;cfg.stats=info.stats;cfg.csg=info.csg;cfg.material=material;cfg.collision_rules=rules
+    cfg.surface=surface;cfg.surfaces=info.surfaces
     if patch.collision~=nil then cfg.collision=patch.collision==true end
     if patch.stream_range~=nil then cfg.stream_range=num(patch.stream_range,nil) end
     object.metadata.asset_bounds={min=Util.deepcopy(info.bounds.min),max=Util.deepcopy(info.bounds.max),source='procedural'}
@@ -530,7 +564,7 @@ function Procedural:update(object_id,patch)
     collapse(model,mark)
     model:touch();self.app:mark_dirty()
     local shown=self:show(model:get_object(object_id))
-    return {object=model:get_object(object_id),parts=#info.parts,bounds=info.bounds,proxies=shown and shown.proxies or 0}
+    return {object=model:get_object(object_id),parts=#info.parts,bounds=info.bounds,proxies=shown and shown.proxies or 0,surfaces=Surfaces.summary(info.surfaces)}
 end
 
 function Procedural:delete(object_id)

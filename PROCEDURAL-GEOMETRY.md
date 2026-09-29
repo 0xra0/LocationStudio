@@ -52,6 +52,10 @@ The glb files are still written for inspection. `procedural_export_glb` writes t
 
 Generated meshes live under `mod\locationstudio\procedural\<premise>\` by default (`procedural_settings(mesh_root=...)`). The dependency resolver treats the template mesh as a dependency and does not report the generated mesh as missing. The preflight fails a procedural object without a template and otherwise counts it as exportable.
 
+## Semantic surfaces
+
+Generators tag their own faces, such as the floor top, the ceiling underside, wall faces, stair treads and the ramp slope. The `surface` option (`"desk"`, `"medical_surface"`, or `{tag, traits, retag, surfaces}`) tags the visible top faces of any procedural object, so props, decals and lights can be placed on it. See [SEMANTIC-SURFACES.md](SEMANTIC-SURFACES.md).
+
 ## Limits
 
 - The export needs at least one World Builder object in scope (a light, collision or prop) for the sector to exist. Procedural collision boxes are enough.

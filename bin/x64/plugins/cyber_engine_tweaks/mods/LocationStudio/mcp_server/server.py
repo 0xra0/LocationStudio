@@ -4944,14 +4944,16 @@ def procedural_create(generator: str, params: dict[str, Any] | None = None, name
                       material_template: str = "", appearance: str = "default", uv_scale: float = 1.0, glass_template: str = "",
                       collision: bool = True, collision_preset: str = "", layer: str = "", stream_range: float | None = None,
                       mesh_path: str = "", spawn: bool = True, materials: dict[str, str] | None = None,
-                      collision_rules: dict[str, Any] | None = None) -> str:
+                      collision_rules: dict[str, Any] | None = None, surface: str | dict[str, Any] | None = None) -> str:
     """Generate structural geometry from dimensions (one undo step). The object keeps its parameters and parts, shows
     a World Builder shape preview, optionally gets real collision boxes, and becomes a real .mesh at Build Mod:
     material_template must be an existing .mesh (catalog path) whose materials the generated mesh reuses, and a
     local copy of it must be in a mod source folder for the WolvenKit import. Alternatively give materials
     {main: .mi, glass: .mi} to build a native CMesh resource directly (mesh_resource_build) with the WolvenKit worker.
-    Place at position [x,y,z] + yaw, or at source=player|aim."""
-    args: dict[str, Any] = {"generator": generator, "params": params or {}, "name": name or None, "premise_id": premise_id or None,
+    Place at position [x,y,z] + yaw, or at source=player|aim. surface: the semantic tag of its visible top faces
+    (desk, shelf, medical_surface, ... see surface_vocabulary) or {tag, traits, retag, surfaces}; generators tag their
+    own faces (floor, ceiling, wall, stairs, ramp)."""
+    args: dict[str, Any] = {"generator": generator, "params": params or {}, "name": name or None, "premise_id": premise_id or None, "surface": surface,
                             "room_id": room_id or None, "layer": layer or None, "collision": collision, "collision_preset": collision_preset or None,
                             "stream_range": stream_range, "mesh_path": mesh_path or None, "spawn": spawn, "collision_rules": collision_rules,
                             "material": {"template": material_template, "appearance": appearance, "uv_scale": uv_scale, "glass_template": glass_template,
@@ -4971,14 +4973,17 @@ def procedural_update(object_id: str, params: dict[str, Any] | None = None, repl
                       material_template: str | None = None, appearance: str | None = None, uv_scale: float | None = None,
                       collision: bool | None = None, name: str | None = None, stream_range: float | None = None,
                       materials: dict[str, str] | None = None, collision_rules: dict[str, Any] | None = None,
-                      clear_collision_rules: bool = False) -> str:
+                      clear_collision_rules: bool = False, surface: str | dict[str, Any] | None = None,
+                      clear_surface: bool = False) -> str:
     """Change a procedural object's parameters (merged unless replace_params), generator, material, collision or
     object-level collision_rules (see collision_rules_set) and regenerate it, replacing its collision boxes and
-    preview. One undo step; invalid parameters change nothing."""
+    preview. surface replaces the semantic surface option (clear_surface removes it). One undo step; invalid
+    parameters change nothing."""
     material = {k: v for k, v in (("template", material_template), ("appearance", appearance), ("uv_scale", uv_scale), ("materials", materials)) if v is not None}
     args: dict[str, Any] = {"id": object_id, "params": params or {}, "replace_params": replace_params, "generator": generator or None,
                             "material": material or None, "collision": collision, "name": name, "stream_range": stream_range,
-                            "collision_rules": False if clear_collision_rules else collision_rules}
+                            "collision_rules": False if clear_collision_rules else collision_rules,
+                            "surface": False if clear_surface else surface}
     return _json(_send("procedural_update", {k: v for k, v in args.items() if v is not None}))
 
 
@@ -5440,6 +5445,179 @@ def grammar_builds() -> str:
     """Grammar builds in this project: grammar, start rule, seed, size, params, premise, room/item counts, and whether
     the build is still present."""
     return _json(_send("grammar_builds", {}))
+
+
+SURFACES_LUA = MOD_DIR / "modules" / "surfaces.lua"
+SURFACE_KINDS = {"asset", "procedural", "decal", "light", "effect", "marker"}
+SURFACE_PATTERNS = {"random", "grid", "line", "center"}
+
+
+def surface_vocabulary_offline() -> dict[str, Any]:
+    """The tag vocabulary, groups and placement kinds, read from modules/surfaces.lua (the single source)."""
+    text = SURFACES_LUA.read_text(encoding="utf-8")
+    tags = []
+    for m in re.finditer(r"^    ([a-z_]+)=\{o='(up|side|down)',is=\{([^}]*)\},hint='([^']*)'\},", text, re.M):
+        groups = [g.strip().strip("'") for g in m.group(3).split(",") if g.strip()]
+        tags.append({"tag": m.group(1), "orientation": m.group(2), "groups": groups, "hint": m.group(4)})
+    block = text[text.index("local GROUPS={"):text.index("Surfaces.TAGS=TAGS")]
+    groups = [{"group": g, "hint": h} for g, h in re.findall(r"([a-z_]+)='([^']*)'", block)]
+    kinds = []
+    kblock = text[text.index("local KINDS={"):text.index("Surfaces.KINDS=KINDS")]
+    for m in re.finditer(r"^    ([a-z_]+)=\{tags=\{([^}]*)\}", kblock, re.M):
+        kinds.append({"kind": m.group(1), "tags": [t.strip().strip("'") for t in m.group(2).split(",") if t.strip()]})
+    return {"tags": sorted(tags, key=lambda t: t["tag"]), "groups": sorted(groups, key=lambda g: g["group"]),
+            "kinds": sorted(kinds, key=lambda k: k["kind"]),
+            "custom_tags": "any lowercase name ([a-z][a-z0-9_]*) is accepted as a custom tag"}
+
+
+def _surface_filter(premise_id: str, room_id: str, object_ids: list[str] | None, tags: list[str] | str | None,
+                    traits: list[str] | None, exclude_tags: list[str] | None, orientation: str) -> dict[str, Any]:
+    args: dict[str, Any] = {"premise_id": premise_id or None, "room_id": room_id or None, "object_ids": object_ids or None,
+                            "tags": tags or None, "traits": traits or None, "exclude_tags": exclude_tags or None}
+    if orientation:
+        if orientation not in {"up", "side", "down"}:
+            raise ValueError("orientation must be up, side or down")
+        args["orientation"] = orientation
+    return {k: v for k, v in args.items() if v is not None}
+
+
+def _placement_args(kind: str, pattern: str, count: int | None, per_surface: int | None, density: float | None,
+                    spacing: float | None, footprint: list[float] | float | None, height: float | None,
+                    elevation: float | None, offset: float | None, margin: float | None, min_distance: float | None,
+                    yaw: str | float | None, yaw_step: float | None, seed: str | int | None,
+                    avoid_objects: bool | None, max_items: int | None) -> dict[str, Any]:
+    if kind not in SURFACE_KINDS:
+        raise ValueError("kind must be one of " + ", ".join(sorted(SURFACE_KINDS)))
+    if pattern and pattern not in SURFACE_PATTERNS:
+        raise ValueError("pattern must be one of " + ", ".join(sorted(SURFACE_PATTERNS)))
+    args: dict[str, Any] = {"kind": kind, "pattern": pattern or None, "count": count, "per_surface": per_surface, "density": density,
+                            "spacing": spacing, "footprint": footprint, "height": height, "elevation": elevation, "offset": offset,
+                            "margin": margin, "min_distance": min_distance, "yaw": yaw, "yaw_step": yaw_step,
+                            "seed": None if seed is None else str(seed), "avoid_objects": avoid_objects, "max": max_items}
+    return {k: v for k, v in args.items() if v is not None}
+
+
+@mcp.tool()
+def surface_vocabulary() -> str:
+    """Offline: the semantic surface vocabulary. Tags (floor, wall, ceiling, desk, table, counter, workbench, shelf,
+    cabinet, bed, road, sidewalk, stairs, ramp, medical_surface, industrial_surface, lab_surface, kitchen_surface, ...)
+    with their expected orientation (up/side/down) and groups (walkable, support, work_surface, storage, vertical,
+    overhead, interior, exterior, medical, industrial, lab, ...), and the placement kinds with their default tags.
+    Queries match a tag, a group or a trait; any lowercase name also works as a custom tag."""
+    return _json(surface_vocabulary_offline())
+
+
+@mcp.tool()
+def surface_query(premise_id: str = "", room_id: str = "", object_ids: list[str] | None = None, tags: list[str] | None = None,
+                  traits: list[str] | None = None, exclude_tags: list[str] | None = None, orientation: str = "",
+                  min_area: float | None = None, limit: int = 200) -> str:
+    """Semantic surfaces of generated geometry, parametric rooms and hand-tagged objects, in world space: tag, traits,
+    center, normal, u axis, size {u, v}, area, orientation, owning object/room/premise. tags match a tag, a group or a
+    trait (any); traits must all match. Counts per tag are returned even when the list is truncated to limit."""
+    args = _surface_filter(premise_id, room_id, object_ids, tags, traits, exclude_tags, orientation)
+    if min_area is not None:
+        args["min_area"] = min_area
+    args["limit"] = limit
+    return _json(_send("surface_query", args))
+
+
+@mcp.tool()
+def surface_object(object_id: str) -> str:
+    """All semantic surfaces of one object (generated and hand-tagged), in world space."""
+    return _json(_send("surface_object", {"object_id": object_id}))
+
+
+@mcp.tool()
+def surface_tag(object_id: str, tag: str = "", face: str = "top", inset: float = 0.0, height: float | None = None,
+                traits: list[str] | None = None, surfaces: list[dict[str, Any]] | None = None, replace: bool = False) -> str:
+    """Tag a surface on any object by hand, e.g. a game-asset desk or shelf that has imported bounds: face
+    top|bottom|front|back|left|right of its bounds, shrunk by inset; height (top only) sets the surface height above the
+    bounds' bottom (a seat or a shelf board). Or pass explicit surfaces [{tag, center [x,y,z], size [u,v], normal |
+    orientation up|side|down, yaw, traits}] in the object's local frame (no bounds needed). One undo step."""
+    args: dict[str, Any] = {"object_id": object_id, "face": face, "inset": inset, "replace": replace}
+    if surfaces is not None:
+        args["surfaces"] = surfaces
+    else:
+        if not tag:
+            raise ValueError("give tag (with face) or surfaces")
+        args["tag"] = tag
+    if height is not None:
+        args["height"] = height
+    if traits:
+        args["traits"] = traits
+    return _json(_send("surface_tag", args))
+
+
+@mcp.tool()
+def surface_untag(object_id: str, tag: str = "") -> str:
+    """Remove hand-tagged surfaces from an object (all, or those with tag). Generated surfaces are changed through the
+    object's surface option instead. One undo step."""
+    args: dict[str, Any] = {"object_id": object_id}
+    if tag:
+        args["tag"] = tag
+    return _json(_send("surface_untag", args))
+
+
+@mcp.tool()
+def surface_sample(kind: str = "asset", tags: list[str] | None = None, traits: list[str] | None = None,
+                   exclude_tags: list[str] | None = None, premise_id: str = "", room_id: str = "",
+                   object_ids: list[str] | None = None, pattern: str = "", count: int | None = None,
+                   per_surface: int | None = None, density: float | None = None, spacing: float | None = None,
+                   footprint: list[float] | None = None, height: float | None = None, elevation: float | None = None,
+                   offset: float | None = None, margin: float | None = None, min_distance: float | None = None,
+                   yaw: str | None = None, yaw_step: float | None = None, seed: str | None = None,
+                   avoid_objects: bool | None = None, max_items: int | None = None) -> str:
+    """Dry run: where items of a kind would go on matching surfaces, without changing anything. Each placement has a
+    world position and rotation (props upright and aligned to the surface; wall items face into the room; decals
+    project into their surface; lights hang offset below ceilings) and the surface it is on. Defaults per kind:
+    asset/procedural/effect -> support surfaces, decal -> floor and walls, light -> ceilings (grid, 3 m), marker ->
+    walkable. pattern random (count total, per_surface, or density per m2), grid/line (spacing) or center. footprint
+    [x,y] and height are the item's size: it must fit inside the surface, have that much clearance under anything
+    above, and not overlap placed objects (avoid_objects). elevation: height above a wall's bottom edge. Same seed =
+    same points. rejected counts why candidates were dropped (spacing, clearance, occupied, outline)."""
+    args = _surface_filter(premise_id, room_id, object_ids, tags, traits, exclude_tags, "")
+    args.update(_placement_args(kind, pattern, count, per_surface, density, spacing, footprint, height, elevation, offset,
+                                margin, min_distance, yaw, yaw_step, seed, avoid_objects, max_items))
+    return _json(_send("surface_sample", args))
+
+
+@mcp.tool()
+def surface_populate(kind: str = "asset", item: dict[str, Any] | None = None, tags: list[str] | None = None,
+                     traits: list[str] | None = None, exclude_tags: list[str] | None = None, premise_id: str = "",
+                     room_id: str = "", object_ids: list[str] | None = None, pattern: str = "", count: int | None = None,
+                     per_surface: int | None = None, density: float | None = None, spacing: float | None = None,
+                     footprint: list[float] | None = None, height: float | None = None, elevation: float | None = None,
+                     offset: float | None = None, margin: float | None = None, min_distance: float | None = None,
+                     yaw: str | None = None, yaw_step: float | None = None, seed: str | None = None,
+                     avoid_objects: bool | None = None, max_items: int | None = None, name: str = "",
+                     dry_run: bool = False) -> str:
+    """Place props, decals, lights, effects or markers on matching semantic surfaces as ONE authoring plan (validated,
+    one undo step, rolled back on failure). Placement options as in surface_sample. item holds the kind's fields:
+    asset {asset_id | asset_query} (a Project Asset), procedural {generator, params, material, surface},
+    decal {resource_name | resource_path, decal_width, decal_height, alpha}, light {config | preset_id},
+    effect {resource_path | resource_name}, marker {type, category}. name may contain {i}. Take resources from the
+    catalog/search tools; never invent paths. dry_run returns the placements only."""
+    args = _surface_filter(premise_id, room_id, object_ids, tags, traits, exclude_tags, "")
+    args.update(_placement_args(kind, pattern, count, per_surface, density, spacing, footprint, height, elevation, offset,
+                                margin, min_distance, yaw, yaw_step, seed, avoid_objects, max_items))
+    for key, value in (item or {}).items():
+        if key in args or key in {"op", "transform", "premise_id", "room_id"}:
+            raise ValueError(f"item cannot set {key}")
+        args[key] = value
+    if name:
+        args["name"] = name
+    args["dry_run"] = dry_run
+    return _json(_send("surface_populate", args))
+
+
+@mcp.tool()
+def surface_refresh(premise_id: str = "") -> str:
+    """Recompute the generated surfaces of procedural objects and parametric rooms (for projects made before semantic
+    surfaces, or after changing the vocabulary). Geometry is not rebuilt. One undo step."""
+    args: dict[str, Any] = {}
+    if premise_id:
+        args["premise_id"] = premise_id
+    return _json(_send("surface_refresh", args))
 
 
 EDL_EXPORTS = MOD_DIR / "exports" / "edl"

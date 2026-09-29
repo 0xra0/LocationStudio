@@ -1038,6 +1038,75 @@ function SpatialUI:draw_grammar()
     end
 end
 
+function SpatialUI:draw_surfaces()
+    local app=self.app;local S=app.surfaces
+    ImGui.Text('SEMANTIC SURFACES')
+    if not S then ImGui.TextDisabled('Semantic surfaces failed to load.');return end
+    ImGui.TextWrapped('Generated geometry knows what its surfaces are (floor, wall, ceiling, desk, shelf, medical_surface ...). Props, decals, lights and markers can be placed on them: on top of work surfaces, clear of other objects and with room above.')
+    local premise=app.model:get_premise(app.selected_premise_id)
+    local scope={premise_id=premise and premise.id or nil}
+    ImGui.TextDisabled(premise and ('Premise: '..tostring(premise.name)) or 'All premises (select a premise to narrow)')
+    local q=S:query({premise_id=scope.premise_id,limit=0})
+    local rows={};for tag,n in pairs(q.by_tag or {}) do rows[#rows+1]={tag,n} end
+    table.sort(rows,function(a,b) return a[1]<b[1] end)
+    if #rows==0 then ImGui.TextDisabled('No tagged surfaces yet. Generate rooms or geometry, or tag an object below.') end
+    local line={}
+    for i,r in ipairs(rows) do line[#line+1]=r[1]..' '..r[2];if #line==4 or i==#rows then ImGui.TextDisabled('  '..table.concat(line,', '));line={} end end
+    if ImGui.SmallButton('REFRESH SURFACES##sf') then local r,err=S:refresh(scope);self:toast(err or (r.updated..' object(s) refreshed')) end
+    -- Selected object: its surfaces and hand tags.
+    local o=app.model:get_object(app.selected_object_id)
+    ImGui.Separator()
+    if o then
+        local info=S:object(o.id)
+        ImGui.Text(tostring(o.name)..': '..info.count..' surface(s)')
+        for i,s in ipairs(info.items) do if i<=8 then ImGui.TextDisabled(string.format('  %s (%s, %s) %.2f x %.2f m at z %.2f',s.tag,s.orientation,s.source,s.size.u,s.size.v,s.center.z)) end end
+        if not self.sf_tag then self.sf_tag='table';self.sf_face='top' end
+        self.sf_tag=select(1,ImGui.InputText('Tag##sf',self.sf_tag,64))
+        for _,f in ipairs({'top','front','back','left','right','bottom'}) do
+            if ImGui.SmallButton((self.sf_face==f and '> ' or '')..f..'##sff_'..f) then self.sf_face=f end
+            ImGui.SameLine()
+        end
+        ImGui.NewLine()
+        if ImGui.Button('TAG FROM BOUNDS##sf',170,26) then local _,err=S:tag({object_id=o.id,tag=self.sf_tag,face=self.sf_face});self:toast(err or ('Tagged '..self.sf_face..' as '..self.sf_tag)) end
+        ImGui.SameLine()
+        if ImGui.Button('CLEAR HAND TAGS##sf',170,26) then local r,err=S:untag({object_id=o.id});self:toast(err or (r.removed..' tag(s) removed')) end
+    else ImGui.TextDisabled('Select an object to see or tag its surfaces.') end
+    -- Populate.
+    ImGui.Separator();ImGui.Text('Populate')
+    if not self.sf_kind then self.sf_kind='marker';self.sf_tags='work_surface';self.sf_count='6';self.sf_seed='1' end
+    for _,k in ipairs({'asset','marker','light','decal'}) do
+        if ImGui.SmallButton((self.sf_kind==k and '> ' or '')..k..'##sfk_'..k) then self.sf_kind=k end
+        ImGui.SameLine()
+    end
+    ImGui.NewLine()
+    self.sf_tags=select(1,ImGui.InputText('Tags / groups / traits##sf',self.sf_tags,128))
+    self.sf_count=select(1,ImGui.InputText('Count##sf',self.sf_count,16))
+    self.sf_seed=select(1,ImGui.InputText('Seed##sfs',self.sf_seed,32))
+    local asset=app.model:get_asset(app.selected_asset_id or app.last_asset_id)
+    if self.sf_kind=='asset' then ImGui.TextDisabled(asset and ('Asset: '..tostring(asset.name)) or 'Select a Project Asset in the browser first.') end
+    if self.sf_kind=='decal' then self.sf_decal=select(1,ImGui.InputText('Decal search##sf',self.sf_decal or '',128)) end
+    local function args(dry)
+        local tags={};for t in tostring(self.sf_tags):gmatch('[%w_]+') do tags[#tags+1]=t end
+        local a={kind=self.sf_kind,tags=#tags>0 and tags or nil,premise_id=scope.premise_id,seed=self.sf_seed,dry_run=dry}
+        if self.sf_kind=='light' then a.pattern='grid';a.spacing=3 else a.count=tonumber(self.sf_count) or 1 end
+        if self.sf_kind=='asset' then a.asset_id=asset and asset.id or nil end
+        if self.sf_kind=='marker' then a.type='surface_spot';a.name='Spot {i}' end
+        if self.sf_kind=='decal' then a.resource_name=self.sf_decal end
+        return a
+    end
+    if ImGui.Button('PREVIEW##sfp',120,28) then
+        local r,err=S:populate(args(true))
+        self.sf_preview=r;if err then self:toast(err) end
+    end
+    ImGui.SameLine()
+    if ImGui.Button('POPULATE##sfp',120,28) then local r,err=S:populate(args(false));self:toast(err or ('Placed '..r.created..' item(s); one undo step')) end
+    local p=self.sf_preview
+    if p then
+        local why={};for k,v in pairs(p.rejected or {}) do why[#why+1]=k..' '..v end;table.sort(why)
+        ImGui.TextDisabled(string.format('Preview: %d placement(s) on %d matching surface(s)%s',p.count,p.surfaces_matched,#why>0 and ('; rejected '..table.concat(why,', ')) or ''))
+    end
+end
+
 function SpatialUI:draw_bounds()
     local app=self.app;local Bd=app.bounds_gen
     ImGui.Text('GENERATED BOUNDS')
@@ -1923,6 +1992,7 @@ function SpatialUI:draw()
         if ImGui.BeginTabItem('Geometry') then self:draw_procedural();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Room gen') then self:draw_room_generator();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Grammar') then self:draw_grammar();ImGui.EndTabItem() end
+        if ImGui.BeginTabItem('Surfaces') then self:draw_surfaces();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Materials') then self:draw_materials();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Collision rules') then self:draw_collision_rules();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Bounds') then self:draw_bounds();ImGui.EndTabItem() end

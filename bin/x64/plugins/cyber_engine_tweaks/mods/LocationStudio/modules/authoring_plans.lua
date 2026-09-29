@@ -13,11 +13,13 @@ local OP_KIND={
     create_vfx='object',create_audio_emitter='object',create_reverb_zone='object',create_occluder='object',create_interactable='object',
     create_npc='object',create_workspot='location',create_npc_route='npc_route',add_route_waypoint='waypoint',create_device_graph='device_graph',
     add_device_node='device_node',add_device_link='device_link',link_fact='volume',import_navigation='navigation_graph',create_spline='spline',create_procedural='object',create_parametric_room='room',create_material='material',set_collision_rules='collision_rules',
+    create_decal='object',populate_surfaces='populate',
 }
 local V2_ONLY={}
 for _,op in ipairs({'edl_begin','set_room_kit','import_resource','place_resource','create_light','create_collision','create_vfx','create_audio_emitter',
     'create_reverb_zone','create_occluder','create_interactable','create_npc','create_workspot','create_npc_route','add_route_waypoint','create_device_graph',
-    'add_device_node','add_device_link','link_fact','import_navigation','create_spline','create_procedural','create_parametric_room','create_material','set_collision_rules'}) do V2_ONLY[op]=true end
+    'add_device_node','add_device_link','link_fact','import_navigation','create_spline','create_procedural','create_parametric_room','create_material','set_collision_rules',
+    'create_decal','populate_surfaces'}) do V2_ONLY[op]=true end
 local NEEDS_PREMISE={create_room=true,create_volume=true,create_camera=true,create_scene=true,capture_scene=true,place_asset=true,place_resource=true,
     create_light=true,create_collision=true,create_vfx=true,create_audio_emitter=true,create_occluder=true,create_interactable=true,create_npc=true,create_procedural=true,create_parametric_room=true}
 -- Ops that do not need the World Builder runtime.
@@ -207,6 +209,16 @@ function Plans:validate(plan)
             local ML=package.loaded['modules/materials']
             if ML then local ok,err=ML.normalize(step);if not ok then table.insert(errors,string.format('step %d: %s',index,err)) end end
         end
+        if op=='populate_surfaces' then
+            local S=package.loaded['modules/surfaces']
+            if S then
+                local _,err=S.placement_options(step);if err then table.insert(errors,string.format('step %d: %s',index,err)) end
+                local _,kerr=S.check_kind(step);if kerr and kerr~=err then table.insert(errors,string.format('step %d: %s',index,kerr)) end
+                local kind=step.kind or 'asset'
+                if kind=='asset' and not is_ref(step.asset_id) then local _,aerr=self:resolve_asset(step.asset_id,step.asset_query);if aerr then table.insert(errors,string.format('step %d: %s',index,aerr)) end end
+                if kind=='procedural' then local P=package.loaded['modules/procedural'];if P and not P.GENERATORS[step.generator] then table.insert(errors,string.format('step %d: unknown generator %s',index,tostring(step.generator))) end end
+            end
+        end
         if op=='create_parametric_room' then
             local RG=package.loaded['modules/room_generator']
             if RG then local ok,err=RG.normalize(step.spec);if not ok then table.insert(errors,string.format('step %d: %s',index,err)) end end
@@ -328,8 +340,21 @@ function Plans:_edl_clear(record)
     return true
 end
 
+-- Objects and rooms made by the running plan (populate_surfaces from_plan).
+function Plans:_track(result)
+    local c=self._created;if not c or not result then return end
+    if result.kind=='object' and result.id then c.objects[#c.objects+1]=result.id elseif result.kind=='room' and result.id then c.rooms[#c.rooms+1]=result.id end
+end
+
 function Plans:_edl_note(step,result)
     local rec=self._edl;if not rec or not result or not result.id or result.kind=='edl' then return end
+    if result.kind=='populate' then
+        for i,id in ipairs(result.ids or {}) do
+            local k=result.kinds and result.kinds[i] or 'object'
+            rec.items[k]=rec.items[k] or {};table.insert(rec.items[k],id)
+        end
+        return
+    end
     local kind=result.kind
     if kind=='premise' then rec.premise_id=result.id end
     rec.items[kind]=rec.items[kind] or {};table.insert(rec.items[kind],result.id)
@@ -479,7 +504,7 @@ function Plans:_run_step(step,aliases,origin)
     elseif op=='create_procedural' then
         if not app.procedural then return nil,'procedural geometry is unavailable' end
         local r;r,warning=app.procedural:create({generator=a.generator,params=a.params,premise_id=a.premise_id,room_id=a.room_id,name=a.name,layer=a.layer,
-            material=a.material,collision=a.collision,collision_preset=a.collision_preset,collision_rules=a.collision_rules,stream_range=a.stream_range,transform=self:_transform(origin,a),spawn=a.spawn})
+            material=a.material,collision=a.collision,collision_preset=a.collision_preset,collision_rules=a.collision_rules,stream_range=a.stream_range,surface=a.surface,surfaces=a.surfaces,transform=self:_transform(origin,a),spawn=a.spawn})
         item=r and r.object;kind='object';if r and r.preview_error then warning=r.preview_error end
     elseif op=='set_collision_rules' then
         if not app.collision_gen then return nil,'collision rules are unavailable' end
@@ -490,6 +515,27 @@ function Plans:_run_step(step,aliases,origin)
         if not app.material_library then return nil,'material library is unavailable' end
         local def=Util.deepcopy(a);def.op=nil;def.as=nil;def.edl_element=nil
         item,warning=app.material_library:create(def);kind='material'
+    elseif op=='create_decal' then
+        if not app.mesh_appearance then return nil,'decals are unavailable' end
+        local r;r,warning=app.mesh_appearance:create_decal({premise_id=a.premise_id,room_id=a.room_id,name=a.name,resource_name=a.resource_name,query=a.query,resource_path=a.resource_path,
+            width=a.width,height=a.height,depth=a.depth,alpha=a.alpha,auto_hide_distance=a.auto_hide_distance,horizontal_flip=a.horizontal_flip,vertical_flip=a.vertical_flip,
+            transform=self:_transform(origin,a),spawn=a.spawn})
+        item=r and r.object;kind='object';if r and r.spawn_error then warning=r.spawn_error end
+    elseif op=='populate_surfaces' then
+        -- Place items on semantic surfaces (modules/surfaces.lua) of what exists now.
+        if not app.surfaces then return nil,'semantic surfaces are unavailable' end
+        local q=Util.deepcopy(a)
+        if a.from_plan==true then q.object_ids=Util.deepcopy(self._created and self._created.objects or {});q.room_ids=Util.deepcopy(self._created and self._created.rooms or {}) end
+        local sample;sample,err=app.surfaces:sample(q);if not sample then return nil,err end
+        if sample.count==0 and a.required==true then return nil,'no placements on '..sample.surfaces_matched..' matching surface(s)' end
+        local ids,kinds={},{}
+        for i,p in ipairs(sample.items) do
+            local sub;sub,err=app.surfaces.step_for(p,a,i);if not sub then return nil,err end
+            local r;r,err=self:_run_step(sub,aliases,origin);if not r then return nil,'placement '..i..' on '..tostring(p.surface.tag)..': '..tostring(err) end
+            ids[#ids+1]=r.id;kinds[#kinds+1]=r.kind;self:_track(r)
+        end
+        item={id=ids[1] or ('populate_'..Util.make_id('p')),ids=ids,kinds=kinds,count=#ids,surfaces_matched=sample.surfaces_matched,rejected=sample.rejected}
+        kind='populate';if #ids==0 then warning='no placements on '..sample.surfaces_matched..' matching surface(s)' end
     elseif op=='create_parametric_room' then
         if not app.room_generator then return nil,'room generator is unavailable' end
         local r;r,warning=app.room_generator:create({spec=a.spec,premise_id=a.premise_id,transform=self:_transform(origin,a)})
@@ -500,7 +546,7 @@ function Plans:_run_step(step,aliases,origin)
     else return nil,'unsupported operation: '..tostring(op) end
     if not item then return nil,warning or (tostring(op)..' failed') end
     local id=item.id or (item.object and item.object.id)
-    return {item=item,id=id,kind=kind,warning=warning}
+    return {item=item,id=id,kind=kind,warning=warning,ids=item.ids,kinds=item.kinds}
 end
 
 function Plans:_rollback_state(snapshot)
@@ -527,12 +573,12 @@ function Plans:execute(plan,options)
     local origin,origin_source=self:_origin(plan);if not origin then return nil,origin_source end
     local live_ids={};for _,object in ipairs(self.app.model.data.objects) do if self.app.placement:is_tracked(object) then table.insert(live_ids,object.id) end end
     local snapshot={data=Util.deepcopy(self.app.model.data),undo=Util.deepcopy(self.app.model.undo_stack),redo=Util.deepcopy(self.app.model.redo_stack),dirty=self.app.dirty==true,dirty_since=self.app.dirty_since,selection=selection_snapshot(self.app),live_ids=live_ids,editing_scene_id=self.app.editing_scene_id,live_scene_id=self.app.live_scene_id}
-    self.running=true;self._edl=nil;local aliases,outputs={},{}
+    self.running=true;self._edl=nil;self._created={objects={},rooms={}};local aliases,outputs={},{}
     if self.app.logger then self.app.logger:info('authoring:plan','started',{name=validation.name,steps=validation.step_count,origin=origin_source}) end
     for index,step in ipairs(plan.steps) do
         local result,err=self:_run_step(step,aliases,origin)
         if not result then
-            self.running=false;self._edl=nil;local rolled,rollback_err,failed=self:_rollback_state(snapshot)
+            self.running=false;self._edl=nil;self._created=nil;local rolled,rollback_err,failed=self:_rollback_state(snapshot)
             if not rolled then
                 self.recovery={snapshot=snapshot,plan_name=validation.name,step=index,error=tostring(err),cleanup_failed=failed};self.last_error='Plan failed at step '..index..' ('..tostring(step.op)..'): '..tostring(err)..'. Rollback is blocked: '..tostring(rollback_err)
                 self.last_result={executed=false,partial=true,recovery_required=true,failed_step=index,error=tostring(err),outputs=outputs}
@@ -545,10 +591,10 @@ function Plans:execute(plan,options)
             return nil,self.last_error
         end
         if step.as and result.id then aliases[step.as]=result.id end
-        self:_edl_note(step,result)
-        table.insert(outputs,{index=index,op=step.op,alias=step.as,kind=result.kind,id=result.id,warning=result.warning})
+        self:_edl_note(step,result);self:_track(result)
+        table.insert(outputs,{index=index,op=step.op,alias=step.as,kind=result.kind,id=result.id,ids=result.ids,warning=result.warning})
     end
-    self.running=false
+    self.running=false;self._created=nil
     local edl=self._edl;self._edl=nil
     self.app.model.undo_stack=Util.deepcopy(snapshot.undo);self.app.model.redo_stack={};self.app.model:push_history(snapshot.data,'Authoring plan '..tostring(validation.name or ''));self.app.model:touch();self.app:mark_dirty()
     local issues=self.app.model:validate();local result={executed=true,name=validation.name,step_count=#outputs,outputs=outputs,aliases=aliases,origin=origin,origin_source=origin_source,preflight=preflight,validation_issues=issues,one_undo=true}
