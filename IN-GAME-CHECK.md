@@ -10,6 +10,13 @@
 The upgrade archive does not contain project/config JSON, logs, exports,
 thumbnails, or bridge state.
 
+## v0.78 Generated bounds smoke check
+
+1. Create a long procedural wall, rotate it by 90° and pitch it. In Spatial → Bounds, the world bounds follow the rotated shape. Run `bounds_get` after moving it; the world bounds move with it.
+2. Run Build Mod and read `procedural-report.json`. Each object lists its ranges; a 1 m cube streams at about 110 m (visible to about 100 m) and a 20 m wall at the 800 m cap by default.
+3. In game, walk away from a small generated prop and a large generated wall. Neither should pop out while it is still clearly visible. If one does, lower `min_screen_angle` or raise `stream_margin`, and rebuild.
+4. Place a generated object across a sector edge. It appears from both sides; check that it is written to the sector holding its centre.
+
 ## v0.77 Collision rules smoke check
 
 1. Create a kit room with a door, and a procedural wall across the doorway (box generator). With collision visualization on, the collider has a gap in the doorway; walk through it.

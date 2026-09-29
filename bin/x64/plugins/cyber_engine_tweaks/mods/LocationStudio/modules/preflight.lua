@@ -115,6 +115,13 @@ function Preflight:_bounds(objects)
     return c
 end
 
+function Preflight:_generated_bounds(objects)
+    local c=check('generated_bounds','Generated bounds')
+    if not self.app.bounds_gen then return c end
+    for _,i in ipairs(self.app.bounds_gen:issues(objects)) do c.add(i.severity,i.message,{object_id=i.object_id,name=i.name}) end
+    return c
+end
+
 function Preflight:_spawns(objects,live)
     local c=check('spawns','Spawns')
     for _,o in ipairs(objects) do
@@ -308,6 +315,7 @@ function Preflight:run(args)
     run(self._project,args)
     run(self._resource_paths,objects,args)
     run(self._bounds,objects)
+    run(self._generated_bounds,objects)
     run(self._spawns,objects,live)
     run(self._noderefs)
     run(self._quest_facts)

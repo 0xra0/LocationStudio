@@ -1,6 +1,6 @@
 local env=dofile(arg[2]..'/support/cet_mock.lua')
 local app=env.app
-assert(app.version=='0.77.0')
+assert(app.version=='0.78.0')
 assert(app.model.data.schema_version==24 and type(app.model.data.room_frames)=='table')
 local frame=assert(app.bridge:handle({id='frame-create',op='wb_frame_create',args={
     name='Clinic room',origin={x=-1908,y=-2469.5,z=24},yaw=45}}))

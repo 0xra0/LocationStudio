@@ -326,6 +326,7 @@ function RoomGen:_build(room,plan,rec)
         pivot={position=Util.deepcopy(room.transform.position),rotation=Util.deepcopy(room.transform.rotation)}},true)
     rec.group_id=group and group.id or nil
     rec.portals=plan.portals;rec.anchors=plan.anchors;rec.sockets=plan.sockets;rec.spec=plan.spec
+    rec.bounds=app.bounds_gen and app.bounds_gen:room_bounds(room.id) or nil
     return true
 end
 

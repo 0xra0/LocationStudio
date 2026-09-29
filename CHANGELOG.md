@@ -1,3 +1,22 @@
+## 0.78.0 - 2026-09-29
+
+- Added automatic bounds for generated resources (`modules/bounds_gen.lua`, `mcp_server/lsbuild/bounds.py`, Spatial → Bounds). Procedural objects, their generated colliders and parametric rooms get records with:
+  - **local:** exact per-shape extents; approximate CSG is flagged;
+  - **world:** AABB plus the oriented box and a bounding sphere;
+  - **collision:** the union of the generated colliders;
+  - **visibility:** render AABB and the distance at which the sphere subtends `min_screen_angle`;
+  - **streaming:** primary and secondary range, expanded AABB and cells. A manual `stream_range` still wins.
+- Records are kept on create, update and collider generation, and recomputed for moved objects.
+- `asset_bounds:world_aabb` uses them for generated resources, which fixes tilted procedural bounds that used the wrong rotation order. Hidden-mesh checks include generated geometry.
+- Build Mod computes the bounds from the built mesh:
+  - node `primaryRange`/`secondaryRange` come from the automatic ranges instead of a fixed 150 m;
+  - nodes go to the sector holding their world centre;
+  - sectors grow by the rotated world AABB;
+  - the report warns when saved bounds differ from the mesh.
+- New preflight check `generated_bounds`: pop-in from a short manual range, objects spanning several streaming cells, and approximate CSG.
+- Added bridge ops and MCP tools `bounds_get`, `bounds_refresh`, `bounds_settings` and `bounds_report` (offline, exact).
+- Added `GENERATED-BOUNDS.md` and Lua/Python tests. Bumped to v0.78.0.
+
 ## 0.77.0 - 2026-09-27
 
 - Added the collision code generator (`modules/collision_gen.lua`, Spatial → Collision rules). Procedural geometry builds its World Builder colliders from rules at three levels, project default → room → object:

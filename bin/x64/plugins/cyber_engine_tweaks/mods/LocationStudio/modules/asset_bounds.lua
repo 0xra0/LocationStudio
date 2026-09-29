@@ -146,6 +146,9 @@ end
 function AssetBounds:world_aabb(object_id)
     local object,err=self.app.model:get_object(object_id)
     if not object then return nil,err or ('object not found: '..tostring(object_id)) end
+    -- Generated resources: bounds computed from their geometry (modules/bounds_gen.lua), in their own rotation convention.
+    local generated=self.app.bounds_gen and self.app.bounds_gen:world_aabb(object)
+    if generated then return {object_id=object.id,name=object.name,units='m',aabb={min=generated.min,max=generated.max},source='generated'} end
     local bounds=object.metadata and object.metadata.asset_bounds
     if type(bounds)~='table' then return nil,'object has no imported asset_bounds metadata: '..object.id end
     local normalized;normalized,err=normalize_bounds(bounds,bounds.source);if not normalized then return nil,err end

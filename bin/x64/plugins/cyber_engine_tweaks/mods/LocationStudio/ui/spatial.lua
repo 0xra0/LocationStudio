@@ -972,6 +972,28 @@ function SpatialUI:draw_procedural()
     end
 end
 
+function SpatialUI:draw_bounds()
+    local app=self.app;local Bd=app.bounds_gen
+    ImGui.Text('GENERATED BOUNDS')
+    if not Bd then ImGui.TextDisabled('Bounds generator failed to load.');return end
+    ImGui.TextWrapped('Local, world, collision, visibility and streaming bounds of generated geometry and colliders are computed from the geometry. Streaming range = visibility distance (bounding sphere seen at the minimum screen angle) + margin, clamped.')
+    local s=Bd:settings()
+    ImGui.TextDisabled(string.format('min angle %.2f deg, margin %g m, range %g-%g m, secondary x%.2f, cell %g m',s.min_screen_angle,s.stream_margin,s.min_range,s.max_range,s.secondary_factor,s.cell_size))
+    if ImGui.Button('REFRESH ALL##bd',150,28) then local r=Bd:refresh({premise_id=app.selected_premise_id});self:toast(r.updated..' record(s) refreshed') end
+    local o=app.model:get_object(app.selected_object_id)
+    if o and Bd:kind_of(o) then
+        local rec=Bd:get(o.id)
+        if rec then
+            local l,w=rec['local'],rec.world
+            ImGui.Text(tostring(o.name)..(rec.exact and '' or ' (approximate)'))
+            ImGui.TextDisabled(string.format('local  %.2f x %.2f x %.2f m',l.extents.x*2,l.extents.y*2,l.extents.z*2))
+            ImGui.TextDisabled(string.format('world  (%.1f, %.1f, %.1f) - (%.1f, %.1f, %.1f)',w.min.x,w.min.y,w.min.z,w.max.x,w.max.y,w.max.z))
+            if rec.collision then ImGui.TextDisabled(string.format('collision  %d collider(s), (%.1f, %.1f, %.1f) - (%.1f, %.1f, %.1f)',rec.collision.count,rec.collision.min.x,rec.collision.min.y,rec.collision.min.z,rec.collision.max.x,rec.collision.max.y,rec.collision.max.z)) end
+            if rec.visibility.distance then ImGui.TextDisabled(string.format('visible to %.0f m; streams at %.0f m (%s), secondary %.0f m; cells %d',rec.visibility.distance,rec.streaming.range,rec.streaming.source,rec.streaming.secondary_range,rec.streaming.cell_count or 0)) end
+        end
+    else ImGui.TextDisabled('Select generated geometry or a generated collider to see its bounds.') end
+end
+
 function SpatialUI:draw_collision_rules()
     local app=self.app;local C=app.collision_gen
     ImGui.Text('COLLISION RULES')
@@ -1836,6 +1858,7 @@ function SpatialUI:draw()
         if ImGui.BeginTabItem('Room gen') then self:draw_room_generator();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Materials') then self:draw_materials();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Collision rules') then self:draw_collision_rules();ImGui.EndTabItem() end
+        if ImGui.BeginTabItem('Bounds') then self:draw_bounds();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Layers') then self:draw_layers();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Splines') then self:draw_splines();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Timeline') then self:draw_timeline();ImGui.EndTabItem() end
