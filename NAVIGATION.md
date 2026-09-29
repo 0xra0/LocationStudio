@@ -1,5 +1,7 @@
 # Navigation data and reachability
 
+> Since v0.82, graphs can also be **generated** from generated geometry, and validated with a real NPC. See [NAVIGATION-GENERATOR.md](NAVIGATION-GENERATOR.md). Generated graphs use the format below and work with every tool on this page.
+
 LocationStudio v0.52 adds a portable navigation graph importer, a Navigation tab, typed transitions, and graph connectivity checks. It does **not** read or query REDengine's live AI navmesh. CET's current mod API usage in this project provides collision queries but no verified navmesh/path API, so native results are reported as unavailable instead of guessed.
 
 ## What this does
@@ -38,7 +40,7 @@ Call MCP `navigation_graph_import` with JSON shaped like this (positions are wor
 }
 ```
 
-Allowed edge kinds: `walk`, `door`, `stairs`, `elevator`, `jump`, `off_mesh`, and `custom`. Each edge must connect two imported node IDs. Limits are 50,000 nodes, 100,000 edges, 25,000 polygons, and 3–64 vertices per polygon. The importer expects an already-converted JSON interchange graph; it does not decode REDengine `.navmesh`/`.navdata` files. A converter must retain coordinates, surface polygons, and link semantics and record its source.
+Allowed edge kinds: `walk`, `door`, `stairs`, `ramp`, `elevator`, `jump`, `off_mesh`, and `custom`. Each edge must connect two imported node IDs. Limits are 50,000 nodes, 100,000 edges, 25,000 polygons, and 3–64 vertices per polygon. The importer expects an already-converted JSON interchange graph; it does not decode REDengine `.navmesh`/`.navdata` files. A converter must retain coordinates, surface polygons, and link semantics and record its source.
 
 ## MCP examples
 

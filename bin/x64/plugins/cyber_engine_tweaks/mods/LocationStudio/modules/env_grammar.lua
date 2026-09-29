@@ -1336,7 +1336,22 @@ function Grammar:generate(args)
     out.build_id=p.build_id;out.premise_id=premise_id;out.steps=result.step_count;out.one_undo=true;out.replaced=result.edl and result.edl.replaced or false
     local warnings={};for _,o in ipairs(result.outputs or {}) do if o.warning then warnings[#warnings+1]='step '..o.index..' ('..o.op..'): '..tostring(o.warning) end end
     out.runtime_warnings=warnings
+    out.navigation=self:_navigation(p.build_id,args.navigation)
     return out
+end
+
+-- Navigation for a build (modules/nav_gen.lua): made when asked (navigation=true or
+-- a parameter object) and remade whenever the build regenerates. It joins the
+-- build's undo step. A failure is reported, not fatal: the layout stays.
+function Grammar:_navigation(build_id,want)
+    local nav=self.app.nav_gen;if not nav or want==false then return nil end
+    local existing
+    for _,g in ipairs(self.app.model.data.navigation_graphs or {}) do if g.generated and g.generator and g.generator.scope and g.generator.scope.build_id==build_id then existing=g end end
+    if not want and not existing then return nil end
+    local params=type(want)=='table' and want or (existing and existing.generator.params) or nil
+    local r,err=nav:generate({build_id=build_id,params=params,graph_id=existing and existing.id or nil,entry=existing and existing.generator.entry or nil,_no_snapshot=true,_inside=true})
+    if not r then return {error=err} end
+    return {graph_id=r.graph_id,replaced=r.replaced,stats=r.stats,warnings=r.report.warnings}
 end
 
 -- Regenerate a build in place (same origin; params/seed/size/start may change).
@@ -1361,7 +1376,10 @@ function Grammar:remove(build_id)
     local edl=plans:edl_get(rec.doc)
     if edl then local r,err=plans:edl_remove(rec.doc);if not r then return nil,err end end
     table.remove(builds(self.app.model),index)
-    return {removed=build_id,premise_id=rec.premise_id}
+    -- Its navigation graph describes geometry that is gone.
+    local graphs=self.app.model.data.navigation_graphs or {};local dropped=0
+    for i=#graphs,1,-1 do local g=graphs[i];if g.generated and g.generator and g.generator.scope and g.generator.scope.build_id==build_id then table.remove(graphs,i);dropped=dropped+1 end end
+    return {removed=build_id,premise_id=rec.premise_id,navigation_removed=dropped>0 and dropped or nil}
 end
 
 function Grammar:builds()

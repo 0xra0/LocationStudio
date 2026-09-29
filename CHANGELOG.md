@@ -1,3 +1,17 @@
+## 0.82.0 - 2026-09-29
+
+- Added a navigation generator (`modules/nav_gen.lua`, Spatial → Navigation → Generate from geometry). It builds a navigation graph from generated geometry:
+  - **Navigation surfaces:** walkable semantic surfaces on a grid, with headroom, obstacle and edge clearance for an agent's radius and height, merged into area polygons with one node each. Floor under solid stairs and ramps and pockets too small to stand in are left out.
+  - **Door transitions:** every door of a parametric room links the floor on both sides. Shared doors merge. Doors are `connected`, `exit`, `blocked` (the blocking objects are named), `too_narrow` or `too_low`.
+  - **Stairs and ramp links,** grouped into flights with a bottom and a top.
+  - **Off-mesh connections:** one-way drops (two way up to `max_climb`) and jumps over gaps. They are checked against walls, and there is one per stretch of ledge.
+  - **Room links and reachability:** which rooms reach which through doors, open floor, stairs, ramps or off-mesh links, plus islands and unreachable or one-way rooms.
+- Generated graphs use the navigation-graph format, so `navigation_graph_check`, workspot reports and `walkability_check` work with them. The graph records its scope and parameters, and a digest tells when the geometry changed (`stale`). The `ramp` link kind was added to graphs.
+- `grammar_generate` takes `navigation`. The build's graph joins its undo step, is regenerated with the build and removed with it.
+- In-game validation with a real NPC: each door, flight, ramp and off-mesh link becomes a leg. The NPC (under the crosshair, by key, or a spawned record) is teleported to the start and sent to the goal with an AI move command using the game's navigation. The leg is `traversed`, `stalled`, `timeout`, `command_failed` or `npc_lost`, with a verdict against the graph. Results and traces are saved on the graph and on each link.
+- Added bridge ops and MCP tools `nav_parameters` (offline), `nav_preview`, `nav_generate`, `nav_regenerate`, `nav_report`, `nav_delete`, `nav_validate_plan`, `nav_validate_start`, `nav_validate_status` and `nav_validate_cancel`.
+- Added `NAVIGATION-GENERATOR.md` and Lua/Python tests. Bumped to v0.82.0.
+
 ## 0.81.0 - 2026-09-29
 
 - Added semantic room types (`modules/room_types.lua`, `grammars/room_types.json`, Spatial → Room types). A room carries a type and inherits the generation rules of that environment:

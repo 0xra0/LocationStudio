@@ -458,3 +458,18 @@ again replaces the previous furnishing). In grammars write `{"room": {"type":
 `room_type_reapply` after changing one. Report doorway and size warnings from
 the preview. Interiors are simple procedural blocks and doorway clearance uses
 bounding boxes: ask the user to check furnished rooms in game.
+
+## Navigation generator
+
+To get navigation for generated geometry, run `nav_preview` and then
+`nav_generate` on a premise, rooms or grammar build (or pass `navigation=True`
+to `grammar_generate`). Report blocked, too-narrow and exit doors,
+unconnected flights, unreachable rooms and other warnings. Use `nav_report`
+to check `stale` and `nav_regenerate` after geometry changes. Describe the
+graph as LocationStudio data: it does not write REDengine navmesh, and never
+claim NPCs can walk generated geometry from the graph alone. For that, use
+`nav_validate_start`. Ask the user first, because it teleports and moves an
+NPC, and never invent a character record for `record`. Poll
+`nav_validate_status` and report `engine_disagrees` legs as the game not
+navigating there. If every leg is `command_failed`, report its detail rather
+than retrying with `run_lua`.

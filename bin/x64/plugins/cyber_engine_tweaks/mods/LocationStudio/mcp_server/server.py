@@ -3335,6 +3335,157 @@ def navigation_workspot_report(start_x: float, start_y: float, start_z: float,
     return _json(_send("navigation_workspot_report", args))
 
 
+NAV_GEN_LUA = MOD_DIR / "modules" / "nav_gen.lua"
+NAV_LEG_KINDS = {"door", "stairs", "ramp", "off_mesh", "rooms"}
+
+
+def nav_parameters_offline() -> list[dict[str, Any]]:
+    """Generator parameters with defaults and ranges, read from modules/nav_gen.lua (no game needed)."""
+    text = NAV_GEN_LUA.read_text(encoding="utf-8")
+    defaults = dict(re.findall(r"(\w+)=([\d.]+)", re.search(r"local DEFAULTS=\{(.*?)\}\n", text).group(1)))
+    ranges = {k: (float(a), float(b)) for k, a, b in re.findall(r"(\w+)=\{([\d.]+),([\d.]+)\}", re.search(r"local RANGES=\{(.*)\}\n", text).group(1))}
+    return [{"name": k, "default": float(v), "min": ranges[k][0], "max": ranges[k][1]} for k, v in sorted(defaults.items())]
+
+
+def _nav_scope(premise_id: str, room_ids: list[str] | None, build_id: str, all_rooms: bool) -> dict[str, Any]:
+    scope: dict[str, Any] = {}
+    if build_id:
+        scope["build_id"] = build_id
+    elif room_ids:
+        scope["room_ids"] = list(room_ids)
+    elif premise_id:
+        scope["premise_id"] = premise_id
+    elif all_rooms:
+        scope["all"] = True
+    else:
+        raise ValueError("give premise_id, room_ids, build_id or all_rooms=True")
+    return scope
+
+
+def _nav_legs(legs: list[str] | None, custom: list[dict[str, Any]] | None) -> dict[str, Any]:
+    out: dict[str, Any] = {}
+    if legs:
+        bad = set(legs) - NAV_LEG_KINDS
+        if bad:
+            raise ValueError(f"unknown leg kinds {sorted(bad)}; use {sorted(NAV_LEG_KINDS)}")
+        out["legs"] = list(legs)
+    if custom:
+        out["custom"] = [{"name": c.get("name"), "start": _xyz(c["start"], "custom start"), "goal": _xyz(c["goal"], "custom goal")} for c in custom]
+    return out
+
+
+@mcp.tool()
+def nav_parameters() -> str:
+    """Navigation generator parameters (cell, agent_radius, agent_height, max_step, max_slope, max_drop, max_jump,
+    max_climb, tile, door_snap) with defaults and ranges. Works offline."""
+    return _json({"parameters": nav_parameters_offline(), "leg_kinds": sorted(NAV_LEG_KINDS)})
+
+
+@mcp.tool()
+def nav_preview(premise_id: str = "", room_ids: list[str] | None = None, build_id: str = "", all_rooms: bool = False,
+                params: dict[str, Any] | None = None, entry: list[float] | None = None) -> str:
+    """Dry run of nav_generate: what the generated navigation would contain (walkable area, area polygons, door
+    transitions with status connected/exit/blocked/too_narrow/too_low, stairs flights, ramps, off-mesh drops and
+    jumps, room links, unreachable rooms, warnings). Changes nothing."""
+    args = _nav_scope(premise_id, room_ids, build_id, all_rooms)
+    if params:
+        args["params"] = params
+    if entry is not None:
+        args["entry"] = _xyz(entry, "entry")
+    return _json(_send("nav_preview", args, timeout=120.0))
+
+
+@mcp.tool()
+def nav_generate(premise_id: str = "", room_ids: list[str] | None = None, build_id: str = "", all_rooms: bool = False,
+                 params: dict[str, Any] | None = None, entry: list[float] | None = None, name: str = "", graph_id: str = "") -> str:
+    """Generate a navigation graph from generated geometry: walkable semantic surfaces (floor, platform, stairs, ramp,
+    ground...) cleared for the agent, door transitions of parametric rooms, stairs/ramp links, off-mesh drops and jumps,
+    and room links. Scope: one of premise_id, room_ids, build_id (a grammar build; regenerating the build then keeps
+    the graph up to date) or all_rooms. entry = [x,y,z] picks the area reachability is measured from. graph_id replaces
+    an earlier generated graph. One undo step. The result is LocationStudio navigation data (navigation_graph_check,
+    walkability_check and workspot reports use it); it does not change REDengine's navmesh. Run nav_preview first and
+    nav_validate_start to test it with a real NPC."""
+    args = _nav_scope(premise_id, room_ids, build_id, all_rooms)
+    args.update(params=params or None, name=name or None, graph_id=graph_id or None)
+    if entry is not None:
+        args["entry"] = _xyz(entry, "entry")
+    return _json(_send("nav_generate", {k: v for k, v in args.items() if v is not None}, timeout=120.0))
+
+
+@mcp.tool()
+def nav_regenerate(graph_id: str, params: dict[str, Any] | None = None, entry: list[float] | None = None) -> str:
+    """Regenerate a generated navigation graph in place from its saved scope, after the geometry changed (nav_report
+    says stale). params are merged into the saved ones. Previous validation results are dropped. One undo step."""
+    args: dict[str, Any] = {"graph_id": graph_id}
+    if params:
+        args["params"] = params
+    if entry is not None:
+        args["entry"] = _xyz(entry, "entry")
+    return _json(_send("nav_regenerate", args, timeout=120.0))
+
+
+@mcp.tool()
+def nav_report(graph_id: str) -> str:
+    """A navigation graph's report: parameters, scope, doors, flights, off-mesh links, room links, reachability,
+    warnings, whether the geometry changed since it was generated (stale), and the last NPC validation results."""
+    return _json(_send("nav_report", {"graph_id": graph_id}))
+
+
+@mcp.tool()
+def nav_delete(graph_id: str) -> str:
+    """Delete a navigation graph (generated or imported). One undo step."""
+    return _json(_send("nav_delete", {"graph_id": graph_id}))
+
+
+@mcp.tool()
+def nav_validate_plan(graph_id: str, legs: list[str] | None = None, max_legs: int = 20, both_directions: bool = False,
+                      custom: list[dict[str, Any]] | None = None) -> str:
+    """The legs an NPC validation run would walk (start, goal, the graph's own verdict), without running it. legs:
+    door, stairs, ramp, off_mesh, rooms (default: all but rooms). custom: [{name?, start:[x,y,z], goal:[x,y,z]}]."""
+    args: dict[str, Any] = {"graph_id": graph_id, "max_legs": max_legs, "both_directions": both_directions}
+    args.update(_nav_legs(legs, custom))
+    return _json(_send("nav_validate_plan", args))
+
+
+@mcp.tool()
+def nav_validate_start(graph_id: str, npc_key: str = "", record: str = "", appearance: str = "",
+                       legs: list[str] | None = None, max_legs: int = 20, both_directions: bool = False,
+                       custom: list[dict[str, Any]] | None = None, tolerance: float = 0.75, stall_time: float = 5.0,
+                       timeout_scale: float = 1.0, run: bool = False, ignore_navigation: bool = False) -> str:
+    """Validate a navigation graph in game with a real NPC. For each leg (door, stairs flight, ramp, off-mesh link) the
+    NPC is teleported to the start and given an AI move command to the goal; its position is sampled until it arrives
+    (traversed), stops making progress (stalled) or runs out of time (timeout). The NPC is the one under the crosshair,
+    npc_key (npc_list_nearby), or a character record spawned for the run (record, e.g. from the user; removed after).
+    This moves and teleports that NPC: tell the user. Poll nav_validate_status; results are saved on the graph and
+    each link. A leg the graph expects to work but the NPC cannot walk (verdict engine_disagrees) usually means the
+    game has no navmesh there: generated geometry does not add to REDengine's navmesh."""
+    if not 0.2 <= tolerance <= 3:
+        raise ValueError("tolerance must be 0.2 to 3 m")
+    args: dict[str, Any] = {"graph_id": graph_id, "max_legs": max_legs, "both_directions": both_directions, "tolerance": tolerance,
+                            "stall_time": stall_time, "timeout_scale": timeout_scale, "run": run, "ignore_navigation": ignore_navigation}
+    if npc_key:
+        args["npc_key"] = npc_key
+    if record:
+        args["record"] = record
+        if appearance:
+            args["appearance"] = appearance
+    args.update(_nav_legs(legs, custom))
+    return _json(_send("nav_validate_start", args))
+
+
+@mcp.tool()
+def nav_validate_status() -> str:
+    """Progress of the current (or last) NPC validation run: state, current leg, and per-leg results (status traversed,
+    stalled, timeout, command_failed, npc_lost; verdict confirmed, engine_disagrees, engine_only, expected_failure)."""
+    return _json(_send("nav_validate_status", {}))
+
+
+@mcp.tool()
+def nav_validate_cancel() -> str:
+    """Stop the running NPC validation run; finished legs are kept and saved on the graph."""
+    return _json(_send("nav_validate_cancel", {}))
+
+
 @mcp.tool()
 def cover_node_create(premise_id: str, name: str = "Cover Node", cover_type: str = "crouch",
                       exposure: str = "medium", spacing: float = 1.5, source: str = "player",
@@ -5415,13 +5566,15 @@ def grammar_preview(grammar: str = "", doc: dict[str, Any] | None = None, start:
 def grammar_generate(grammar: str = "", doc: dict[str, Any] | None = None, start: str = "", params: dict[str, Any] | None = None,
                      seed: int = 1, size: list[float] | None = None, premise_id: str = "", premise_name: str = "",
                      premise_kind: str = "interior", position: list[float] | None = None, yaw: float = 0.0,
-                     source: str = "player", build_id: str = "") -> str:
+                     source: str = "player", build_id: str = "", navigation: bool | dict[str, Any] | None = None) -> str:
     """Generate a layout from a grammar as ONE authoring plan: parametric rooms with doors/windows (cut through both
     rooms at shared walls), procedural geometry, lights, assets, volumes and markers. Validated first; one undo step;
     rolled back completely on failure. Without premise_id a new premise is created (premise_name/premise_kind).
-    Reusing build_id replaces that earlier generation. Run grammar_preview first."""
+    Reusing build_id replaces that earlier generation. Run grammar_preview first.
+    navigation=True (or a nav_generate params object) also generates the build's navigation graph in the same undo
+    step; once a build has one, regenerating the build regenerates it. navigation=False skips it."""
     args = _grammar_args(grammar, doc, start, params, seed, size, premise_id, position, yaw, source)
-    args.update(premise_name=premise_name or None, premise_kind=premise_kind, build_id=build_id or None)
+    args.update(premise_name=premise_name or None, premise_kind=premise_kind, build_id=build_id or None, navigation=navigation)
     return _json(_send("grammar_generate", {k: v for k, v in args.items() if v is not None}))
 
 

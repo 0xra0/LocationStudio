@@ -1,4 +1,4 @@
-# LocationStudio v0.81.0 — Semantic Room Types
+# LocationStudio v0.82.0 — Navigation Generator
 
 LocationStudio is an in-game Cyber Engine Tweaks editor for building locations,
 placing the full World Builder game-resource catalog, moving live objects, and
@@ -11,6 +11,8 @@ v0.53.0 adds persistent Device Logic graphs for terminals, doors, elevators, swi
 v0.54.0 adds a conflict-aware Quest Forge round-trip. Preview/import matches exact LocationStudio IDs (or previously linked NodeRefs), displays linked facts beside selected objects, preserves local notes and placement by default, and only applies changed coordinates when explicitly enabled. See [QUEST-FORGE-ROUNDTRIP.md](QUEST-FORGE-ROUNDTRIP.md).
 
 v0.55.0 adds a quest simulation/debug panel with live fact reads, writer/consumer mapping, and staged fact writes. Each write/reset/manual trigger requires a second confirmation after a persistent-save warning. Manual trigger simulation sets the configured fact; it does not dispatch a native volume event. See [QUEST-SIMULATION.md](QUEST-SIMULATION.md).
+
+v0.82.0 adds a navigation generator. It turns the walkable surfaces of generated rooms, stairs, ramps and platforms into a navigation graph: area polygons cleared for an agent's size, door transitions (with blocked and too-narrow doors reported), stairs and ramp flights, off-mesh drops and jumps, and room links with reachability. Grammar builds can carry their graph and keep it up to date. A validation run sends a real NPC along every door, flight, ramp and off-mesh link with the game's own AI movement and records where the engine agrees with the graph. The graph is LocationStudio data: REDengine's navmesh cannot be written from CET. See [NAVIGATION-GENERATOR.md](NAVIGATION-GENERATOR.md).
 
 v0.81.0 adds semantic room types. A room can be a `clinic`, `office`, `storage`, `security`, `maintenance`, `corridor`, `server_room` or another built-in or custom type, and inherits the rules of that environment: shell defaults (a server room gets a raised floor), surface traits, grammar variables (clinic counters become `medical_surface`), interior rules that furnish the room clear of its doors, and markers on its surfaces. Types extend each other, projects can add their own, and any room can be given a type and furnished from it in one undo step. See [ROOM-TYPES.md](ROOM-TYPES.md).
 
