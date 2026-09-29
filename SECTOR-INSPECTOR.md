@@ -1,5 +1,7 @@
 # Streaming-sector inspector
 
+To divide a generated environment into sectors in the first place, see the [sector partitioner](SECTOR-PARTITIONER.md).
+
 LocationStudio 0.61 inspects the streaming sectors in a World Builder export (`*_exported.json`), before or after it is built into a mod. For every exported node it reports:
 
 - the sector it belongs to, and the sector's variant range;

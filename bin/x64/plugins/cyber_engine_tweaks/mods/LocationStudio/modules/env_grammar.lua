@@ -1337,7 +1337,23 @@ function Grammar:generate(args)
     local warnings={};for _,o in ipairs(result.outputs or {}) do if o.warning then warnings[#warnings+1]='step '..o.index..' ('..o.op..'): '..tostring(o.warning) end end
     out.runtime_warnings=warnings
     out.navigation=self:_navigation(p.build_id,args.navigation)
+    out.sectors=self:_sectors(p.build_id,args.sectors)
     return out
+end
+
+-- Streaming sectors for a build (modules/sector_partition.lua), the same way:
+-- made when asked (sectors=true or a parameter object), remade with the build
+-- (after its navigation graph, which it reads), in the build's undo step.
+function Grammar:_sectors(build_id,want)
+    local sp=self.app.sector_partition;if not sp or want==false then return nil end
+    local existing
+    for _,p in ipairs(sp:list()) do if p.scope and p.scope.build_id==build_id then existing=p end end
+    if not want and not existing then return nil end
+    local params=type(want)=='table' and want or (existing and existing.params) or nil
+    local r,err=sp:generate({build_id=build_id,params=params,partition_id=existing and existing.id or nil,pins=existing and existing.pins or nil,
+        entry=existing and existing.entry or nil,base_name=existing and existing.base_name or nil,_no_snapshot=true,_inside=true})
+    if not r then return {error=err} end
+    return {partition_id=r.partition_id,replaced=r.replaced,stats=r.stats,warnings=r.report.warnings}
 end
 
 -- Navigation for a build (modules/nav_gen.lua): made when asked (navigation=true or
@@ -1379,7 +1395,10 @@ function Grammar:remove(build_id)
     -- Its navigation graph describes geometry that is gone.
     local graphs=self.app.model.data.navigation_graphs or {};local dropped=0
     for i=#graphs,1,-1 do local g=graphs[i];if g.generated and g.generator and g.generator.scope and g.generator.scope.build_id==build_id then table.remove(graphs,i);dropped=dropped+1 end end
-    return {removed=build_id,premise_id=rec.premise_id,navigation_removed=dropped>0 and dropped or nil}
+    -- So does its sector partition.
+    local parts=self.app.model.data.sector_partitions or {};local dropped_parts=0
+    for i=#parts,1,-1 do local sp=parts[i];if sp.scope and sp.scope.build_id==build_id then table.remove(parts,i);dropped_parts=dropped_parts+1 end end
+    return {removed=build_id,premise_id=rec.premise_id,navigation_removed=dropped>0 and dropped or nil,sectors_removed=dropped_parts>0 and dropped_parts or nil}
 end
 
 function Grammar:builds()

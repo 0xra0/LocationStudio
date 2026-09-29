@@ -7,7 +7,7 @@ local T=function(x,y,z,yaw) return {position={x=x,y=y,z=z,w=1},rotation={roll=0,
 local function fails(needle,res,err) assert(res==nil,'expected a failure: '..tostring(needle));assert(tostring(err):find(needle,1,true),'expected "'..needle..'" in: '..tostring(err)) end
 local function box(cx,cy,cz,sx,sy,sz) return {shape='box',center={x=cx,y=cy,z=cz},size={x=sx,y=sy,z=sz},rotation={roll=0,pitch=0,yaw=0},material='main'} end
 local function count(list,pred) local n=0;for _,x in ipairs(list or {}) do if pred(x) then n=n+1 end end;return n end
-assert(app.version=='0.82.0')
+assert(app.version=='0.83.0')
 
 -- Parameters.
 local P=assert(NavGen.normalize_params(nil))

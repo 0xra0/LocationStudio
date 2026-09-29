@@ -106,16 +106,25 @@ local function sector_category_ready(ui)
     return nil
 end
 
-function BuildExport:export(args)
-    args=args or {}
-    local name=tostring(args.name or '')
-    if not name:match('^[a-z0-9_]+$') then return nil,'name must match [a-z0-9_]+ (it becomes the .archive, .xl and sector name).' end
-    local ui,ui_err=self:_export_ui();if not ui then return nil,ui_err end
-    if sector_category_ready(ui)==false then
-        return nil,'Open World Builder > Export tab once this session (WB builds its sector-category table only when that tab is drawn), then retry.'
+-- WB's sector-category names (the same upvalue), to map 'interior'/'exterior'
+-- to its 0-based category index. nil when they cannot be read.
+local function sector_category_index(ui,wanted)
+    if type(debug)~='table' or type(debug.getupvalue)~='function' or type(wanted)~='string' then return nil end
+    for i=1,64 do
+        local name,value=debug.getupvalue(ui.exportGroup,i)
+        if name==nil then return nil end
+        if name=='sectorCategory' then
+            if type(value)~='table' then return nil end
+            for index,label in ipairs(value) do if tostring(label):lower()==wanted:lower() then return index-1 end end
+            return nil
+        end
     end
+    return nil
+end
 
-    local objects,err=self:_objects(args);if not objects then return nil,err end
+-- WB-serialized children of one export group. Returns children, handles and the
+-- skipped list, or nil and an error that stops the export.
+function BuildExport:_serialize(objects,group_name)
     local handles,skipped,children={}, {}, {}
     local marker_groups,zone_records={},{}
     for _,object in ipairs(objects) do
@@ -169,7 +178,7 @@ function BuildExport:export(args)
         end
         local saved=record.data.spawnable
         if type(saved)~='table' then return nil,'Ambient reverb zone has no serialized World Builder spawn data.' end
-        saved.outlinePath='/'..GROUP_PREFIX..name..'/'..markers.name
+        saved.outlinePath='/'..group_name..'/'..markers.name
         saved.markers={}
         for _,marker in ipairs(markers.objects) do
             local p=marker.transform.position
@@ -184,35 +193,90 @@ function BuildExport:export(args)
         table.insert(children,group)
         for _,h in ipairs(markers.handles or {}) do table.insert(handles,h) end
     end
-    local accepted,accept_err=self:_accept_skipped(skipped,#children,args)
-    if not accepted then self.last_error=accept_err;return nil,accept_err end
+    return children,handles,skipped
+end
 
-    local group_name=GROUP_PREFIX..name
-    local origin=centroid(handles)
-    local blob={
-        name=group_name,modulePath='modules/classes/editor/positionableGroup',
-        headerOpen=false,propertyHeaderStates={},visible=true,hiddenByParent=false,expandable=true,selected=false,
-        isUsingSpawnables=true,childs=children,
-        origin=origin,originInitialized=true,rotation={roll=0,pitch=0,yaw=0},pos=origin,
-    }
+-- Export one World Builder group (the objects in scope), or with `groups` one
+-- group per entry: {name=, object_ids=, category=|category_name=, level=,
+-- streaming={x,y,z}}. World Builder writes each group as its own sector.
+function BuildExport:export(args)
+    args=args or {}
+    local name=tostring(args.name or '')
+    if not name:match('^[a-z0-9_]+$') then return nil,'name must match [a-z0-9_]+ (it becomes the .archive, .xl and sector name).' end
+    local ui,ui_err=self:_export_ui();if not ui then return nil,ui_err end
+    if sector_category_ready(ui)==false then
+        return nil,'Open World Builder > Export tab once this session (WB builds its sector-category table only when that tab is drawn), then retry.'
+    end
+
+    local specs={}
+    if type(args.groups)=='table' then
+        if #args.groups==0 then return nil,'groups is empty' end
+        local names={}
+        local excluded,procedural,disabled={}, {}, {}
+        for i,g in ipairs(args.groups) do
+            local gname=tostring(type(g)=='table' and g.name or '')
+            if not gname:match('^[a-z0-9_]+$') then return nil,'groups['..i..'].name must match [a-z0-9_]+' end
+            if names[gname] then return nil,'duplicate group name '..gname end
+            names[gname]=true
+            local objects,err=self:_objects({object_ids=type(g.object_ids)=='table' and g.object_ids or {}});if not objects then return nil,err end
+            for _,x in ipairs(self.last_excluded_by_layer) do excluded[#excluded+1]=x end
+            for _,x in ipairs(self.last_procedural) do procedural[#procedural+1]=x end
+            for _,x in ipairs(self.last_disabled_collision) do disabled[#disabled+1]=x end
+            specs[#specs+1]={sector=gname,group_name=GROUP_PREFIX..gname,objects=objects,category=g.category,category_name=g.category_name,level=g.level,streaming=g.streaming}
+        end
+        self.last_excluded_by_layer,self.last_procedural,self.last_disabled_collision=excluded,procedural,disabled
+    else
+        local objects,err=self:_objects(args);if not objects then return nil,err end
+        specs[1]={group_name=GROUP_PREFIX..name,objects=objects,category=args.category,level=args.level,streaming=args.streaming}
+    end
+
+    -- Serialize every group before anything is written, so a refusal writes nothing.
+    local all_skipped,total,empty={},0,{}
+    for _,spec in ipairs(specs) do
+        local children,handles,skipped=self:_serialize(spec.objects,spec.group_name)
+        if not children then self.last_error=handles;return nil,handles end
+        spec.children,spec.handles=children,handles
+        for _,s in ipairs(skipped) do s.group=spec.sector;all_skipped[#all_skipped+1]=s end
+        total=total+#children
+        if #children==0 then empty[#empty+1]=spec.sector or spec.group_name end
+    end
+    local accepted,accept_err=self:_accept_skipped(all_skipped,total,args)
+    if not accepted then self.last_error=accept_err;return nil,accept_err end
+    local written={}
+    for _,spec in ipairs(specs) do if #spec.children>0 then written[#written+1]=spec end end
+
     -- WB's element.save writes data/objects/<fileName>.json relative to WB's own
     -- mod folder and refreshes its Saved list; CET does not let LS write there.
-    local save=handles[1].save
-    if type(save)~='function' then return nil,'World Builder element.save is unavailable in this WB version.' end
-    local saved,save_err=pcall(save,{name=group_name,fileName=group_name,sUI=handles[1].sUI,serialize=function() return blob end})
-    if not saved then self.last_error=tostring(save_err);return nil,'World Builder could not save group '..group_name..': '..tostring(save_err) end
+    for _,spec in ipairs(written) do
+        spec.origin=centroid(spec.handles)
+        local blob={
+            name=spec.group_name,modulePath='modules/classes/editor/positionableGroup',
+            headerOpen=false,propertyHeaderStates={},visible=true,hiddenByParent=false,expandable=true,selected=false,
+            isUsingSpawnables=true,childs=spec.children,
+            origin=spec.origin,originInitialized=true,rotation={roll=0,pitch=0,yaw=0},pos=spec.origin,
+        }
+        local save=spec.handles[1].save
+        if type(save)~='function' then return nil,'World Builder element.save is unavailable in this WB version.' end
+        local saved,save_err=pcall(save,{name=spec.group_name,fileName=spec.group_name,sUI=spec.handles[1].sUI,serialize=function() return blob end})
+        if not saved then self.last_error=tostring(save_err);return nil,'World Builder could not save group '..spec.group_name..': '..tostring(save_err) end
+    end
 
     local previous={projectName=ui.projectName,xlFormat=ui.xlFormat,groups=ui.groups}
-    local streaming=args.streaming or {}
     local exported,export_err=pcall(function()
         ui.projectName=name;ui.xlFormat=args.xl_format==1 and 1 or 0;ui.groups={}
-        ui.addGroup(group_name)
-        local group=ui.groups[1];if not group then error('World Builder did not register group '..group_name) end
-        if args.category~=nil then group.category=tonumber(args.category) end
-        if args.level~=nil then group.level=tonumber(args.level) end
-        group.streamingX=tonumber(streaming.x) or group.streamingX
-        group.streamingY=tonumber(streaming.y) or group.streamingY
-        group.streamingZ=tonumber(streaming.z) or group.streamingZ
+        for i,spec in ipairs(written) do
+            ui.addGroup(spec.group_name)
+            local group=ui.groups[i];if not group or group.name~=spec.group_name then error('World Builder did not register group '..spec.group_name) end
+            local category=spec.category~=nil and tonumber(spec.category) or sector_category_index(ui,spec.category_name)
+            if category~=nil then group.category=category end
+            spec.category_index=group.category
+            if spec.level~=nil then group.level=tonumber(spec.level) end
+            local streaming=spec.streaming or {}
+            group.streamingX=tonumber(streaming.x) or group.streamingX
+            group.streamingY=tonumber(streaming.y) or group.streamingY
+            group.streamingZ=tonumber(streaming.z) or group.streamingZ
+            spec.applied={category=group.category,level=group.level,streaming={x=group.streamingX,y=group.streamingY,z=group.streamingZ}}
+        end
         ui.export()
     end)
     ui.projectName,ui.xlFormat,ui.groups=previous.projectName,previous.xlFormat,previous.groups
@@ -224,14 +288,24 @@ function BuildExport:export(args)
 
     local issues={}
     for kind,list in pairs(ui.exportIssues or {}) do if type(list)=='table' and #list>0 then issues[kind]=Util.deepcopy(list) end end
+    local first=written[1]
     self.last_result={
-        name=name,group=group_name,
-        world_builder_group_file='data/objects/'..group_name..'.json',
+        name=name,group=first.group_name,
+        world_builder_group_file='data/objects/'..first.group_name..'.json',
         world_builder_export_file='export/'..name..'_exported.json',
-        exported=#children,skipped=skipped,excluded_by_layer=Util.deepcopy(self.last_excluded_by_layer or {}),disabled_collision=Util.deepcopy(self.last_disabled_collision or {}),procedural=Util.deepcopy(self.last_procedural or {}),export_issues=issues,origin=origin,
+        exported=total,skipped=all_skipped,excluded_by_layer=Util.deepcopy(self.last_excluded_by_layer or {}),disabled_collision=Util.deepcopy(self.last_disabled_collision or {}),procedural=Util.deepcopy(self.last_procedural or {}),export_issues=issues,origin=first.origin,
     }
+    if type(args.groups)=='table' then
+        local rows={}
+        for _,spec in ipairs(written) do
+            rows[#rows+1]={sector=spec.sector,group=spec.group_name,world_builder_group_file='data/objects/'..spec.group_name..'.json',exported=#spec.children,
+                category=spec.applied.category,category_name=spec.category_name,level=spec.applied.level,streaming=spec.applied.streaming,origin=spec.origin}
+        end
+        self.last_result.groups=rows;self.last_result.group=nil;self.last_result.world_builder_group_file=nil
+        self.last_result.empty_groups=#empty>0 and empty or nil
+    end
     self.last_error=nil
-    self:_log('info','exported',{name=name,exported=#children,skipped=#skipped})
+    self:_log('info','exported',{name=name,exported=total,skipped=#all_skipped,groups=#written})
     return self.last_result
 end
 

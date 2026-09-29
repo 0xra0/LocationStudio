@@ -414,6 +414,7 @@ function Model:normalize()
     self.data.combat_encounters=type(self.data.combat_encounters)=='table' and self.data.combat_encounters or {}
     self.data.cover_nodes=type(self.data.cover_nodes)=='table' and self.data.cover_nodes or {}
     self.data.navigation_graphs=type(self.data.navigation_graphs)=='table' and self.data.navigation_graphs or {}
+    self.data.sector_partitions=type(self.data.sector_partitions)=='table' and self.data.sector_partitions or {}
     self.data.device_logic_graphs=type(self.data.device_logic_graphs)=='table' and self.data.device_logic_graphs or {}
     self.data.world_state_variants=type(self.data.world_state_variants)=='table' and self.data.world_state_variants or {}
     for i,v in ipairs(self.data.world_state_variants) do self.data.world_state_variants[i]=normalize_world_state_variant(v) end

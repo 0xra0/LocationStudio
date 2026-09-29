@@ -10,6 +10,13 @@
 The upgrade archive does not contain project/config JSON, logs, exports,
 thumbnails, or bridge state.
 
+## v0.83 Sector partitioner smoke check
+
+1. Generate the **Mixed facility** grammar with `grammar_generate(..., navigation=True, sectors={"max_nodes": 60})`. The report lists several sectors named `<build>_01`, `_02`... Walking from the entrance, you meet them in that order. Each sector's rooms are joined by doors. Undo removes the build, its graph and its partition together.
+2. Select the premise, press **PREVIEW** in Spatial → Sectors, then **PARTITION INTO SECTORS**. Raise *Max nodes per sector* until it reports one sector, then lower it again.
+3. Press **EXPORT SECTORS TO WORLD BUILDER** (open WB's Export tab once first). **Run `sector_inspect` on the export and report how many sectors it has.** The count should match the partition, and each sector's bounds should hold its rooms. If WB wrote one sector, or its streaming boxes ignore the per-group extents, report it: both are unverified.
+4. Build and deploy the mod. Walk from the entrance to the far end. **Report any pop-in or empty rooms when crossing a transition door** listed in the report.
+
 ## v0.82 Navigation generator smoke check
 
 1. Generate the **Mixed facility** grammar with navigation (`grammar_generate(..., navigation=True)`, or select its premise and press **GENERATE NAVIGATION** in Spatial → Navigation). The report shows one island, every door `connected`, and no unreachable rooms. Undo removes the build and its graph together.
