@@ -444,3 +444,17 @@ populating it. Use a grammar's `populate` list for generated layouts. Take asset
 ids, decals and effects from the catalog and search tools; never invent paths.
 Placement checks use bounds and surfaces, not exact meshes, and wall and ceiling
 decal orientation is unverified: ask the user to check placements in game.
+
+## Room types
+
+Give rooms a semantic type (clinic, office, storage, security, maintenance,
+corridor, server_room, ... see `room_type_catalog`) instead of repeating
+furniture and lighting by hand. A typed room inherits the type's shell defaults,
+surface traits, grammar variables, interior rules and placements. For a new
+room use `room_type_create_room`; for an existing room use `room_type_assign`,
+then `room_type_preview` and `room_type_furnish` (one undo step; furnishing
+again replaces the previous furnishing). In grammars write `{"room": {"type":
+...}}`. Save project types with `room_type_save` (`extends` a built-in) and run
+`room_type_reapply` after changing one. Report doorway and size warnings from
+the preview. Interiors are simple procedural blocks and doorway clearance uses
+bounding boxes: ask the user to check furnished rooms in game.

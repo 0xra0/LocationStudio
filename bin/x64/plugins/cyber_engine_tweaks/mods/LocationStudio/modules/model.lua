@@ -11,7 +11,7 @@ local function blank_project()
             id = 'default', name = 'Night City Location Project', description = '', author = '', tags = {},
             created_at = Util.now_iso(), updated_at = Util.now_iso(),
         },
-        locations = {}, routes = {}, npc_routes = {}, combat_encounters = {}, cover_nodes = {}, navigation_graphs = {}, device_logic_graphs = {}, world_state_variants = {}, environments = {}, splines = {}, timelines = {}, reference_areas = {}, edl_builds = {}, generated_rooms = {}, material_defs = {}, grammars = {}, grammar_builds = {}, collision_rules = {}, premises = {}, rooms = {}, objects = {}, object_groups = {}, object_prefabs = {}, volumes = {}, cameras = {}, scenes = {}, assets = {}, vanilla_removals = {}, room_frames = {},
+        locations = {}, routes = {}, npc_routes = {}, combat_encounters = {}, cover_nodes = {}, navigation_graphs = {}, device_logic_graphs = {}, world_state_variants = {}, environments = {}, splines = {}, timelines = {}, reference_areas = {}, edl_builds = {}, generated_rooms = {}, material_defs = {}, grammars = {}, grammar_builds = {}, room_types = {}, room_furnishings = {}, collision_rules = {}, premises = {}, rooms = {}, objects = {}, object_groups = {}, object_prefabs = {}, volumes = {}, cameras = {}, scenes = {}, assets = {}, vanilla_removals = {}, room_frames = {},
         -- Layer ids 'shell' and 'decoration' are kept for compatibility; they are
         -- shown as Architecture and Props.
         layers = {
@@ -143,6 +143,7 @@ local function normalize_room(item)
         wall_thickness=math.max(0.01, tonumber(item.wall_thickness) or 0.15), level=math.floor(tonumber(item.level) or 0),
         layer=item.layer or 'shell', openings=openings, shell_object_ids=type(item.shell_object_ids) == 'table' and item.shell_object_ids or {},
         tags=type(item.tags) == 'table' and item.tags or {}, notes=tostring(item.notes or ''), enabled=item.enabled ~= false,
+        room_type=type(item.room_type) == 'string' and item.room_type ~= '' and item.room_type or nil,
         created_at=item.created_at or now, updated_at=now,
     }
 end
@@ -423,6 +424,8 @@ function Model:normalize()
     self.data.material_defs=type(self.data.material_defs)=='table' and self.data.material_defs or {}
     self.data.grammars=type(self.data.grammars)=='table' and self.data.grammars or {}
     self.data.grammar_builds=type(self.data.grammar_builds)=='table' and self.data.grammar_builds or {}
+    self.data.room_types=type(self.data.room_types)=='table' and self.data.room_types or {}
+    self.data.room_furnishings=type(self.data.room_furnishings)=='table' and self.data.room_furnishings or {}
     self.data.collision_rules=type(self.data.collision_rules)=='table' and self.data.collision_rules or {}
     if type(self.data.collision_rules.default)~='table' then self.data.collision_rules.default={} end
     if type(self.data.collision_rules.rooms)~='table' then self.data.collision_rules.rooms={} end

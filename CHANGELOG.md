@@ -1,3 +1,19 @@
+## 0.81.0 - 2026-09-29
+
+- Added semantic room types (`modules/room_types.lua`, `grammars/room_types.json`, Spatial → Room types). A room carries a type and inherits the generation rules of that environment:
+  - **Shell defaults** (floor, ceiling, trim, lighting, materials, collision) go under the room's own spec.
+  - **Surface traits** are added to every surface of the room.
+  - **Grammar variables** such as `counter_surface` or `light_intensity` override grammar defaults, but not variables a rule sets.
+  - **Interior rules** furnish the room once its doors are known. Furniture in front of a doorway is left out.
+  - **Placements** are made on the room's own surfaces.
+- Built-in types: `room`, `corridor`, `office`, `reception`, `clinic`, `storage`, `security`, `armory`, `maintenance`, `workshop`, `server_room`, `lab`, `bedroom`, `bunk_room`, `bathroom` and `kitchen`. Types `extend` each other, and projects can save their own or override built-ins. Their interiors are in the new `room_interiors` grammar, which every grammar can use and override.
+- Parametric rooms take `type` in their spec and keep their own spec apart from it, so changing the type regenerates the shell with the new defaults. Room records keep `room_type`.
+- Grammar rooms take `type` and `furnish`. The built-in grammars label every room with a type, and the new `facility` grammar is furnished entirely by its room types. New expression functions: `has`, `count` and `pick`.
+- Any room, including room-kit rooms, can be given a type and furnished from it as one authoring plan. Furnishing again replaces the previous furnishing. `room_type_create_room` makes a typed room with its interior in one step, and `room_type_reapply` updates rooms after a type changes.
+- Plan validation checks room types in `create_parametric_room`.
+- Added bridge ops and MCP tools `room_type_catalog` (offline), `room_type_list`, `room_type_get`, `room_type_save`, `room_type_delete`, `room_type_rooms`, `room_type_assign`, `room_type_preview`, `room_type_furnish`, `room_type_unfurnish`, `room_type_create_room` and `room_type_reapply`.
+- Added `ROOM-TYPES.md` and Lua/Python tests. Bumped to v0.81.0.
+
 ## 0.80.0 - 2026-09-29
 
 - Added semantic surfaces (`modules/surfaces.lua`, Spatial → Surfaces). Generated geometry records what each surface is:

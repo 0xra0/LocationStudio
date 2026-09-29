@@ -74,7 +74,7 @@ Parametric rooms add these surfaces:
 - the ceiling;
 - the exterior walls.
 
-The room spec's `surfaces` key changes them: `{"floor": "road", "walls": "wall", "exterior": false, "ceiling": "ceiling", "traits": ["medical"]}`.
+The room spec's `surfaces` key changes them: `{"floor": "road", "walls": "wall", "exterior": false, "ceiling": "ceiling", "traits": ["medical"]}`. A [room type](ROOM-TYPES.md) adds its traits (`medical`, `office`, `tech`...) to every surface of the room.
 
 ### Hand tags
 

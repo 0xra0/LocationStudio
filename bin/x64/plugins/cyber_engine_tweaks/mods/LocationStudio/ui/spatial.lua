@@ -1107,6 +1107,59 @@ function SpatialUI:draw_surfaces()
     end
 end
 
+function SpatialUI:draw_room_types()
+    local app=self.app;local RT=app.room_types
+    ImGui.Text('ROOM TYPES')
+    if not RT then ImGui.TextDisabled('Room types failed to load.');return end
+    ImGui.TextWrapped('A room type (clinic, office, storage, security, maintenance, corridor, server_room ...) gives a room its shell defaults, surface traits and grammar variables, furnishes its interior clear of the doors and places markers on its surfaces.')
+    local list=RT:list().items
+    self.rt_type=self.rt_type or 'office'
+    local line=0
+    for _,t in ipairs(list) do
+        if line>0 then ImGui.SameLine() end
+        if ImGui.SmallButton((self.rt_type==t.id and '> ' or '')..t.id..'##rtt_'..t.id) then self.rt_type=t.id;self.rt_preview=nil end
+        line=line+1;if line==5 then line=0 end
+    end
+    local info=RT:get(self.rt_type)
+    if info then
+        local e=info.effective
+        ImGui.TextDisabled(e.name..' ('..table.concat(e.chain,' > ')..', '..info.source..'): '..tostring(e.description))
+        ImGui.TextDisabled('  traits: '..(#e.traits>0 and table.concat(e.traits,', ') or '-')..'; interior: '..(#e.interior>0 and table.concat(e.interior,', ') or '-')..'; placements: '..#e.populate..'; rooms: '..#info.rooms)
+    end
+    -- Selected room.
+    ImGui.Separator()
+    local room=app.model:get_room(app.selected_room_id)
+    if room then
+        ImGui.Text(tostring(room.name)..': '..(room.room_type and ('type '..room.room_type) or 'no type'))
+        if ImGui.Button('SET TYPE##rt',120,26) then local r,err=RT:assign(room.id,self.rt_type,{});self:toast(err or ('Type '..self.rt_type..(r.regenerated and ' (shell regenerated)' or ''))) end
+        ImGui.SameLine()
+        if ImGui.Button('PREVIEW##rt',120,26) then local r,err=RT:furnish(room.id,{dry_run=true,seed=self.rt_seed});self.rt_preview=r;if err then self:toast(err) end end
+        ImGui.SameLine()
+        if ImGui.Button('FURNISH##rt',120,26) then local r,err=RT:furnish(room.id,{seed=self.rt_seed});self:toast(err or ('Furnished: '..r.items..' item(s); one undo step')) end
+        if ImGui.Button('UNFURNISH##rt',120,26) then local _,err=RT:unfurnish(room.id);self:toast(err or 'Furnishing removed') end
+        ImGui.SameLine()
+        if ImGui.Button('CLEAR TYPE##rt',120,26) then local _,err=RT:assign(room.id,false,{});self:toast(err or 'Type cleared') end
+        self.rt_seed=tonumber((ImGui.InputText('Seed##rt',tostring(self.rt_seed or 1),16))) or 1
+        local p=self.rt_preview
+        if p and p.room_id==room.id then
+            local kinds={};for k,v in pairs(p.kinds or {}) do kinds[#kinds+1]=k..' '..v end;table.sort(kinds)
+            ImGui.TextDisabled('Preview ('..p.type..'): '..p.items..' item(s)'..(#kinds>0 and (' - '..table.concat(kinds,', ')) or '')..', '..#p.populate..' placement set(s)')
+            for _,w in ipairs(p.warnings or {}) do ImGui.TextDisabled('  '..w) end
+        end
+    else ImGui.TextDisabled('Select a room to give it a type or furnish it.') end
+    -- A new typed room at the player.
+    ImGui.Separator();ImGui.Text('New '..self.rt_type..' room')
+    self.rt_w=select(1,ImGui.InputText('Width##rtw',self.rt_w or '5',16))
+    self.rt_l=select(1,ImGui.InputText('Length##rtl',self.rt_l or '4',16))
+    if ImGui.Button('CREATE ROOM##rt',150,28) then
+        local r,err=RT:create_room({type=self.rt_type,width=tonumber(self.rt_w) or 5,length=tonumber(self.rt_l) or 4,
+            spec={doors={{wall='south',offset=0}}},premise_id=app.selected_premise_id,seed=self.rt_seed})
+        self:toast(err or ('Created a '..self.rt_type..' room with '..#r.items..' item(s); one undo step'))
+    end
+    ImGui.SameLine()
+    if ImGui.Button('REAPPLY TYPE##rt',150,28) then local r,err=RT:reapply(self.rt_type,{});self:toast(err or (#r.results..' update(s), '..r.failed..' failed')) end
+end
+
 function SpatialUI:draw_bounds()
     local app=self.app;local Bd=app.bounds_gen
     ImGui.Text('GENERATED BOUNDS')
@@ -1993,6 +2046,7 @@ function SpatialUI:draw()
         if ImGui.BeginTabItem('Room gen') then self:draw_room_generator();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Grammar') then self:draw_grammar();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Surfaces') then self:draw_surfaces();ImGui.EndTabItem() end
+        if ImGui.BeginTabItem('Room types') then self:draw_room_types();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Materials') then self:draw_materials();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Collision rules') then self:draw_collision_rules();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Bounds') then self:draw_bounds();ImGui.EndTabItem() end

@@ -10,6 +10,14 @@
 The upgrade archive does not contain project/config JSON, logs, exports,
 thumbnails, or bridge state.
 
+## v0.81 Room types smoke check
+
+1. Generate the **Mixed facility** grammar. Every room has furniture that matches its type: offices have desks and cabinets, storage rooms have shelves and crates, maintenance rooms have a workbench, a cabinet and a pipe, and the server room (when present) has rack rows on a raised floor. **Check that no furniture blocks a door** and nothing clips through walls.
+2. Walk through the doors of each room. Workstation, loot-spot and repair-spot markers sit on the desks, shelves and benches.
+3. In Spatial → Room types, pick `clinic`, set a room size and press **CREATE ROOM**. The room has crown moulding, an exam bed and a counter, and a supply spot on the counter. Undo removes it in one step.
+4. Select a room-kit room, pick `storage`, press **SET TYPE** and then **FURNISH**. Shelves stand along the walls without doors, inside the room. Press **FURNISH** again: the furniture is replaced, not doubled. **UNFURNISH** removes it.
+5. Select a parametric room, pick `server_room` and press **SET TYPE**. The shell regenerates with a raised floor; check that the doors still reach the new floor height.
+
 ## v0.80 Semantic surfaces smoke check
 
 1. Generate the **Clinic** grammar. In Spatial → Surfaces, the premise lists `medical_surface`, `desk`, `bed`, `floor`, `wall`, `ceiling` and `exterior_wall` counts, and each exam-room counter has a supply-spot marker in its centre.

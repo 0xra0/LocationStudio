@@ -1,4 +1,4 @@
-# LocationStudio v0.80.0 — Semantic Surfaces
+# LocationStudio v0.81.0 — Semantic Room Types
 
 LocationStudio is an in-game Cyber Engine Tweaks editor for building locations,
 placing the full World Builder game-resource catalog, moving live objects, and
@@ -11,6 +11,8 @@ v0.53.0 adds persistent Device Logic graphs for terminals, doors, elevators, swi
 v0.54.0 adds a conflict-aware Quest Forge round-trip. Preview/import matches exact LocationStudio IDs (or previously linked NodeRefs), displays linked facts beside selected objects, preserves local notes and placement by default, and only applies changed coordinates when explicitly enabled. See [QUEST-FORGE-ROUNDTRIP.md](QUEST-FORGE-ROUNDTRIP.md).
 
 v0.55.0 adds a quest simulation/debug panel with live fact reads, writer/consumer mapping, and staged fact writes. Each write/reset/manual trigger requires a second confirmation after a persistent-save warning. Manual trigger simulation sets the configured fact; it does not dispatch a native volume event. See [QUEST-SIMULATION.md](QUEST-SIMULATION.md).
+
+v0.81.0 adds semantic room types. A room can be a `clinic`, `office`, `storage`, `security`, `maintenance`, `corridor`, `server_room` or another built-in or custom type, and inherits the rules of that environment: shell defaults (a server room gets a raised floor), surface traits, grammar variables (clinic counters become `medical_surface`), interior rules that furnish the room clear of its doors, and markers on its surfaces. Types extend each other, projects can add their own, and any room can be given a type and furnished from it in one undo step. See [ROOM-TYPES.md](ROOM-TYPES.md).
 
 v0.80.0 adds semantic surfaces. Generated geometry records what each surface is: floor, wall, ceiling, desk, shelf, counter, road, medical_surface, industrial_surface and so on. Parametric rooms add their interior floor, walls (without the openings), ceiling and exterior walls, and any object can be tagged by hand. Props, decals, lights, effects and markers can then be placed on matching surfaces: on top of work surfaces, clear of other objects, with enough room above, and facing the right way. Grammars do the same through a `populate` list. See [SEMANTIC-SURFACES.md](SEMANTIC-SURFACES.md).
 

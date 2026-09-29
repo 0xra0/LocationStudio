@@ -31,6 +31,8 @@ The library is in `grammars/library.json`.
 | `apartment` | A hallway with apartments on both sides. Each has a living room with a kitchen counter, a bedroom with a window and a bathroom. |
 | `bunker` | 40 cm walls, a corridor with ducts and pipes, bunk rooms, armouries, a generator room and a command room. |
 | `laboratory` | Wet labs, clean rooms with observation windows onto the corridor, and a server room. |
+| `facility` | A corridor spine with offices, storage rooms, security rooms, maintenance rooms, clinics and a server room. Only shells and doors: every room is furnished by its [room type](ROOM-TYPES.md). `furnish: false` leaves them empty. |
+| `room_interiors` | The interior rules of the built-in room types (`OfficeInterior`, `ClinicInterior`, `ServerInterior`, ...). Every grammar can use them. |
 
 The grammars only use generated geometry, so they work in any project. Material parameters (`wall_material`, `floor_material`, `ceiling_material`) are empty by default. Set them to `.mi` paths from the catalog or to `@library` keys.
 
@@ -113,14 +115,15 @@ Expressions support:
 - numbers, `'strings'` and variables (`$` is optional);
 - the operators `+ - * / % ^`;
 - comparisons, `and`/`or`/`not` and `c ? a : b`;
-- the functions `min`, `max`, `floor`, `ceil`, `round`, `abs`, `sqrt`, `sin`, `cos`, `clamp`, `if`, `rand`, `randint` and `opposite('north')`.
+- the functions `min`, `max`, `floor`, `ceil`, `round`, `abs`, `sqrt`, `sin`, `cos`, `clamp`, `if`, `rand`, `randint` and `opposite('north')`;
+- the list functions `has(list, value)`, `count(list)` and `pick(list, index)` (index from 0; `''` past the end).
 
 The following variables are available:
 
 - grammar params and `set` variables;
 - `sx`, `sy`, `sz`;
 - `i`, `n` and `side`;
-- `t` inside a room;
+- `t` inside a room, and `room_type` after a typed room;
 - `depth` and `pi`.
 
 Params given to a child are evaluated in the child's scope.
@@ -141,6 +144,23 @@ A grammar's `populate` list runs after the layout is built. Each entry places it
 Placements avoid other geometry and need room above them. `grammar_preview` estimates how many each entry makes and counts the layout's surfaces by tag. Included grammars' populate lists run first.
 
 The built-in rules tag their furniture through params such as `desk_surface`, `counter_surface` and `workbench_surface`, and their rooms through `room_traits`. For example, the clinic sets `counter_surface: medical_surface` and `room_traits: ["medical"]`.
+
+## Room types
+
+A `room` can take a `type` such as `clinic`, `office`, `storage`, `security`, `maintenance`, `corridor` or `server_room` (see [ROOM-TYPES.md](ROOM-TYPES.md)):
+
+- **Defaults and traits:** the type's spec defaults go under the room's spec, and its surface traits are added.
+- **Variables:** its params override the grammar's defaults for the rest of the rule. Variables a rule sets or the generation passes in still win.
+- **Interior:** once the whole layout has expanded and every door is known, its interior rules furnish the room. Items in front of a door are left out, with a warning.
+- **Placements:** its placements go on that room's surfaces.
+
+`furnish: false` keeps the defaults, traits and variables but skips the interior and placements. The built-in grammars use it because they furnish their rooms themselves.
+
+```json
+{"room": {"type": "server_room", "wall_thickness": "$wall"}}
+```
+
+Interior rules come from the grammar itself or from the `room_interiors` grammar. A rule of the same name in your grammar overrides the built-in one (for example your own `Desk`). `grammar_preview` reports `stats.room_types`, `stats.interior_items` and `stats.doorway_cleared`, and marks furnishing items with `furnishing`.
 
 ## Generating
 

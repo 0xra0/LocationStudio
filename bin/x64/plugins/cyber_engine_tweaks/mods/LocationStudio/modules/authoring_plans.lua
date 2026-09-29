@@ -221,7 +221,10 @@ function Plans:validate(plan)
         end
         if op=='create_parametric_room' then
             local RG=package.loaded['modules/room_generator']
-            if RG then local ok,err=RG.normalize(step.spec);if not ok then table.insert(errors,string.format('step %d: %s',index,err)) end end
+            local spec,terr=step.spec,nil
+            if self.app.room_types and type(spec)=='table' and spec.type and not is_ref(spec.type) then spec,terr=self.app.room_types:apply(spec) end
+            if not spec then table.insert(errors,string.format('step %d: %s',index,tostring(terr)))
+            elseif RG then local ok,err=RG.normalize(spec);if not ok then table.insert(errors,string.format('step %d: %s',index,err)) end end
             if type(step.offset)~='table' and type(step.transform)~='table' then table.insert(errors,string.format('step %d: create_parametric_room requires offset',index)) end
         end
         if op=='move' and not step.kind then table.insert(errors,string.format('step %d: move requires kind',index)) end
