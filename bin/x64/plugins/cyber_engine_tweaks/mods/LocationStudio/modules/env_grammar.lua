@@ -31,6 +31,9 @@ local MAX_ITEMS=1900
 local MAX_ROOMS=200
 local MAX_INCLUDE=4
 local LIBRARY_PATH='grammars/library.json'
+local INTERIORS='room_interiors'
+local INTERIOR_PAD=0.15   -- doorway clearance: door width + 2 x pad, this deep into the room
+local INTERIOR_DEPTH=1.0
 local ID='^[%a_][%w_%-]*$'
 local RULE_NAME='^[%a_][%w_]*$'
 local AXES={x=true,y=true,z=true}
@@ -133,8 +136,13 @@ local FN={
     rand=function(ctx,a) local r=ctx.rng();if a[1] and a[2] then return a[1]+(a[2]-a[1])*r end;return r end,
     randint=function(ctx,a) return math.floor(a[1]+(a[2]-a[1]+1)*ctx.rng()) end,
     opposite=function(_,a) return OPPOSITE[a[1]] or error('opposite() needs north, south, east or west',0) end,
+    -- Lists (room interior variables such as free_sides).
+    has=function(_,a) if type(a[1])~='table' then error('has() needs a list',0) end;for _,v in ipairs(a[1]) do if v==a[2] then return true end end;return false end,
+    count=function(_,a) if type(a[1])~='table' then error('count() needs a list',0) end;return #a[1] end,
+    pick=function(_,a) if type(a[1])~='table' or type(a[2])~='number' then error('pick() needs a list and an index',0) end;local v=a[1][math.floor(a[2])+1];if v==nil then return '' end;return v end,
 }
-local ARITY={min=-1,max=-1,floor=1,ceil=1,round=-1,abs=1,sqrt=1,sin=1,cos=1,clamp=3,['if']=3,rand=-1,randint=2,opposite=1}
+local ARITY={min=-1,max=-1,floor=1,ceil=1,round=-1,abs=1,sqrt=1,sin=1,cos=1,clamp=3,['if']=3,rand=-1,randint=2,opposite=1,has=2,count=1,pick=2}
+local ANY_ARGS={['if']=true,opposite=true,has=true,count=true,pick=true}
 
 local function eval_node(node,ctx)
     local k=node.k
@@ -154,7 +162,7 @@ local function eval_node(node,ctx)
         local ar=ARITY[node.name]
         if ar>=0 and #args~=ar then error(node.name..'() takes '..ar..' argument(s)',0) end
         if ar<0 and #args==0 and node.name~='rand' then error(node.name..'() needs arguments',0) end
-        if node.name~='if' and node.name~='opposite' then for _,v in ipairs(args) do if type(v)~='number' then error(node.name..'() needs numbers',0) end end end
+        if not ANY_ARGS[node.name] then for _,v in ipairs(args) do if type(v)~='number' then error(node.name..'() needs numbers',0) end end end
         return f(ctx,args)
     end
     local a,b=eval_node(node.a,ctx),eval_node(node.b,ctx)
@@ -272,6 +280,7 @@ function Grammar.normalize(doc,resolve,seen)
     local g={id=doc.id,name=doc.name,description=doc.description or '',start=doc.start,params={},rules={},include={},populate={}}
     if g.id~=nil and (type(g.id)~='string' or not g.id:match(ID)) then return nil,'id must start with a letter and use letters, digits, _ or -' end
     g.id=g.id or 'inline';g.name=type(g.name)=='string' and g.name~='' and g.name or g.id
+    local seen_given=seen~=nil
     seen=seen or {};if seen[g.id] then return nil,'include cycle through '..g.id end
     -- Included grammars first; this document's params and rules override theirs.
     local includes=doc.include;if type(includes)=='string' then includes={includes} end
@@ -298,6 +307,17 @@ function Grammar.normalize(doc,resolve,seen)
         if type(rule)~='table' then return nil,'rule '..name..' must be a list of operations or an object' end
         if rule[1]~=nil or next(rule)==nil then rule={['do']=rule} end
         g.rules[name]=Util.deepcopy(rule)
+    end
+    -- Room type interiors (modules/room_types.lua): the room_interiors grammar's rules and
+    -- params fill in whatever the document and its includes do not define.
+    if not seen_given and resolve and g.id~=INTERIORS and doc.interiors~=false then
+        local other=resolve(INTERIORS)
+        if other then
+            local og,err=Grammar.normalize(other,resolve,{});if not og then return nil,'room_interiors: '..err end
+            for k,v in pairs(og.rules) do if g.rules[k]==nil then g.rules[k]=v end end
+            for k,v in pairs(og.params) do if g.params[k]==nil then g.params[k]=v end end
+            g.interiors=true
+        end
     end
     if next(g.rules)==nil then return nil,'a grammar needs at least one rule' end
     if doc.populate~=nil then
@@ -355,6 +375,13 @@ local function new_ctx(state,parent,scope,label)
     ctx.rng=function() seedv=(seedv*16807)%2147483647;return seedv/2147483647 end
     if ctx.depth>MAX_DEPTH then fail(ctx,'rules nest deeper than '..MAX_DEPTH..' (does a rule always call itself?)') end
     return ctx
+end
+
+-- A variable set in this rule chain (set, rule or child params) or by the generation, not a grammar default.
+local function explicit(ctx,k)
+    local c=ctx
+    while c do if rawget(c.vars,k)~=nil then return true end;c=c.parent end
+    return ctx.state.user_params[k]~=nil
 end
 
 local function set_scope(ctx,scope) ctx.scope=scope;ctx.vars.sx,ctx.vars.sy,ctx.vars.sz=round(scope.s.x,6),round(scope.s.y,6),round(scope.s.z,6) end
@@ -518,6 +545,7 @@ end
 
 local function opening(ctx,kind,body)
     local room=ctx.room;if not room then fail(ctx,kind..' needs an enclosing room (run it after a room operation)') end
+    if ctx.state.phase=='interior' then fail(ctx,'room type interior rules cannot add doors or windows') end
     local c=to_layout(ctx.scope,{x=ctx.scope.s.x/2,y=ctx.scope.s.y/2,z=0})
     local x,y=room_local(room,c)
     local wall=value(ctx,body.wall,'wall')
@@ -554,32 +582,147 @@ end
 local function room_op(ctx,body)
     local state=ctx.state
     if #state.rooms>=MAX_ROOMS then fail(ctx,'more than '..MAX_ROOMS..' rooms') end
+    if state.phase=='interior' then fail(ctx,'room type interior rules cannot make rooms') end
     local RG=package.loaded['modules/room_generator'] or require('modules/room_generator')
     local spec=value(ctx,body,'room')
-    spec.name=nil;spec.doors=type(spec.doors)=='table' and spec.doors or {};spec.windows=type(spec.windows)=='table' and spec.windows or {}
-    local T=num(spec.wall_thickness,0.15);spec.wall_thickness=T
+    local type_id=spec.type;local furnish=spec.furnish==nil or truth(spec.furnish)
+    spec.name=nil;spec.furnish=nil;spec.type=nil
+    spec.doors=type(spec.doors)=='table' and spec.doors or {};spec.windows=type(spec.windows)=='table' and spec.windows or {}
+    -- A room type (modules/room_types.lua) puts its defaults under the spec.
+    local own=Util.deepcopy(spec);local eff
+    if type_id~=nil and type_id~=false and type_id~='' then
+        if type(type_id)~='string' then fail(ctx,'room type must be a type id') end
+        local err;eff,err=state.room_type(type_id);if not eff then fail(ctx,err) end
+        local RT=package.loaded['modules/room_types'] or require('modules/room_types')
+        spec=RT.apply_spec(spec,eff);own.type=type_id
+    end
+    local T=num(spec.wall_thickness,0.15);spec.wall_thickness=T;own.wall_thickness=T
     local s=ctx.scope.s
     spec.width=round(s.x-2*T,4);spec.length=round(s.y-2*T,4);spec.height=round(num(spec.height,s.z),4)
+    own.width,own.length,own.height=spec.width,spec.length,spec.height;own.depth=nil
     if spec.width<1 or spec.length<1 then fail(ctx,string.format('room needs at least 1 m inside its walls; the scope is %.2f x %.2f m',s.x,s.y)) end
     local base=Util.deepcopy(spec);base.doors={};base.windows={}
     local norm,err=RG.normalize(base);if not norm then fail(ctx,'room: '..err) end
     local name=unique_name(state,interpolate(ctx,body.name) or ctx.rule or 'Room')
     local center=to_layout(ctx.scope,{x=s.x/2,y=s.y/2,z=0})
     local floor_top=norm.floor.type=='raised' and norm.floor.raise or 0
-    local room={index=#state.rooms+1,name=name,spec=spec,T=T,width=spec.width,length=spec.length,height=spec.height,yaw=ctx.scope.yaw,
+    local room={index=#state.rooms+1,name=name,spec=spec,own=own,T=T,width=spec.width,length=spec.length,height=spec.height,yaw=ctx.scope.yaw,type=eff and eff.id or nil,
         center={x=round(center.x),y=round(center.y),z=round(center.z)},floor_top=floor_top,doors={},windows={},connect={},path=ctx.path,rule=ctx.rule}
     -- Explicit openings from the spec keep their own positions.
     for _,d in ipairs(spec.doors) do room.doors[#room.doors+1]=d end
     for _,w in ipairs(spec.windows) do room.windows[#room.windows+1]=w end
-    spec.doors=nil;spec.windows=nil
+    spec.doors=nil;spec.windows=nil;own.doors=nil;own.windows=nil
     room.alias='room_'..room.index
     state.rooms[#state.rooms+1]=room
     state.kind_counts.room=(state.kind_counts.room or 0)+1
     ctx.room=room
     -- The rest of this rule runs in the room's interior.
-    set_scope(ctx,child_scope(ctx.scope,{x=s.x/2,y=s.y/2,z=floor_top},{x=spec.width,y=spec.length,z=spec.height-floor_top},0))
+    local interior=child_scope(ctx.scope,{x=s.x/2,y=s.y/2,z=floor_top},{x=spec.width,y=spec.length,z=spec.height-floor_top},0)
+    set_scope(ctx,interior)
     ctx.vars.t=T
+    if eff then
+        -- The type's variables override grammar defaults, not what a rule, set or the generation chose.
+        for k,v in pairs(eff.params) do if not explicit(ctx,k) then ctx.vars[k]=Util.deepcopy(v) end end
+        ctx.vars.room_type=eff.id
+        for _,w in ipairs((package.loaded['modules/room_types']).size_warnings(eff,spec.width,spec.length,spec.height)) do state.warnings[#state.warnings+1]=name..': '..w end
+        if furnish and (#eff.interior>0 or #eff.populate>0) then state.pending[#state.pending+1]={room=room,ctx=ctx,eff=eff,scope=Util.deepcopy(interior)} end
+    end
     return room
+end
+
+-- Interior rules and placements of typed rooms, once every door is known.
+local function room_sides(room)
+    local order={}
+    local entry=room.doors[1] and room.doors[1].wall or 'south'
+    local back=OPPOSITE[entry]
+    order[1]=back
+    for _,s in ipairs((entry=='north' or entry=='south') and {'east','west'} or {'north','south'}) do order[#order+1]=s end
+    order[#order+1]=entry
+    local door,win={},{}
+    for _,d in ipairs(room.doors) do door[d.wall]=true end
+    for _,w in ipairs(room.windows) do win[w.wall]=true end
+    local doors_on,windows_on,wall_sides,free_sides={},{},{},{}
+    for _,s in ipairs(order) do
+        if door[s] then doors_on[#doors_on+1]=s else wall_sides[#wall_sides+1]=s;if not win[s] then free_sides[#free_sides+1]=s end end
+        if win[s] then windows_on[#windows_on+1]=s end
+    end
+    return {doors_on=doors_on,windows_on=windows_on,wall_sides=wall_sides,free_sides=free_sides,entry_side=entry,
+        back_side=door[back] and '' or back,wall_side=wall_sides[1] or '',free_side=free_sides[1] or '',
+        long_axis=room.length>room.width and 'y' or 'x',room_width=room.width,room_length=room.length,room_height=room.height-room.floor_top}
+end
+
+local function run_interior(state,p)
+    local room,eff=p.room,p.eff
+    local c=new_ctx(state,p.ctx,p.scope,'interior:'..eff.id)
+    c.room=room
+    for k,v in pairs(room_sides(room)) do c.vars[k]=v end
+    c.vars.room_type=eff.id
+    local first=#state.items+1
+    for _,rule in ipairs(eff.interior) do
+        if not state.g.rules[rule] then fail(c,'room type '..eff.id..': interior rule '..rule..' not found') end
+        run_rule(new_ctx(state,c,p.scope,rule),rule)
+    end
+    for i=first,#state.items do state.items[i].interior=room end
+    for k,e in ipairs(eff.populate) do
+        if e['if']==nil or truth(expr(c,e['if'],'if')) then
+            local entry=value(c,e,'populate '..k);entry['if']=nil
+            entry.seed=entry.seed~=nil and tostring(entry.seed) or (tostring(state.seed)..'|'..room.alias..'|'..eff.id..k)
+            state.room_populate[#state.room_populate+1]={entry=entry,room=room,label=room.name..' ('..eff.id..') populate '..k}
+        end
+    end
+end
+
+-- Layout-frame AABB of an item in the room's frame: x0, x1, y0, y1, z0, z1 (z from the room floor).
+local function item_box(room,item)
+    local pts={}
+    local b=item.local_bounds
+    local lo_z,hi_z
+    if item.kind=='geometry' and b then
+        for _,x in ipairs({b.min.x,b.max.x}) do for _,y in ipairs({b.min.y,b.max.y}) do
+            local rx,ry=rot(item.yaw or 0,x,y);pts[#pts+1]={x=item.offset.x+rx,y=item.offset.y+ry}
+        end end
+        lo_z,hi_z=item.offset.z+b.min.z,item.offset.z+b.max.z
+    else
+        for _,d in ipairs({{-0.25,-0.25},{0.25,-0.25},{0.25,0.25},{-0.25,0.25}}) do pts[#pts+1]={x=item.offset.x+d[1],y=item.offset.y+d[2]} end
+        lo_z,hi_z=item.offset.z,item.offset.z+0.5
+    end
+    local x0,x1,y0,y1=math.huge,-math.huge,math.huge,-math.huge
+    for _,p in ipairs(pts) do local x,y=room_local(room,p);x0=math.min(x0,x);x1=math.max(x1,x);y0=math.min(y0,y);y1=math.max(y1,y) end
+    local floor=room.center.z+room.floor_top
+    return x0,x1,y0,y1,lo_z-floor,hi_z-floor
+end
+
+-- Keep doorways clear: interior items in front of a door (door width + pad, INTERIOR_DEPTH deep, door height) are left out.
+local function blocks_door(room,item)
+    if item.kind=='light' or item.kind=='volume' then return false end
+    local x0,x1,y0,y1,z0=item_box(room,item)
+    local W,L=room.width,room.length
+    for _,d in ipairs(room.doors) do
+        if z0<num(d.height,2.1)-1e-3 then
+            local h=num(d.width,1)/2+INTERIOR_PAD;local off=num(d.offset,0);local a0,a1,b0,b1
+            if d.wall=='north' then a0,a1,b0,b1=off-h,off+h,L/2-INTERIOR_DEPTH,L/2
+            elseif d.wall=='south' then a0,a1,b0,b1=off-h,off+h,-L/2,-L/2+INTERIOR_DEPTH
+            elseif d.wall=='east' then a0,a1,b0,b1=W/2-INTERIOR_DEPTH,W/2,off-h,off+h
+            else a0,a1,b0,b1=-W/2,-W/2+INTERIOR_DEPTH,off-h,off+h end
+            if x0<a1-1e-3 and x1>a0+1e-3 and y0<b1-1e-3 and y1>b0+1e-3 then return true end
+        end
+    end
+    return false
+end
+
+local function clear_doorways(state)
+    local keep,dropped={},{}
+    for _,item in ipairs(state.items) do
+        local room=item.interior
+        if room and blocks_door(room,item) then
+            dropped[room]=(dropped[room] or 0)+1;state.kind_counts[item.kind]=state.kind_counts[item.kind]-1
+        else keep[#keep+1]=item end
+    end
+    state.items=keep
+    local rooms={};for room in pairs(dropped) do rooms[#rooms+1]=room end
+    table.sort(rooms,function(a,b) return tostring(a.alias)<tostring(b.alias) end)
+    for _,room in ipairs(rooms) do state.warnings[#state.warnings+1]=room.name..': '..dropped[room]..' furnishing item(s) left out to keep doorways clear' end
+    state.cleared=0;for _,n in pairs(dropped) do state.cleared=state.cleared+n end
 end
 
 local function terminal(ctx,kind,body)
@@ -782,7 +925,70 @@ local function overlap(a,b)
     return true
 end
 
--- Expand a normalized grammar. args: start, params, seed, size.
+local function new_state(g,seed,globals,args)
+    local state={g=g,seed=seed,globals=globals,items={},rooms={},calls=0,level=0,rule_counts={},kind_counts={},names={},warnings={},
+        pending={},room_populate={},user_params={},cleared=0}
+    for k in pairs(type(args.params)=='table' and args.params or {}) do state.user_params[k]=true end
+    local RT=package.loaded['modules/room_types'] or require('modules/room_types')
+    local lookup=args.type_lookup or RT.builtin_lookup()
+    local cache={}
+    state.room_type=function(id)
+        if cache[id]==nil then local eff,err=RT.resolve_with(id,lookup);cache[id]=eff or {error=err} end
+        if cache[id].error then return nil,cache[id].error end
+        return cache[id]
+    end
+    return state
+end
+
+local function grammar_error(e) return type(e)=='table' and e.grammar_error or ('grammar expansion failed: '..tostring(e)) end
+
+-- Interiors of typed rooms, doorway clearance, surfaces and placements, bounds.
+local function finish(state,root,args)
+    local g=state.g
+    local ok,err=pcall(function()
+        state.phase='interior'
+        for _,p in ipairs(state.pending) do run_interior(state,p) end
+        state.phase=nil
+    end)
+    if not ok then return nil,grammar_error(err) end
+    clear_doorways(state)
+    -- Semantic surfaces of the layout (layout frame) and the populate placements they allow.
+    local RG=package.loaded['modules/room_generator'] or require('modules/room_generator')
+    local S=package.loaded['modules/surfaces'] or require('modules/surfaces')
+    local pool,obstacles=Grammar.surface_pool(state,RG,S)
+    for _,s in ipairs(args.pool or {}) do pool[#pool+1]=s end
+    for _,o in ipairs(args.obstacles or {}) do obstacles[#obstacles+1]=o end
+    local populate={}
+    for k,e in ipairs(g.populate or {}) do
+        local okp,perr=pcall(function()
+            local pctx=new_ctx(state,nil,root,'populate '..k)
+            if e['if']~=nil and not truth(expr(pctx,e['if'],'if')) then return end
+            local entry=value(pctx,e,'populate');entry['if']=nil
+            entry.seed=entry.seed~=nil and tostring(entry.seed) or (tostring(state.seed)..'|populate'..k)
+            local est,serr=S.sample_pool(pool,entry,obstacles);if not est then fail(pctx,serr) end
+            populate[#populate+1]={entry=entry,estimate=est.count,surfaces_matched=est.surfaces_matched}
+        end)
+        if not okp then return nil,grammar_error(perr) end
+    end
+    -- Each typed room's own placements, on that room's surfaces only.
+    for _,rp in ipairs(state.room_populate) do
+        local sub={};for _,s in ipairs(pool) do if s.room_id==rp.room.alias then sub[#sub+1]=s end end
+        local est,serr=S.sample_pool(sub,rp.entry,obstacles);if not est then return nil,rp.label..': '..tostring(serr) end
+        populate[#populate+1]={entry=rp.entry,estimate=est.count,surfaces_matched=est.surfaces_matched,room=rp.room}
+    end
+    local lo,hi={x=math.huge,y=math.huge,z=math.huge},{x=-math.huge,y=-math.huge,z=-math.huge}
+    local function grow(x,y,z) lo.x=math.min(lo.x,x);lo.y=math.min(lo.y,y);lo.z=math.min(lo.z,z);hi.x=math.max(hi.x,x);hi.y=math.max(hi.y,y);hi.z=math.max(hi.z,z) end
+    for _,room in ipairs(state.rooms) do for _,p in ipairs(footprint(room)) do grow(p.x,p.y,room.center.z);grow(p.x,p.y,room.center.z+room.height) end end
+    for _,item in ipairs(state.items) do grow(item.offset.x,item.offset.y,item.offset.z) end
+    local types={};for _,room in ipairs(state.rooms) do if room.type then types[room.type]=(types[room.type] or 0)+1 end end
+    local furnished=0;for _,item in ipairs(state.items) do if item.interior then furnished=furnished+1 end end
+    return {grammar=g.id,name=g.name,seed=state.seed,rooms=state.rooms,items=state.items,
+        stats={calls=state.calls,rules=state.rule_counts,kinds=state.kind_counts,rooms=#state.rooms,items=#state.items,connected_openings=state.connected,surfaces=S.summary(pool),
+            room_types=types,interior_items=furnished,doorway_cleared=state.cleared},
+        warnings=state.warnings,bounds=lo.x<math.huge and {min=lo,max=hi} or nil,populate=populate,surface_pool=pool}
+end
+
+-- Expand a normalized grammar. args: start, params, seed, size, type_lookup (room types).
 function Grammar.expand(g,args)
     args=args or {}
     local start=args.start or g.start
@@ -800,7 +1006,7 @@ function Grammar.expand(g,args)
         if g.params[k]==nil then unknown[#unknown+1]=k end
         globals[k]=Util.deepcopy(v)
     end
-    local state={g=g,seed=seed,globals=globals,items={},rooms={},calls=0,level=0,rule_counts={},kind_counts={},names={},warnings={}}
+    local state=new_state(g,seed,globals,args)
     for _,k in ipairs(unknown) do state.warnings[#state.warnings+1]='param '..k..' is not declared by the grammar' end
     local root={o={x=-sx/2,y=-sy/2,z=0},yaw=0,s={x=sx,y=sy,z=sz}}
     local ok,err=pcall(function()
@@ -823,33 +1029,53 @@ function Grammar.expand(g,args)
             return nil,room.path..': room '..room.name..': '..rerr
         end
         room.final=spec
+        -- The spec the room is built from: its own settings (the type is applied again when it is built).
+        local own=Util.deepcopy(room.own);own.name=room.name;own.doors=spec.doors;own.windows=spec.windows
+        room.final_own=own
     end
     for i=1,#state.rooms do for j=i+1,#state.rooms do
         if overlap(state.rooms[i],state.rooms[j]) then state.warnings[#state.warnings+1]='rooms '..state.rooms[i].name..' and '..state.rooms[j].name..' overlap' end
     end end
-    -- Semantic surfaces of the layout (layout frame) and the populate placements they allow.
-    local S=package.loaded['modules/surfaces'] or require('modules/surfaces')
-    local pool,obstacles=Grammar.surface_pool(state,RG,S)
-    local populate={}
-    for k,e in ipairs(g.populate or {}) do
-        local pctx
-        local okp,perr=pcall(function()
-            pctx=new_ctx(state,nil,root,'populate '..k)
-            if e['if']~=nil and not truth(expr(pctx,e['if'],'if')) then return end
-            local entry=value(pctx,e,'populate');entry['if']=nil
-            entry.seed=entry.seed~=nil and tostring(entry.seed) or (tostring(seed)..'|populate'..k)
-            local est,serr=S.sample_pool(pool,entry,obstacles);if not est then fail(pctx,serr) end
-            populate[#populate+1]={entry=entry,estimate=est.count,surfaces_matched=est.surfaces_matched}
-        end)
-        if not okp then return nil,type(perr)=='table' and perr.grammar_error or tostring(perr) end
+    local out,ferr=finish(state,root,args)
+    if not out then return nil,ferr end
+    out.start=start;out.size={sx,sy,sz}
+    return out
+end
+
+-- Furnish an existing room from its type: the type's interior rules and placements
+-- in the room's frame (the layout frame is the world here). desc: id, name, type,
+-- width, length, height, T, floor_top, center, yaw, doors, windows.
+-- args: seed, params, type_lookup, pool / obstacles (the room's world surfaces and objects).
+function Grammar.furnish(g,desc,args)
+    args=args or {}
+    local seed=math.floor(num(args.seed,1))
+    local globals={pi=math.pi}
+    for k,v in pairs(g.params) do globals[k]=Util.deepcopy(v) end
+    for k,v in pairs(type(args.params)=='table' and args.params or {}) do
+        if type(k)~='string' or not k:match(RULE_NAME) then return nil,'param names must be identifiers: '..tostring(k) end
+        globals[k]=Util.deepcopy(v)
     end
-    local lo,hi={x=math.huge,y=math.huge,z=math.huge},{x=-math.huge,y=-math.huge,z=-math.huge}
-    local function grow(x,y,z) lo.x=math.min(lo.x,x);lo.y=math.min(lo.y,y);lo.z=math.min(lo.z,z);hi.x=math.max(hi.x,x);hi.y=math.max(hi.y,y);hi.z=math.max(hi.z,z) end
-    for _,room in ipairs(state.rooms) do for _,p in ipairs(footprint(room)) do grow(p.x,p.y,room.center.z);grow(p.x,p.y,room.center.z+room.height) end end
-    for _,item in ipairs(state.items) do grow(item.offset.x,item.offset.y,item.offset.z) end
-    return {grammar=g.id,name=g.name,start=start,seed=seed,size={sx,sy,sz},rooms=state.rooms,items=state.items,
-        stats={calls=state.calls,rules=state.rule_counts,kinds=state.kind_counts,rooms=#state.rooms,items=#state.items,connected_openings=state.connected,surfaces=S.summary(pool)},
-        warnings=state.warnings,bounds=lo.x<math.huge and {min=lo,max=hi} or nil,populate=populate,surface_pool=pool}
+    local state=new_state(g,seed,globals,args)
+    local eff,err=state.room_type(desc.type);if not eff then return nil,err end
+    local W,L,H=num(desc.width,4),num(desc.length,4),num(desc.height,3);local ft=num(desc.floor_top,0)
+    local c=desc.center or {x=0,y=0,z=0}
+    local room={index=1,name=desc.name or 'Room',alias=desc.id,existing=true,T=num(desc.T,0.15),width=W,length=L,height=H,yaw=num(desc.yaw,0),type=eff.id,
+        center={x=num(c.x,0),y=num(c.y,0),z=num(c.z,0)},floor_top=ft,doors=Util.deepcopy(desc.doors or {}),windows=Util.deepcopy(desc.windows or {}),connect={}}
+    local hx,hy=rot(room.yaw,W/2,L/2)
+    local scope={o={x=room.center.x-hx,y=room.center.y-hy,z=room.center.z+ft},yaw=room.yaw,s={x=W,y=L,z=H-ft}}
+    local ok,perr=pcall(function()
+        local ctx=new_ctx(state,nil,scope,'furnish')
+        ctx.room=room
+        for k,v in pairs(eff.params) do if not explicit(ctx,k) then ctx.vars[k]=Util.deepcopy(v) end end
+        ctx.vars.t=room.T;ctx.vars.room_type=eff.id
+        for _,w in ipairs((package.loaded['modules/room_types']).size_warnings(eff,W,L,H)) do state.warnings[#state.warnings+1]=room.name..': '..w end
+        state.pending[1]={room=room,ctx=ctx,eff=eff,scope=scope}
+    end)
+    if not ok then return nil,type(perr)=='table' and perr.grammar_error or tostring(perr) end
+    local out;out,err=finish(state,scope,args)
+    if not out then return nil,err end
+    out.start='furnish';out.room=room
+    return out
 end
 
 -- World (layout-frame) surfaces of an expansion and the AABBs of its geometry.
@@ -899,9 +1125,10 @@ function Grammar.compile(exp,opts)
         steps[#steps+1]={op='create_premise',as='premise',name=opts.premise_name or exp.name,kind=opts.premise_kind or 'interior'}
         premise='$premise'
     end
-    local function room_ref(item) return item.room and ('$'..item.room.alias) or nil end
+    local function ref(room) if not room then return nil end;if room.existing then return room.alias end;return '$'..room.alias end
+    local function room_ref(item) return ref(item.room) end
     for _,room in ipairs(exp.rooms) do
-        steps[#steps+1]={op='create_parametric_room',as=room.alias,premise_id=premise,spec=room.final,offset=Util.deepcopy(room.center),yaw=room.yaw}
+        steps[#steps+1]={op='create_parametric_room',as=room.alias,premise_id=premise,spec=room.final_own or room.final,offset=Util.deepcopy(room.center),yaw=room.yaw}
     end
     local n=0
     for _,item in ipairs(exp.items) do
@@ -921,6 +1148,8 @@ function Grammar.compile(exp,opts)
     -- Placements on the surfaces of what this plan built.
     for k,p in ipairs(exp.populate or {}) do
         local step=Util.deepcopy(p.entry);step.op='populate_surfaces';step.as='populate_'..k;step.from_plan=true;step.premise_id=premise
+        -- A room type's placements stay in that room; an existing room's own surfaces count too.
+        if p.room then step.room_id=ref(p.room);if p.room.existing then step.from_plan=nil end end
         steps[#steps+1]=step
     end
     return {format='locationstudio-authoring-plan',version=2,name=opts.label or ('Grammar: '..exp.name),origin=opts.origin or 'player',steps=steps}
@@ -1026,17 +1255,18 @@ local function summary(exp)
     local rooms={}
     for _,r in ipairs(exp.rooms) do
         rooms[#rooms+1]={name=r.name,rule=r.rule,path=r.path,center=Util.deepcopy(r.center),yaw=r.yaw,width=r.width,length=r.length,height=r.height,
-            doors=#r.final.doors,windows=#r.final.windows}
+            doors=#r.final.doors,windows=#r.final.windows,type=r.type}
     end
     local items={}
     for _,it in ipairs(exp.items) do
         items[#items+1]={kind=it.kind,name=it.name,rule=it.rule,path=it.path,room=it.room and it.room.name or nil,offset=Util.deepcopy(it.offset),yaw=it.yaw,
-            generator=it.generator,asset_id=it.asset_id,asset_query=it.asset_query}
+            generator=it.generator,asset_id=it.asset_id,asset_query=it.asset_query,furnishing=it.interior and true or nil}
     end
     local populate={}
     for k,p in ipairs(exp.populate or {}) do
         local e=p.entry
-        populate[k]={kind=e.kind or 'asset',tags=e.tags or e.tag,traits=e.traits or e.trait,estimate=p.estimate,surfaces_matched=p.surfaces_matched,asset_id=e.asset_id,asset_query=e.asset_query,generator=e.generator}
+        populate[k]={kind=e.kind or 'asset',tags=e.tags or e.tag,traits=e.traits or e.trait,estimate=p.estimate,surfaces_matched=p.surfaces_matched,asset_id=e.asset_id,asset_query=e.asset_query,generator=e.generator,
+            room=p.room and p.room.name or nil,room_type=p.room and p.room.type or nil}
     end
     return {grammar=exp.grammar,name=exp.name,start=exp.start,seed=exp.seed,size=Util.deepcopy(exp.size),rooms=rooms,items=items,stats=Util.deepcopy(exp.stats),
         warnings=Util.deepcopy(exp.warnings),bounds=Util.deepcopy(exp.bounds),populate=populate}
@@ -1060,7 +1290,10 @@ end
 function Grammar:plan(args)
     args=args or {}
     local g,err=self:_grammar(args);if not g then return nil,err end
-    local exp;exp,err=Grammar.expand(g,args);if not exp then return nil,err end
+    local xargs={}
+    for k,v in pairs(args) do xargs[k]=v end
+    xargs.type_lookup=self.app.room_types and self.app.room_types:lookup() or nil
+    local exp;exp,err=Grammar.expand(g,xargs);if not exp then return nil,err end
     if args.premise_id and not self.app.model:get_premise(args.premise_id) then return nil,'premise not found: '..tostring(args.premise_id) end
     local build_id=args.build_id or (slug(g.id)..'_'..Util.make_id('b'))
     if not tostring(build_id):match(ID) then return nil,'build_id must use letters, digits, _ or -' end

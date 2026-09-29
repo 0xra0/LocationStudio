@@ -1,0 +1,194 @@
+{
+  "format": "locationstudio-room-types",
+  "version": 1,
+  "schema": {
+    "id": "lowercase letters, digits and _ (clinic, server_room)",
+    "name": "display name",
+    "description": "text",
+    "extends": "another room type: its rules are inherited and this type's override them",
+    "traits": "semantic surface traits every surface of the room carries (medical, office, ...); added to the parent's",
+    "tags": "room tags; added to the parent's",
+    "spec": "parametric room defaults (height, wall_thickness, floor, ceiling, trim, materials, lighting, collision, collision_rules, surfaces). A room's own spec overrides them; objects merge key by key, lists replace",
+    "params": "grammar variables the room's rules see (counter_surface, desk_surface, light_intensity, ...). They override grammar defaults, not variables set by a rule, set or the generation",
+    "interior": "rule name or list of rules (from the grammar, else the room_interiors grammar) run in the room's interior once its doors are known; false for none",
+    "populate": "surface placements for this room (see SEMANTIC-SURFACES.md); the parent's come first unless inherit_populate is false",
+    "inherit_populate": "false drops the parent's populate entries",
+    "size": "{min_width, min_length, min_height, max_width, max_length}: advisory; rooms outside it get a warning",
+    "interior_variables": "interior rules also see room_type, room_width, room_length, room_height, doors_on and windows_on (sides with doors / windows), wall_sides (sides without doors) and free_sides (without doors or windows), both ordered far side first, wall_side and free_side (their first entry or ''), entry_side (the first door's side, else south), back_side (opposite the entry if it has no door, else '') and long_axis (x or y)"
+  },
+  "types": {
+    "room": {
+      "name": "Room",
+      "description": "Generic room. Every built-in type extends it.",
+      "spec": {"trim": {"skirting": true}}
+    },
+    "corridor": {
+      "name": "Corridor",
+      "extends": "room",
+      "description": "Circulation space: flat ceiling, light anchors every 4 m, a cable tray along it (grammar variable tray) and patrol points on the floor.",
+      "traits": ["circulation"],
+      "spec": {"ceiling": {"type": "flat"}, "lighting": {"anchors": "grid", "spacing": 4}},
+      "interior": "CorridorInterior",
+      "populate": [
+        {"kind": "marker", "tags": "floor", "pattern": "grid", "spacing": 6, "margin": 1, "type": "patrol_point", "category": "Room types", "name": "Patrol point {i}"}
+      ],
+      "size": {"min_width": 1.2}
+    },
+    "office": {
+      "name": "Office",
+      "extends": "room",
+      "description": "Desks in rows with cabinets along a free wall; a workstation marker on every desk.",
+      "traits": ["office"],
+      "tags": ["workplace"],
+      "spec": {"trim": {"crown": true}, "lighting": {"anchors": "grid", "spacing": 3}},
+      "params": {"desk_surface": "desk", "light_intensity": 55, "desk_spacing": 2.4},
+      "interior": "OfficeInterior",
+      "populate": [
+        {"kind": "marker", "tags": "desk", "pattern": "center", "per_surface": 1, "footprint": 0.4, "height": 0.3, "type": "workstation", "category": "Room types", "name": "Workstation {i}"}
+      ],
+      "size": {"min_width": 3, "min_length": 3}
+    },
+    "reception": {
+      "name": "Reception",
+      "extends": "office",
+      "description": "A counter in front of the far wall and cabinets beside it.",
+      "params": {"counter_surface": "counter"},
+      "interior": "ReceptionInterior",
+      "inherit_populate": false,
+      "populate": [
+        {"kind": "marker", "tags": "counter", "pattern": "center", "per_surface": 1, "footprint": 0.4, "height": 0.3, "type": "receptionist", "category": "Room types", "name": "Receptionist {i}"}
+      ]
+    },
+    "clinic": {
+      "name": "Clinic",
+      "extends": "room",
+      "description": "Bright, cool light; an examination bed, a medical counter and a cabinet. Supply spots on the medical surfaces.",
+      "traits": ["medical"],
+      "tags": ["medical"],
+      "spec": {"trim": {"crown": true}, "lighting": {"anchors": "grid", "spacing": 2.5}},
+      "params": {"counter_surface": "medical_surface", "light_intensity": 70},
+      "interior": "ClinicInterior",
+      "populate": [
+        {"kind": "marker", "tags": "medical_surface", "pattern": "center", "per_surface": 1, "footprint": 0.4, "height": 0.3, "type": "supply_spot", "category": "Room types", "name": "Supply spot {i}"}
+      ],
+      "size": {"min_width": 2.5, "min_length": 3}
+    },
+    "storage": {
+      "name": "Storage",
+      "extends": "room",
+      "description": "Shelf rows on the free walls and crates in the middle; loot spots on the shelves.",
+      "traits": ["storage"],
+      "spec": {"ceiling": {"type": "beams", "beam_spacing": 1.8}, "lighting": {"anchors": "grid", "spacing": 4.5}},
+      "params": {"light_intensity": 40, "crates": true},
+      "interior": "StorageInterior",
+      "populate": [
+        {"kind": "marker", "tags": "shelf", "count": 3, "footprint": 0.3, "height": 0.3, "type": "loot_spot", "category": "Room types", "name": "Loot spot {i}"}
+      ],
+      "size": {"min_width": 2, "min_length": 2}
+    },
+    "security": {
+      "name": "Security",
+      "extends": "room",
+      "description": "A monitoring desk, lockers along a free wall, a security zone volume and a guard post.",
+      "traits": ["security"],
+      "tags": ["restricted"],
+      "spec": {"trim": {"skirting": false}, "lighting": {"anchors": "grid", "spacing": 3}},
+      "params": {"desk_surface": "desk", "light_intensity": 40},
+      "interior": "SecurityInterior",
+      "populate": [
+        {"kind": "marker", "tags": "floor", "pattern": "center", "per_surface": 1, "footprint": 0.6, "type": "guard_post", "category": "Room types", "name": "Guard post {i}"}
+      ],
+      "size": {"min_width": 2.5, "min_length": 2.5}
+    },
+    "armory": {
+      "name": "Armory",
+      "extends": "security",
+      "description": "Weapon cabinets along the free walls.",
+      "traits": ["military"],
+      "interior": "ArmoryInterior",
+      "inherit_populate": false
+    },
+    "maintenance": {
+      "name": "Maintenance",
+      "extends": "room",
+      "description": "Exposed beams, a pipe run under the ceiling, a workbench and a tool cabinet; repair spots on the bench.",
+      "traits": ["industrial", "maintenance"],
+      "spec": {"ceiling": {"type": "beams", "beam_spacing": 1.5}, "trim": {"skirting": false}, "lighting": {"anchors": "grid", "spacing": 4}},
+      "params": {"workbench_surface": "industrial_surface", "light_intensity": 45},
+      "interior": "MaintenanceInterior",
+      "populate": [
+        {"kind": "marker", "tags": "industrial_surface", "pattern": "center", "per_surface": 1, "footprint": 0.4, "height": 0.3, "type": "repair_spot", "category": "Room types", "name": "Repair spot {i}"}
+      ],
+      "size": {"min_width": 2, "min_length": 2}
+    },
+    "workshop": {
+      "name": "Workshop",
+      "extends": "maintenance",
+      "description": "Workbenches along the free walls and crates.",
+      "interior": "WorkshopInterior"
+    },
+    "server_room": {
+      "name": "Server room",
+      "extends": "room",
+      "description": "Raised floor, cool light, rows of racks with aisles and a cable tray.",
+      "traits": ["tech"],
+      "tags": ["restricted"],
+      "spec": {"floor": {"type": "raised", "raise": 0.3}, "ceiling": {"type": "flat"}, "trim": {"skirting": false}, "lighting": {"anchors": "grid", "spacing": 2.5}},
+      "params": {"light_intensity": 45, "rack_aisle": 1.2},
+      "interior": "ServerInterior",
+      "size": {"min_width": 3, "min_length": 3, "min_height": 2.6}
+    },
+    "lab": {
+      "name": "Laboratory",
+      "extends": "room",
+      "description": "Lab benches along the free walls; sample spots on them.",
+      "traits": ["lab"],
+      "spec": {"lighting": {"anchors": "grid", "spacing": 3}},
+      "params": {"counter_surface": "lab_surface", "workbench_surface": "lab_surface", "light_intensity": 65},
+      "interior": "LabInterior",
+      "populate": [
+        {"kind": "marker", "tags": "lab_surface", "density": 0.5, "footprint": 0.3, "height": 0.3, "type": "sample_spot", "category": "Room types", "name": "Sample spot {i}"}
+      ],
+      "size": {"min_width": 3, "min_length": 3}
+    },
+    "bedroom": {
+      "name": "Bedroom",
+      "extends": "room",
+      "description": "A bed against a free wall and a wardrobe.",
+      "traits": ["residential"],
+      "spec": {"lighting": {"anchors": "center"}},
+      "params": {"light_intensity": 35},
+      "interior": "BedroomInterior",
+      "populate": [
+        {"kind": "marker", "tags": "bed", "pattern": "center", "per_surface": 1, "footprint": 0.4, "height": 0, "type": "sleep_spot", "category": "Room types", "name": "Sleep spot {i}"}
+      ],
+      "size": {"min_width": 2.2, "min_length": 2.2}
+    },
+    "bunk_room": {
+      "name": "Bunk room",
+      "extends": "bedroom",
+      "description": "Bunks along the free walls.",
+      "traits": ["military"],
+      "interior": "BunkInterior"
+    },
+    "bathroom": {
+      "name": "Bathroom",
+      "extends": "room",
+      "description": "A counter on a wall without doors.",
+      "traits": ["residential"],
+      "spec": {"lighting": {"anchors": "center"}},
+      "params": {"counter_surface": "counter", "light_intensity": 25},
+      "interior": "BathroomInterior",
+      "size": {"min_width": 1.5, "min_length": 1.5}
+    },
+    "kitchen": {
+      "name": "Kitchen",
+      "extends": "room",
+      "description": "Kitchen counters along the free walls.",
+      "traits": ["residential"],
+      "params": {"counter_surface": "kitchen_surface", "light_intensity": 45},
+      "interior": "KitchenInterior",
+      "size": {"min_width": 2, "min_length": 2}
+    }
+  }
+}

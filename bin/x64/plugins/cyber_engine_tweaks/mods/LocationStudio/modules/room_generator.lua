@@ -67,6 +67,11 @@ function RoomGen.normalize(spec)
     if s.width<1 or s.width>100 or s.length<1 or s.length>100 then return nil,'width and length must be between 1 and 100 m' end
     if s.height<2 or s.height>30 then return nil,'height must be between 2 and 30 m' end
     if s.wall_thickness<0.05 or s.wall_thickness>2 then return nil,'wall_thickness must be between 0.05 and 2 m' end
+    -- Semantic room type (modules/room_types.lua); its defaults are applied before this.
+    if spec.type~=nil and spec.type~=false and spec.type~='' then
+        if type(spec.type)~='string' or not spec.type:match('^[%l_][%l%d_]*$') then return nil,'type must be a room type id (lowercase letters, digits and _)' end
+        s.type=spec.type
+    end
     local f=type(spec.floor)=='table' and spec.floor or {type=spec.floor}
     s.floor={type=f.type or 'slab',thickness=num(f.thickness,0.2),raise=num(f.raise,0.15)}
     if not FLOORS[s.floor.type] then return nil,'floor type must be slab, raised or none' end
@@ -416,18 +421,39 @@ function RoomGen:_transaction(label,fn)
     return result
 end
 
+-- The spec with its room type's defaults applied (modules/room_types.lua).
+function RoomGen:_typed(spec)
+    if type(spec)~='table' or spec.type==nil or spec.type==false or spec.type=='' then return spec end
+    local RT=self.app.room_types;if not RT then return spec end
+    local out,eff=RT:apply(spec);if not out then return nil,eff end
+    return out,eff
+end
+
+-- A user spec without placement arguments.
+local function base_of(args)
+    local base=Util.deepcopy(args.spec or args)
+    if not args.spec then for _,k in ipairs({'premise_id','transform','source','distance','yaw'}) do base[k]=nil end end
+    return base
+end
+
 function RoomGen:preview(spec)
-    local plan,err=RoomGen.plan(spec);if not plan then return nil,err end
+    local typed,eff=self:_typed(spec);if not typed then return nil,eff end
+    local plan,err=RoomGen.plan(typed);if not plan then return nil,err end
     local counts={}
     for role,parts in pairs(plan.roles) do counts[role]=#parts end
     local tags={}
     for _,list in pairs(plan.surfaces) do for _,q in ipairs(list) do tags[q.tag]=(tags[q.tag] or 0)+1 end end
-    return {spec=plan.spec,parts=counts,portals=plan.portals,anchors=plan.anchors,sockets=plan.sockets,surfaces=tags}
+    local RT=package.loaded['modules/room_types']
+    return {spec=plan.spec,parts=counts,portals=plan.portals,anchors=plan.anchors,sockets=plan.sockets,surfaces=tags,
+        type=eff and {id=eff.id,name=eff.name,chain=eff.chain,traits=eff.traits,interior=eff.interior,populate=#eff.populate} or nil,
+        warnings=eff and RT and RT.size_warnings(eff,plan.spec.width,plan.spec.length,plan.spec.height) or nil}
 end
 
 function RoomGen:create(args)
     args=args or {}
-    local plan,err=RoomGen.plan(args.spec or args);if not plan then return nil,err end
+    local base=base_of(args)
+    local typed,eff=self:_typed(base);if not typed then return nil,eff end
+    local plan,err=RoomGen.plan(typed);if not plan then return nil,err end
     local premise=self.app.model:get_premise(args.premise_id or self.app.selected_premise_id);if not premise then return nil,'select a premise or give premise_id' end
     local transform=args.transform
     if not transform then
@@ -441,7 +467,9 @@ function RoomGen:create(args)
         local room,rerr=self.app.builder:create_room({premise_id=premise.id,name=s.name,width=s.width,depth=s.length,height=s.height,wall_thickness=math.min(s.wall_thickness,s.width/2-0.01),
             transform=transform,generate_shell=false,tags={'parametric'}})
         if not room then return nil,rerr end
-        local rec={id=room.id,created_at=Util.now_iso()}
+        room.room_type=s.type
+        if eff then for _,t in ipairs(eff.tags or {}) do local has=false;for _,x in ipairs(room.tags) do if x==t then has=true end end;if not has then room.tags[#room.tags+1]=t end end end
+        local rec={id=room.id,created_at=Util.now_iso(),base_spec=base}
         local ok,berr=self:_build(room,plan,rec);if not ok then return nil,berr end
         table.insert(registry(self.app.model),rec)
         self:_link_portals(premise.id)
@@ -453,14 +481,20 @@ end
 function RoomGen:update(room_id,patch)
     local rec=self:get(room_id);if not rec then return nil,'not a generated room' end
     local room=self.app.model:get_room(room_id);if not room then return nil,'room not found' end
-    local spec=Util.deepcopy(rec.spec)
-    for k,v in pairs(type(patch)=='table' and (patch.spec or patch) or {}) do if k~='id' then spec[k]=Util.deepcopy(v) end end
-    local plan,err=RoomGen.plan(spec);if not plan then return nil,err end
+    -- Patches apply to the room's own spec; its type's defaults are applied again after.
+    local spec=Util.deepcopy(rec.base_spec or rec.spec)
+    for k,v in pairs(type(patch)=='table' and (patch.spec or patch) or {}) do
+        if k=='type' and (v==false or v=='') then spec.type=nil elseif k~='id' then spec[k]=Util.deepcopy(v) end
+    end
+    local typed,eff=self:_typed(spec);if not typed then return nil,eff end
+    local plan,err=RoomGen.plan(typed);if not plan then return nil,err end
     return self:_transaction('Regenerate room '..plan.spec.name,function()
         local r=self:get(room_id);local ok,cerr=self:_clear(r);if not ok then return nil,cerr end
         local s=plan.spec
         room=self.app.model:get_room(room_id)
         room.name=s.name;room.size={width=s.width,depth=s.length,height=s.height};room.wall_thickness=math.min(s.wall_thickness,s.width/2-0.01)
+        room.room_type=s.type;r.base_spec=spec
+        if eff then for _,t in ipairs(eff.tags or {}) do local has=false;for _,x in ipairs(room.tags) do if x==t then has=true end end;if not has then room.tags[#room.tags+1]=t end end end
         local bok,berr=self:_build(room,plan,r);if not bok then return nil,berr end
         r.updated_at=Util.now_iso()
         self:_link_portals(room.premise_id)
@@ -487,7 +521,7 @@ function RoomGen:list(args)
         if room and (not args.premise_id or args.premise_id=='' or room.premise_id==args.premise_id) then
             local pieces=0;for _ in pairs(rec.piece_ids or {}) do pieces=pieces+1 end
             rows[#rows+1]={id=rec.id,name=room.name,size={width=rec.spec.width,length=rec.spec.length,height=rec.spec.height},doors=#rec.spec.doors,windows=#rec.spec.windows,
-                floor=rec.spec.floor.type,ceiling=rec.spec.ceiling.type,pieces=pieces,lights=#(rec.light_ids or {}),portals=#(rec.portals or {}),sockets=#(rec.sockets or {})}
+                floor=rec.spec.floor.type,ceiling=rec.spec.ceiling.type,type=room.room_type,pieces=pieces,lights=#(rec.light_ids or {}),portals=#(rec.portals or {}),sockets=#(rec.sockets or {})}
         end
     end
     return {items=rows,count=#rows}

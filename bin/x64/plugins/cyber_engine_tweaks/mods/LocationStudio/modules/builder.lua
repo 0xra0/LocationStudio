@@ -363,7 +363,7 @@ function Builder:create_room(args)
     local transform=args.transform or local_transform(premise.transform,args.x or 0,args.y or 0,(args.z or 0)+(args.level or 0)*premise.floor_height,args.yaw or 0)
     local room=self.app.model:add_room({
         premise_id=premise.id,name=args.name,kind=args.kind,size={width=args.width,depth=args.depth,height=args.height or premise.floor_height},
-        wall_thickness=args.wall_thickness,level=args.level,layer=args.layer,transform=transform,tags=args.tags,notes=args.notes,
+        wall_thickness=args.wall_thickness,level=args.level,layer=args.layer,transform=transform,tags=args.tags,notes=args.notes,room_type=args.room_type,
     })
     if args.generate_shell~=false then self:rebuild_room_shell(room.id) end
     self.app:mark_dirty(); return room

@@ -137,6 +137,10 @@ rooms:
       lighting: {anchors: grid, spacing: 3, create_lights: true}
 ```
 
+## Room types
+
+`"type": "clinic"` (or `office`, `storage`, `security`, `maintenance`, `corridor`, `server_room`, or a project type) puts that type's defaults under the spec. For example, `server_room` gives a raised floor and `maintenance` gives beams. Keys the spec sets itself win. The room keeps its own spec apart from the type: `room_generator_update` with a new `type` regenerates the shell with that type's defaults, and `"type": false` clears it. The type's surface traits and tags are added to the room. To furnish the room from its type, use `room_type_furnish`. See [ROOM-TYPES.md](ROOM-TYPES.md).
+
 ## Semantic surfaces
 
 Each room records its interior floor, its walls without the doors and windows, its ceiling and its exterior walls as semantic surfaces. The spec's `surfaces` key (`{floor, walls, exterior, ceiling, traits}`) renames or drops them, or adds traits such as `medical`. See [SEMANTIC-SURFACES.md](SEMANTIC-SURFACES.md).

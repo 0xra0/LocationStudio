@@ -5266,7 +5266,8 @@ def room_generator_preview(spec: dict[str, Any]) -> str:
     windows: [{wall, offset, width, height, sill, frame, glass, mullions_x, mullions_y}],
     floor: {type slab|raised|none, thickness, raise}, ceiling: {type flat|beams|coffered|none, thickness, beam_spacing, beam_width, beam_depth},
     trim: {skirting, skirting_height, crown}, materials: {floor, walls, ceiling, trim, frame, glass} (.mi from the catalog, or a .mesh template),
-    lighting: {anchors grid|center|none, spacing, create_lights, light {color, intensity, radius}}, collision, block_windows}."""
+    lighting: {anchors grid|center|none, spacing, create_lights, light {color, intensity, radius}}, collision, block_windows,
+    type (a room type such as clinic or server_room: its defaults go under the spec, see room_type_catalog)}."""
     return _json(_send("room_generator_preview", {"spec": spec}))
 
 
@@ -5282,7 +5283,8 @@ def room_generator_create(spec: dict[str, Any], premise_id: str = "", position: 
     windows: [{wall, offset, width, height, sill, frame, glass, mullions_x, mullions_y}],
     floor: {type slab|raised|none, thickness, raise}, ceiling: {type flat|beams|coffered|none, thickness, beam_spacing, beam_width, beam_depth},
     trim: {skirting, skirting_height, crown}, materials: {floor, walls, ceiling, trim, frame, glass} (.mi from the catalog, or a .mesh template),
-    lighting: {anchors grid|center|none, spacing, create_lights, light {color, intensity, radius}}, collision, block_windows}."""
+    lighting: {anchors grid|center|none, spacing, create_lights, light {color, intensity, radius}}, collision, block_windows,
+    type (a room type: its defaults go under the spec; room_type_create_room also furnishes it)}."""
     args: dict[str, Any] = {"spec": spec, "premise_id": premise_id or None}
     if position is not None:
         p = _xyz(position, "position")
@@ -5297,7 +5299,8 @@ def room_generator_create(spec: dict[str, Any], premise_id: str = "", position: 
 @mcp.tool()
 def room_generator_update(room_id: str, spec: dict[str, Any]) -> str:
     """Regenerate a parametric room from changed spec keys (merged over the saved spec; lists replace). One undo step;
-    the room keeps its id and transform, generated pieces are replaced, hand-placed objects stay."""
+    the room keeps its id and transform, generated pieces are replaced, hand-placed objects stay. type changes the room
+    type (its defaults are applied again; type false clears it)."""
     return _json(_send("room_generator_update", {"room_id": room_id, "spec": spec}))
 
 
@@ -5369,7 +5372,7 @@ def grammar_schema() -> str:
 @mcp.tool()
 def grammar_library() -> str:
     """Environment grammars available to generate from: the project's saved grammars and the built-in ones (common
-    rules, corridor, industrial, clinic, apartment, bunker, laboratory), with start rule, size and params."""
+    rules, room_interiors, corridor, industrial, clinic, apartment, bunker, laboratory, facility), with start rule, size and params."""
     return _json(_send("grammar_library", {}))
 
 
@@ -5618,6 +5621,190 @@ def surface_refresh(premise_id: str = "") -> str:
     if premise_id:
         args["premise_id"] = premise_id
     return _json(_send("surface_refresh", args))
+
+
+ROOM_TYPES_JSON = MOD_DIR / "grammars" / "room_types.json"
+
+
+def _merge_spec(base: Any, over: Any) -> Any:
+    if not isinstance(base, dict) or not isinstance(over, dict):
+        return json.loads(json.dumps(over))
+    out = json.loads(json.dumps(base))
+    for key, value in over.items():
+        out[key] = _merge_spec(out[key], value) if isinstance(value, dict) and isinstance(out.get(key), dict) else json.loads(json.dumps(value))
+    return out
+
+
+def room_types_offline() -> dict[str, Any]:
+    """Built-in room types with their inherited (effective) rules, read from grammars/room_types.json, and the interior
+    rules of the room_interiors grammar. Mirrors RoomTypes.resolve_with in modules/room_types.lua."""
+    doc = json.loads(ROOM_TYPES_JSON.read_text(encoding="utf-8"))
+    types: dict[str, Any] = doc.get("types") or {}
+    library = json.loads(GRAMMAR_LIBRARY.read_text(encoding="utf-8"))
+    interiors = sorted(((library.get("grammars") or {}).get("room_interiors") or {}).get("rules", {}).keys())
+
+    def resolve(type_id: str) -> dict[str, Any]:
+        chain: list[dict[str, Any]] = []
+        cur: str | None = type_id
+        while cur:
+            if any(t.get("_id") == cur for t in chain) or len(chain) >= 8:
+                raise ValueError(f"room type inheritance cycle through {cur}")
+            t = dict(types.get(cur) or {})
+            if not t:
+                raise ValueError(f"unknown room type {cur}")
+            t["_id"] = cur
+            chain.insert(0, t)
+            cur = t.get("extends")
+        eff: dict[str, Any] = {"id": type_id, "chain": [], "traits": [], "tags": [], "spec": {}, "params": {}, "interior": [], "populate": [], "size": {}}
+        for t in chain:
+            eff["chain"].append(t["_id"])
+            for key in ("traits", "tags"):
+                for v in [t[key]] if isinstance(t.get(key), str) else (t.get(key) or []):
+                    if v not in eff[key]:
+                        eff[key].append(v)
+            eff["spec"] = _merge_spec(eff["spec"], t.get("spec") or {})
+            eff["params"].update(t.get("params") or {})
+            if t.get("interior") is False:
+                eff["interior"] = []
+            elif t.get("interior") is not None:
+                eff["interior"] = [t["interior"]] if isinstance(t["interior"], str) else list(t["interior"])
+            if t.get("inherit_populate") is False:
+                eff["populate"] = []
+            eff["populate"].extend(t.get("populate") or [])
+            eff["size"].update(t.get("size") or {})
+        eff["name"] = chain[-1].get("name", type_id)
+        eff["description"] = chain[-1].get("description", "")
+        return eff
+
+    return {"schema": doc.get("schema"), "types": {tid: resolve(tid) for tid in sorted(types)}, "interior_rules": interiors}
+
+
+@mcp.tool()
+def room_type_catalog() -> str:
+    """Offline: the built-in semantic room types (room, corridor, office, reception, clinic, storage, security, armory,
+    maintenance, workshop, server_room, lab, bedroom, bunk_room, bathroom, kitchen) with what each inherits: spec
+    defaults (floor, ceiling, trim, lighting, ...), surface traits, grammar params (counter_surface, desk_surface,
+    light_intensity, ...), interior rules that furnish it, populate placements and advisory size; the type schema; and
+    the interior rules available in the room_interiors grammar. Read this before writing a custom type."""
+    return _json(room_types_offline())
+
+
+@mcp.tool()
+def room_type_list() -> str:
+    """Room types of the project: its own (project) types and the built-in ones, with parent, effective traits,
+    interior rules, placement count and how many rooms use each. A project type with a built-in id overrides it."""
+    return _json(_send("room_type_list", {}))
+
+
+@mcp.tool()
+def room_type_get(type_id: str) -> str:
+    """One room type: its document, the effective (inherited) rules and the rooms that use it."""
+    return _json(_send("room_type_get", {"type": type_id}))
+
+
+@mcp.tool()
+def room_type_save(doc: dict[str, Any]) -> str:
+    """Save a custom room type to the project (validated; one undo step). doc: {id (lowercase, e.g. ripperdoc),
+    name, description, extends (e.g. clinic), traits, tags, spec (parametric room defaults), params (grammar
+    variables), interior (rule name(s) from a grammar or room_interiors, or false), populate (surface placements),
+    inherit_populate, size {min_width, ...}}. Rooms of this type (and of types extending it) pick the change up when
+    they are regenerated or furnished again; room_type_reapply does that for all of them."""
+    return _json(_send("room_type_save", {"doc": doc}))
+
+
+@mcp.tool()
+def room_type_delete(type_id: str) -> str:
+    """Delete a project room type (built-in types cannot be deleted; a deleted override falls back to the built-in).
+    Refused while another project type extends it. One undo step."""
+    return _json(_send("room_type_delete", {"type": type_id}))
+
+
+@mcp.tool()
+def room_type_rooms(type_id: str = "", premise_id: str = "") -> str:
+    """Rooms that carry a type (optionally of one type, including types extending it, or in one premise): type,
+    whether it is a generated parametric room and whether it has been furnished from its type."""
+    args: dict[str, Any] = {}
+    if type_id:
+        args["type"] = type_id
+    if premise_id:
+        args["premise_id"] = premise_id
+    return _json(_send("room_type_rooms", args))
+
+
+@mcp.tool()
+def room_type_assign(room_id: str, type_id: str = "", clear: bool = False, regenerate: bool = True, furnish: bool = False,
+                     seed: int | None = None, params: dict[str, Any] | None = None) -> str:
+    """Give a room a type (or clear it). A generated parametric room regenerates its shell with the type's defaults
+    (one undo step); other rooms just record the type and its tags. furnish=true then furnishes it from the type
+    (a second undo step). Clearing a type also removes its furnishing."""
+    if not type_id and not clear:
+        raise ValueError("give type_id or clear=true")
+    args: dict[str, Any] = {"room_id": room_id, "type": type_id or None, "clear": clear, "regenerate": regenerate, "furnish": furnish,
+                            "seed": seed, "params": params}
+    return _json(_send("room_type_assign", {k: v for k, v in args.items() if v is not None}))
+
+
+def _furnish_args(room_id: str, type_id: str, seed: int | None, params: dict[str, Any] | None) -> dict[str, Any]:
+    args: dict[str, Any] = {"room_id": room_id, "type": type_id or None, "seed": seed, "params": params}
+    return {k: v for k, v in args.items() if v is not None}
+
+
+@mcp.tool()
+def room_type_preview(room_id: str, type_id: str = "", seed: int | None = None, params: dict[str, Any] | None = None,
+                      include_plan: bool = False) -> str:
+    """Dry run of furnishing a room from its type (or type_id): interior items by kind, placements with estimates,
+    warnings (items left out to keep doorways clear, size advice) and whether the plan validates."""
+    args = _furnish_args(room_id, type_id, seed, params)
+    args["include_plan"] = include_plan
+    return _json(_send("room_type_preview", args))
+
+
+@mcp.tool()
+def room_type_furnish(room_id: str, type_id: str = "", seed: int | None = None, params: dict[str, Any] | None = None) -> str:
+    """Furnish a room from its type as ONE authoring plan: the type's interior rules (furniture kept out of
+    doorways) and its surface placements. Works for parametric and room-kit rooms. Furnishing again replaces the
+    previous furnishing (hand-placed objects stay). One undo step; rolled back on failure."""
+    return _json(_send("room_type_furnish", _furnish_args(room_id, type_id, seed, params)))
+
+
+@mcp.tool()
+def room_type_unfurnish(room_id: str) -> str:
+    """Remove the furnishing a room got from its type. One undo step."""
+    return _json(_send("room_type_unfurnish", {"room_id": room_id}))
+
+
+@mcp.tool()
+def room_type_create_room(type_id: str, width: float = 5.0, length: float = 4.0, height: float | None = None,
+                          spec: dict[str, Any] | None = None, name: str = "", premise_id: str = "", premise_name: str = "",
+                          position: list[float] | None = None, yaw: float = 0.0, source: str = "player",
+                          seed: int = 1, params: dict[str, Any] | None = None, furnish: bool = True, build_id: str = "") -> str:
+    """Create a typed parametric room with its interior in one undo step: the type's spec defaults under spec (doors,
+    windows, materials, ...), its surface traits, interior rules and placements. It is a grammar build, so
+    grammar_regenerate (new seed/params) and grammar_remove work on it. width/length are the interior size (m);
+    height defaults to the type's. position [x,y,z] + yaw place the floor centre, otherwise source=player|camera.
+    Without premise_id the selected premise is used, else a new premise is created."""
+    args: dict[str, Any] = {"type": type_id, "width": width, "length": length, "height": height, "spec": spec, "name": name or None,
+                            "premise_id": premise_id or None, "premise_name": premise_name or None, "seed": seed, "params": params,
+                            "furnish": furnish, "build_id": build_id or None}
+    if position is not None:
+        p = _xyz(position, "position")
+        args["transform"] = {"position": {**p, "w": 1}, "rotation": {"roll": 0, "pitch": 0, "yaw": yaw}}
+    else:
+        if source not in {"player", "camera"}:
+            raise ValueError("source must be player or camera (or give position)")
+        args["origin"] = source
+    return _json(_send("room_type_create_room", {k: v for k, v in args.items() if v is not None}))
+
+
+@mcp.tool()
+def room_type_reapply(type_id: str, premise_id: str = "") -> str:
+    """After changing a type, bring its rooms (and rooms of types extending it) up to date: grammar builds containing
+    them regenerate, other parametric rooms regenerate their shell, furnished rooms furnish again with the same seed.
+    Each is its own undo step; the result lists every action and failure."""
+    args: dict[str, Any] = {"type": type_id}
+    if premise_id:
+        args["premise_id"] = premise_id
+    return _json(_send("room_type_reapply", args))
 
 
 EDL_EXPORTS = MOD_DIR / "exports" / "edl"
