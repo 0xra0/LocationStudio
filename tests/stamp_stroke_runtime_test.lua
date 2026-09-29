@@ -1,6 +1,6 @@
 local env=dofile(arg[2]..'/support/cet_mock.lua')
 local app=env.app
-assert(app.version=='0.79.0')
+assert(app.version=='0.80.0')
 
 local premise=assert(app.actions:create_premise_from_player('Stamp Stroke Test','exterior'))
 local function wb_metadata(path,name)

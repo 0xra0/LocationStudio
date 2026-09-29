@@ -58,6 +58,7 @@ A grammar document has these keys:
 - **`include`:** inherits the params and rules of other grammars. Rules with the same name override the inherited ones, which is how `CorridorExtras` is filled in.
 - **`start` and `size`:** the first rule and the box it runs in. The box is centred on the origin, with the floor at z = 0.
 - **`params`:** defaults that each generation can override.
+- **`populate`:** placements on the semantic surfaces of what the generation built, such as props on desks, markers on medical surfaces or decals on walls. See [Populate](#populate).
 
 ### Scopes
 
@@ -88,9 +89,9 @@ Any operation can have `if: "expression"`.
 
 | Terminal | Result |
 | --- | --- |
-| `room` | A parametric room whose **outer** footprint is the scope. It takes the room spec: `wall_thickness`, `floor`, `ceiling`, `trim`, `materials`, `lighting`, `collision`, `collision_rules`, explicit `doors`/`windows`, `height` and `name`. The operations after it run in the room's **interior**, and `t` is the wall thickness. Neighbouring rooms stand back to back, each with its own wall. |
+| `room` | A parametric room whose **outer** footprint is the scope. It takes the room spec: `wall_thickness`, `floor`, `ceiling`, `trim`, `materials`, `lighting`, `collision`, `collision_rules`, explicit `doors`/`windows`, `surfaces` (`{floor, walls, exterior, ceiling, traits}`), `height` and `name`. The operations after it run in the room's **interior**, and `t` is the wall thickness. Neighbouring rooms stand back to back, each with its own wall. |
 | `door` / `window` | An opening in the enclosing room's wall nearest the scope centre, or in `wall`. Its settings are `width`, `height`, `sill` (windows), `frame`, `frame_width` and `shift`. With `connect` (the default), the same opening is cut into the room behind the wall, so a door placed from either side joins both rooms. A door can also stand a door-leaf asset in the opening (`asset_id`/`asset_query`). |
-| `geometry` | A procedural generator with `params` and `material`. `collision` defaults to true and `layer` to `decoration`. The object stands at `at`, which defaults to the bottom centre of the scope, and turns with the scope. Compound parts can use `[x, y, z]` arrays. |
+| `geometry` | A procedural generator with `params` and `material`. `collision` defaults to true and `layer` to `decoration`. The object stands at `at`, which defaults to the bottom centre of the scope, and turns with the scope. Compound parts can use `[x, y, z]` arrays. `surface` tags its visible top faces (`"desk"`, `"$counter_surface"`), and compound parts can carry their own `surface`. See [SEMANTIC-SURFACES.md](SEMANTIC-SURFACES.md). |
 | `asset` | A Project Asset (`asset_id` or `asset_query`) placed at `at`. |
 | `light` | A static light (`intensity`, `radius`, `color` or `config`, or `preset_id`). By default it hangs 0.15 m under the top centre of the scope. |
 | `volume` | A volume filling the scope, for example a trigger per room. |
@@ -125,6 +126,21 @@ The following variables are available:
 Params given to a child are evaluated in the child's scope.
 
 `rand` is seeded by the generation seed and the rule path. The same seed always gives the same layout, and changing one part of a grammar does not reshuffle the rest.
+
+## Populate
+
+A grammar's `populate` list runs after the layout is built. Each entry places items of a kind (`asset`, `procedural`, `decal`, `light`, `effect` or `marker`) on the semantic surfaces of this generation: tags, groups or traits such as `desk`, `work_surface`, `medical`, `ceiling` or `exterior_wall`. Entries take the options of `surface_populate` ([SEMANTIC-SURFACES.md](SEMANTIC-SURFACES.md)): `count`, `per_surface`, `density`, `pattern`, `spacing`, `footprint`, `height`, `elevation` and `seed`, plus the kind's fields and `if`. Values can use params.
+
+```json
+"populate": [
+  {"kind": "asset", "asset_query": "coffee mug", "tags": "desk", "count": 6, "footprint": 0.15, "height": 0.15},
+  {"if": "supply_spots", "kind": "marker", "tags": "medical_surface", "per_surface": 1, "pattern": "center", "type": "supply_spot"}
+]
+```
+
+Placements avoid other geometry and need room above them. `grammar_preview` estimates how many each entry makes and counts the layout's surfaces by tag. Included grammars' populate lists run first.
+
+The built-in rules tag their furniture through params such as `desk_surface`, `counter_surface` and `workbench_surface`, and their rooms through `room_traits`. For example, the clinic sets `counter_surface: medical_surface` and `room_traits: ["medical"]`.
 
 ## Generating
 

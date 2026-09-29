@@ -10,6 +10,15 @@
 The upgrade archive does not contain project/config JSON, logs, exports,
 thumbnails, or bridge state.
 
+## v0.80 Semantic surfaces smoke check
+
+1. Generate the **Clinic** grammar. In Spatial → Surfaces, the premise lists `medical_surface`, `desk`, `bed`, `floor`, `wall`, `ceiling` and `exterior_wall` counts, and each exam-room counter has a supply-spot marker in its centre.
+2. Select the reception desk-counter and set Populate to **asset** with a small Project Asset (such as a mug), tags `counter`, count 3. Press **PREVIEW**, then **POPULATE**. The mugs stand on the counter top, upright, not floating or sunk. Undo removes all three at once.
+3. Populate **marker** on `floor` in an exam room. No marker is placed under the bed or the counter.
+4. Populate **decal** with a decal search (such as `graffiti`) on tags `wall`, pattern center. Each decal lies flat on the inside of a wall at 1.5 m. **Check that wall decals project into the wall.** If they project sideways, report it: the pitch −90° convention for decals is unverified.
+5. Populate **light** on the ceiling of a room with no lights. The lights hang just under the ceiling on a 3 m grid.
+6. Tag a vanilla or catalog table by hand (**TAG FROM BOUNDS**, face top), then populate on `table`. The items sit on its top; if the imported bounds are loose, use `inset` or `height` with `surface_tag`.
+
 ## v0.79 Environment grammar smoke check
 
 1. In Spatial → Grammar pick **Service corridor** and press **PREVIEW**: 1 room, 8 doors, 6 lights. Press **GENERATE AT PLAYER**. Walk the corridor: doors every 6 m on both walls, a light panel and a light every 4 m, a cable tray along the north wall under the ceiling.

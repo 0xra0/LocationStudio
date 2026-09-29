@@ -1,5 +1,6 @@
 local Util=require('modules/util')
 local Procedural=require('modules/procedural')
+local Surfaces=require('modules/surfaces')
 
 -- Parametric room generator. One specification (width, length, height, wall
 -- thickness, doors, windows, floor/ceiling type, trims, materials, lighting)
@@ -12,7 +13,9 @@ local Procedural=require('modules/procedural')
 --   * portals for every opening, linked to adjoining generated rooms;
 --   * lighting anchors on the ceiling (optionally real lights);
 --   * snapping sockets (walls, corners, doors, windows, floor/ceiling centre,
---     light anchors) that objects can be snapped to.
+--     light anchors) that objects can be snapped to;
+--   * semantic surfaces (modules/surfaces.lua): interior floor, walls (without
+--     the openings) and ceiling, and the exterior walls.
 -- Everything is recorded in model.data.generated_rooms and regenerates or
 -- deletes as one undo step.
 --
@@ -82,6 +85,19 @@ function RoomGen.normalize(spec)
         if not CG then return nil,'collision rules are unavailable' end
         local r,err=CG.normalize_rules(spec.collision_rules);if not r then return nil,'collision_rules: '..err end
         s.collision_rules=r
+    end
+    -- Semantic surface tags; false leaves a surface out.
+    local sf=spec.surfaces;if sf~=nil and type(sf)~='table' then return nil,'surfaces must be {floor, walls, exterior, ceiling, traits}' end
+    sf=sf or {}
+    s.surfaces={floor='floor',walls='wall',exterior='exterior_wall',ceiling='ceiling'}
+    for k,v in pairs(sf) do
+        local key=k=='wall' and 'walls' or k
+        if key=='traits' then
+            local opt,err=Surfaces.normalize_option({traits=v});if err then return nil,'surfaces.traits: '..err end
+            s.surfaces.traits=opt and opt.traits or nil
+        elseif s.surfaces[key]==nil then return nil,'unknown surfaces key '..tostring(k)..' (floor, walls, exterior, ceiling, traits)'
+        elseif v==false or v=='' then s.surfaces[key]=false
+        else local ok,err=Surfaces.check_tag(v);if not ok then return nil,'surfaces.'..k..': '..err end;s.surfaces[key]=v end
     end
     local mats=type(spec.materials)=='table' and spec.materials or {}
     s.materials={floor=material(mats.floor),walls=material(mats.walls or mats.wall),ceiling=material(mats.ceiling),trim=material(mats.trim or mats.walls or mats.wall),
@@ -167,6 +183,7 @@ function RoomGen.plan(spec)
         local ops={}
         for _,list in ipairs({s.doors,s.windows}) do for _,o in ipairs(list) do if o.wall==wall then ops[#ops+1]={offset=o.offset,width=o.width,height=o.height,sill=o.sill} end end end
         local parts,werr=G.wall.fn({length=len,height=H,thickness=T,openings=ops});if not parts then return nil,wall..' wall: '..tostring(werr) end
+        for _,q in ipairs(parts) do q.surface=nil end
         append(walls,transform_parts(parts,cx,cy,0,yaw))
     end
     roles.walls=walls
@@ -250,7 +267,33 @@ function RoomGen.plan(spec)
         sockets[#sockets+1]={id=p.id,kind=p.kind,position={x=base.x+inward[1]*T/2,y=base.y+inward[2]*T/2,z=p.kind=='door' and floor_top or p.sill},yaw=facing[p.wall],wall=p.wall}
     end
     for _,a in ipairs(anchors) do sockets[#sockets+1]={id=a.id,kind='light',position=Util.deepcopy(a.position),yaw=0} end
-    return {spec=s,roles=roles,portals=portals,anchors=anchors,sockets=sockets,floor_top=floor_top}
+    -- Semantic surfaces per role, in the room frame.
+    local st=s.surfaces;local surfaces={floor={},walls={},ceiling={}}
+    local function rect(list,tag,c,n,su,sv)
+        if tag and su>0.01 and sv>0.01 then list[#list+1]={tag=tag,traits=st.traits and Util.deepcopy(st.traits) or nil,center=c,normal=n,size={u=su,v=sv}} end
+    end
+    if s.floor.type~='none' then rect(surfaces.floor,st.floor,{x=0,y=0,z=floor_top},{x=0,y=0,z=1},W,L) end
+    if s.ceiling.type~='none' then rect(surfaces.ceiling,st.ceiling,{x=0,y=0,z=H},{x=0,y=0,z=-1},W,L) end
+    local inward_of={north={0,-1},south={0,1},east={-1,0},west={1,0}}
+    for _,wall in ipairs({'north','east','south','west'}) do
+        local cx,cy,yaw,full=wall_line(s,wall)
+        local inward=inward_of[wall]
+        local ops={}
+        for _,list in ipairs({s.doors,s.windows}) do for _,o in ipairs(list) do if o.wall==wall then ops[#ops+1]={offset=o.offset,width=o.width,height=o.height,sill=o.sill} end end end
+        -- Inner faces span the interior length from the floor top; exterior faces the full wall.
+        for _,side in ipairs({{tag=st.walls,length=WALLS[wall].axis=='x' and W or L,sign=1,z0=floor_top},{tag=st.exterior,length=full,sign=-1,z0=0}}) do
+            if side.tag then
+                local parts=G.wall.fn({length=side.length,height=H,thickness=T,openings=ops})
+                for _,q in ipairs(parts or {}) do
+                    local z0=math.max(side.z0,q.center.z-q.size.z/2);local z1=math.min(H,q.center.z+q.size.z/2)
+                    local r=Procedural.rotate({x=q.center.x,y=0,z=0},{yaw=yaw})
+                    local c={x=cx+r.x+side.sign*inward[1]*T/2,y=cy+r.y+side.sign*inward[2]*T/2,z=(z0+z1)/2}
+                    rect(surfaces.walls,side.tag,c,{x=side.sign*inward[1],y=side.sign*inward[2],z=0},q.size.x,z1-z0)
+                end
+            end
+        end
+    end
+    return {spec=s,roles=roles,portals=portals,anchors=anchors,sockets=sockets,floor_top=floor_top,surfaces=surfaces}
 end
 
 function RoomGen:_world(room,p)
@@ -282,7 +325,7 @@ function RoomGen:_build(room,plan,rec)
         local parts=plan.roles[role]
         if parts then
             local collision=s.collision and (role=='floor' or role=='walls' or role=='ceiling')
-            local r,err=app.procedural:create({generator='compound',params={parts=parts},name=room.name..' / '..role,premise_id=room.premise_id,room_id=room.id,
+            local r,err=app.procedural:create({generator='compound',params={parts=parts,surfaces=plan.surfaces[role]},name=room.name..' / '..role,premise_id=room.premise_id,room_id=room.id,
                 layer='shell',transform=Util.deepcopy(room.transform),material=s.materials[role],collision=collision,spawn=true,
                 mesh_path=app.procedural:settings().mesh_root..'\\'..tostring(room.name):lower():gsub('[^%w]+','_')..'_'..room.id..'\\'..role..'.mesh'})
             if not r then return nil,role..': '..tostring(err) end
@@ -377,7 +420,9 @@ function RoomGen:preview(spec)
     local plan,err=RoomGen.plan(spec);if not plan then return nil,err end
     local counts={}
     for role,parts in pairs(plan.roles) do counts[role]=#parts end
-    return {spec=plan.spec,parts=counts,portals=plan.portals,anchors=plan.anchors,sockets=plan.sockets}
+    local tags={}
+    for _,list in pairs(plan.surfaces) do for _,q in ipairs(list) do tags[q.tag]=(tags[q.tag] or 0)+1 end end
+    return {spec=plan.spec,parts=counts,portals=plan.portals,anchors=plan.anchors,sockets=plan.sockets,surfaces=tags}
 end
 
 function RoomGen:create(args)

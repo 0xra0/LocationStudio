@@ -1,3 +1,21 @@
+## 0.80.0 - 2026-09-29
+
+- Added semantic surfaces (`modules/surfaces.lua`, Spatial → Surfaces). Generated geometry records what each surface is:
+  - **Vocabulary:** tags such as floor, wall, ceiling, desk, table, counter, workbench, shelf, cabinet, bed, road, sidewalk, stairs, ramp, medical_surface, industrial_surface, lab_surface and kitchen_surface. Each has an expected orientation and groups (walkable, support, work_surface, storage, vertical, overhead, medical, industrial, ...). Traits can be added, and custom tags are allowed.
+  - **Generators tag their faces:** floor, ceiling, wall faces without openings, stair treads and landing, ramp slope, window glass. Procedural objects take a `surface` option that tags visible top faces (hidden faces, such as desk legs, are skipped), retags, adds traits or adds explicit rectangles. Compound parts can carry their own `surface`.
+  - **Parametric rooms** add their interior floor, walls (without doors and windows), ceiling and exterior walls. The room spec's `surfaces` key renames, drops or adds traits to them.
+  - **Hand tags** from an object's bounds (or explicit rectangles) work for any object, such as game-asset furniture.
+- Placement on surfaces:
+  - **Kinds:** asset, procedural, decal, light, effect and marker, each with sensible default tags, size and offset.
+  - **Patterns:** random (count, per surface or density), grid, line and center, with a seed.
+  - **Fit checks:** footprint, clearance under anything above, overlap with placed objects, and spacing.
+  - **Facing:** props are aligned with the surface, wall items face into the room, decals project into their surface and lights hang under ceilings.
+- `surface_populate` creates the placements as one authoring plan: validated, one undo step, full rollback. New plan ops `populate_surfaces` (with `from_plan`) and `create_decal`.
+- Environment grammars gained `surface`/`surfaces` on geometry, room `surfaces`, and a `populate` list that runs on the generation's own surfaces. Regenerating or removing a build removes the placements too. The preview counts surfaces by tag and estimates each populate entry.
+- The built-in grammars tag their furniture and rooms: medical clinic counters, lab benches, industrial workbenches, kitchen counters, shelves, beds and so on. The clinic and laboratory populate supply and sample markers.
+- Added bridge ops and MCP tools `surface_vocabulary` (offline), `surface_query`, `surface_object`, `surface_tag`, `surface_untag`, `surface_sample`, `surface_populate` and `surface_refresh`. `procedural_create`/`procedural_update` take `surface`.
+- Added `SEMANTIC-SURFACES.md` and Lua/Python tests. Bumped to v0.80.0.
+
 ## 0.79.0 - 2026-09-29
 
 - Added the environment grammar system (`modules/env_grammar.lua`, `grammars/library.json`, Spatial → Grammar). Named rules run in oriented boxes of space:

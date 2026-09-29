@@ -137,6 +137,10 @@ rooms:
       lighting: {anchors: grid, spacing: 3, create_lights: true}
 ```
 
+## Semantic surfaces
+
+Each room records its interior floor, its walls without the doors and windows, its ceiling and its exterior walls as semantic surfaces. The spec's `surfaces` key (`{floor, walls, exterior, ceiling, traits}`) renames or drops them, or adds traits such as `medical`. See [SEMANTIC-SURFACES.md](SEMANTIC-SURFACES.md).
+
 ## Limits
 
 - Rooms are rectangular. Use procedural `floor`/`wall` pieces for other shapes.

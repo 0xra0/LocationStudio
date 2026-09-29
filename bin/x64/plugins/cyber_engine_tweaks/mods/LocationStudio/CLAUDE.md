@@ -430,3 +430,17 @@ and fix its errors and overlap warnings before `grammar_generate`. Keep the
 `build_id` to regenerate in place with `grammar_regenerate`, and tell the user
 that regenerating replaces hand edits to generated items. Grammars only
 reference Project Assets and materials that exist; never invent paths.
+
+## Semantic surfaces
+
+To place props, decals, lights, effects or markers where they belong, use the
+semantic surfaces of generated geometry instead of computing heights by hand.
+Check tags with `surface_vocabulary` and what exists with `surface_query`.
+Always run `surface_sample` (or `surface_populate` with `dry_run`) first and
+report `rejected` counts, then `surface_populate` (one undo step). Tag new
+procedural geometry with `surface` (for example desk tops, shelves or
+medical_surface), and tag game-asset furniture by hand with `surface_tag` before
+populating it. Use a grammar's `populate` list for generated layouts. Take asset
+ids, decals and effects from the catalog and search tools; never invent paths.
+Placement checks use bounds and surfaces, not exact meshes, and wall and ceiling
+decal orientation is unverified: ask the user to check placements in game.

@@ -16,6 +16,9 @@ local Util=require('modules/util')
 --   door / window  an opening in the enclosing room's nearest wall (also cut into the room behind it)
 --   geometry  procedural geometry; asset  a Project Asset; light  a static light
 --   volume  a volume filling the scope; marker  a location
+-- Geometry and rooms carry semantic surfaces (modules/surfaces.lua). A grammar's
+-- `populate` list places props, decals, lights, effects or markers on the
+-- surfaces of what it built (desks, shelves, floors, walls, ceilings...).
 -- Expansion is pure and deterministic for a seed. The result is compiled into
 -- one authoring plan (version 2) and executed by modules/authoring_plans.lua:
 -- validated first, one undo step, full rollback on failure. A generation is an
@@ -266,7 +269,7 @@ end
 -- Normalize a grammar document. `resolve(id)` returns another grammar for include.
 function Grammar.normalize(doc,resolve,seen)
     if type(doc)~='table' then return nil,'a grammar must be an object' end
-    local g={id=doc.id,name=doc.name,description=doc.description or '',start=doc.start,params={},rules={},include={}}
+    local g={id=doc.id,name=doc.name,description=doc.description or '',start=doc.start,params={},rules={},include={},populate={}}
     if g.id~=nil and (type(g.id)~='string' or not g.id:match(ID)) then return nil,'id must start with a letter and use letters, digits, _ or -' end
     g.id=g.id or 'inline';g.name=type(g.name)=='string' and g.name~='' and g.name or g.id
     seen=seen or {};if seen[g.id] then return nil,'include cycle through '..g.id end
@@ -281,6 +284,7 @@ function Grammar.normalize(doc,resolve,seen)
         local og,err=Grammar.normalize(other,resolve,s2);if not og then return nil,'include '..tostring(inc)..': '..err end
         for k,v in pairs(og.params) do g.params[k]=v end
         for k,v in pairs(og.rules) do g.rules[k]=v end
+        for _,e in ipairs(og.populate or {}) do g.populate[#g.populate+1]=e end
         g.include[#g.include+1]=inc
         g.size=g.size or og.size
     end
@@ -296,6 +300,17 @@ function Grammar.normalize(doc,resolve,seen)
         g.rules[name]=Util.deepcopy(rule)
     end
     if next(g.rules)==nil then return nil,'a grammar needs at least one rule' end
+    if doc.populate~=nil then
+        if type(doc.populate)~='table' then return nil,'populate must be a list of placements' end
+        local S=package.loaded['modules/surfaces'] or require('modules/surfaces')
+        for i,e in ipairs(doc.populate) do
+            if type(e)~='table' then return nil,'populate '..i..' must be an object' end
+            local kind=e.kind or 'asset'
+            if type(kind)~='string' or (kind:sub(1,1)~='$' and not S.KINDS[kind]) then return nil,'populate '..i..': kind must be asset, procedural, decal, light, effect or marker' end
+            if kind:sub(1,1)~='$' then local ok,err=S.check_kind(e);if not ok then return nil,'populate '..i..': '..err end end
+            g.populate[#g.populate+1]=Util.deepcopy(e)
+        end
+    end
     if doc.size~=nil then
         local s=doc.size;local x,y,z=num(s.x or s[1]),num(s.y or s[2]),num(s.z or s[3])
         if not x or not y or not z or x<=0 or y<=0 or z<=0 then return nil,'size must be [x, y, z] in metres' end
@@ -582,9 +597,13 @@ local function terminal(ctx,kind,body)
             end
         end
         local P=package.loaded['modules/procedural'] or require('modules/procedural')
-        local info,err=P.generate(body.generator,params);if not info then fail(ctx,'geometry '..body.generator..': '..tostring(err)) end
+        local surface=body.surface~=nil and value(ctx,body.surface,'surface') or nil
+        local surfaces=body.surfaces~=nil and value(ctx,body.surfaces,'surfaces') or nil
+        local option,oerr=P.surface_option(surface,surfaces);if option==nil then fail(ctx,'geometry '..body.generator..': '..tostring(oerr)) end
+        local info,err=P.generate(body.generator,params,option);if not info then fail(ctx,'geometry '..body.generator..': '..tostring(err)) end
         local item=point_item(ctx,body,{x=s.x/2,y=s.y/2,z=0})
         item.kind='geometry';item.name=unique_name(state,label or ctx.rule or body.generator);item.generator=body.generator;item.params=params
+        item.surface=surface;item.surfaces=surfaces;item.surface_list=info.surfaces;item.local_bounds=info.bounds
         item.material=body.material~=nil and value(ctx,body.material,'material') or nil
         item.collision=body.collision==nil and true or truth(value(ctx,body.collision,'collision'))
         item.collision_rules=body.collision_rules~=nil and value(ctx,body.collision_rules,'collision_rules') or nil
@@ -808,13 +827,66 @@ function Grammar.expand(g,args)
     for i=1,#state.rooms do for j=i+1,#state.rooms do
         if overlap(state.rooms[i],state.rooms[j]) then state.warnings[#state.warnings+1]='rooms '..state.rooms[i].name..' and '..state.rooms[j].name..' overlap' end
     end end
+    -- Semantic surfaces of the layout (layout frame) and the populate placements they allow.
+    local S=package.loaded['modules/surfaces'] or require('modules/surfaces')
+    local pool,obstacles=Grammar.surface_pool(state,RG,S)
+    local populate={}
+    for k,e in ipairs(g.populate or {}) do
+        local pctx
+        local okp,perr=pcall(function()
+            pctx=new_ctx(state,nil,root,'populate '..k)
+            if e['if']~=nil and not truth(expr(pctx,e['if'],'if')) then return end
+            local entry=value(pctx,e,'populate');entry['if']=nil
+            entry.seed=entry.seed~=nil and tostring(entry.seed) or (tostring(seed)..'|populate'..k)
+            local est,serr=S.sample_pool(pool,entry,obstacles);if not est then fail(pctx,serr) end
+            populate[#populate+1]={entry=entry,estimate=est.count,surfaces_matched=est.surfaces_matched}
+        end)
+        if not okp then return nil,type(perr)=='table' and perr.grammar_error or tostring(perr) end
+    end
     local lo,hi={x=math.huge,y=math.huge,z=math.huge},{x=-math.huge,y=-math.huge,z=-math.huge}
     local function grow(x,y,z) lo.x=math.min(lo.x,x);lo.y=math.min(lo.y,y);lo.z=math.min(lo.z,z);hi.x=math.max(hi.x,x);hi.y=math.max(hi.y,y);hi.z=math.max(hi.z,z) end
     for _,room in ipairs(state.rooms) do for _,p in ipairs(footprint(room)) do grow(p.x,p.y,room.center.z);grow(p.x,p.y,room.center.z+room.height) end end
     for _,item in ipairs(state.items) do grow(item.offset.x,item.offset.y,item.offset.z) end
     return {grammar=g.id,name=g.name,start=start,seed=seed,size={sx,sy,sz},rooms=state.rooms,items=state.items,
-        stats={calls=state.calls,rules=state.rule_counts,kinds=state.kind_counts,rooms=#state.rooms,items=#state.items,connected_openings=state.connected},
-        warnings=state.warnings,bounds=lo.x<math.huge and {min=lo,max=hi} or nil}
+        stats={calls=state.calls,rules=state.rule_counts,kinds=state.kind_counts,rooms=#state.rooms,items=#state.items,connected_openings=state.connected,surfaces=S.summary(pool)},
+        warnings=state.warnings,bounds=lo.x<math.huge and {min=lo,max=hi} or nil,populate=populate,surface_pool=pool}
+end
+
+-- World (layout-frame) surfaces of an expansion and the AABBs of its geometry.
+function Grammar.surface_pool(state,RG,S)
+    local pool,obstacles={},{}
+    for _,room in ipairs(state.rooms) do
+        local plan=room.final and RG.plan(room.final)
+        if plan then
+            local t={position=room.center,rotation={roll=0,pitch=0,yaw=room.yaw}}
+            local i=0
+            for _,role in ipairs({'floor','walls','ceiling'}) do
+                for _,q in ipairs(plan.surfaces[role] or {}) do
+                    local list=S.normalize_explicit({q})
+                    if list and list[1] then i=i+1;pool[#pool+1]=S.to_world(list[1],t,{id=room.alias..':'..i,object_id=room.alias..'_'..role,room_id=room.alias,object_name=room.name}) end
+                end
+            end
+        end
+    end
+    for n,item in ipairs(state.items) do
+        if item.kind=='geometry' then
+            local t={position=item.offset,rotation={roll=item.roll or 0,pitch=item.pitch or 0,yaw=item.yaw or 0}}
+            local owner='geometry_'..n
+            for i,q in ipairs(item.surface_list or {}) do
+                pool[#pool+1]=S.to_world(q,t,{id=owner..':'..i,object_id=owner,room_id=item.room and item.room.alias or nil,object_name=item.name})
+            end
+            local b=item.local_bounds
+            if b and item.collision~=false then
+                local lo,hi={x=math.huge,y=math.huge,z=math.huge},{x=-math.huge,y=-math.huge,z=-math.huge}
+                for _,x in ipairs({b.min.x,b.max.x}) do for _,y in ipairs({b.min.y,b.max.y}) do for _,z in ipairs({b.min.z,b.max.z}) do
+                    local r=S.rotate({x=x,y=y,z=z},t.rotation)
+                    for _,k in ipairs({'x','y','z'}) do local v=r[k]+item.offset[k];lo[k]=math.min(lo[k],v);hi[k]=math.max(hi[k],v) end
+                end end end
+                obstacles[#obstacles+1]={min=lo,max=hi,owner=owner}
+            end
+        end
+    end
+    return pool,obstacles
 end
 
 -- Compile an expansion into a version 2 authoring plan.
@@ -837,7 +909,7 @@ function Grammar.compile(exp,opts)
         local base={as=alias,premise_id=premise,room_id=room_ref(item),name=item.name,offset=Util.deepcopy(item.offset),yaw=item.yaw,pitch=item.pitch,roll=item.roll}
         if item.kind=='geometry' then
             base.op='create_procedural';base.generator=item.generator;base.params=item.params;base.material=item.material;base.collision=item.collision
-            base.collision_rules=item.collision_rules;base.layer=item.layer;base.stream_range=item.stream_range
+            base.collision_rules=item.collision_rules;base.layer=item.layer;base.stream_range=item.stream_range;base.surface=item.surface;base.surfaces=item.surfaces
         elseif item.kind=='asset' then base.op='place_asset';base.asset_id=item.asset_id;base.asset_query=item.asset_query;base.spawn=item.spawn
         elseif item.kind=='light' then base.op='create_light';base.config=item.config;base.preset_id=item.preset_id
         elseif item.kind=='volume' then
@@ -845,6 +917,11 @@ function Grammar.compile(exp,opts)
             base.offset.z=base.offset.z+item.size.z/2
         elseif item.kind=='marker' then base.op='create_location';base.premise_id=nil;base.room_id=nil;base.type=item.type;base.category=item.category end
         steps[#steps+1]=base
+    end
+    -- Placements on the surfaces of what this plan built.
+    for k,p in ipairs(exp.populate or {}) do
+        local step=Util.deepcopy(p.entry);step.op='populate_surfaces';step.as='populate_'..k;step.from_plan=true;step.premise_id=premise
+        steps[#steps+1]=step
     end
     return {format='locationstudio-authoring-plan',version=2,name=opts.label or ('Grammar: '..exp.name),origin=opts.origin or 'player',steps=steps}
 end
@@ -956,8 +1033,13 @@ local function summary(exp)
         items[#items+1]={kind=it.kind,name=it.name,rule=it.rule,path=it.path,room=it.room and it.room.name or nil,offset=Util.deepcopy(it.offset),yaw=it.yaw,
             generator=it.generator,asset_id=it.asset_id,asset_query=it.asset_query}
     end
+    local populate={}
+    for k,p in ipairs(exp.populate or {}) do
+        local e=p.entry
+        populate[k]={kind=e.kind or 'asset',tags=e.tags or e.tag,traits=e.traits or e.trait,estimate=p.estimate,surfaces_matched=p.surfaces_matched,asset_id=e.asset_id,asset_query=e.asset_query,generator=e.generator}
+    end
     return {grammar=exp.grammar,name=exp.name,start=exp.start,seed=exp.seed,size=Util.deepcopy(exp.size),rooms=rooms,items=items,stats=Util.deepcopy(exp.stats),
-        warnings=Util.deepcopy(exp.warnings),bounds=Util.deepcopy(exp.bounds)}
+        warnings=Util.deepcopy(exp.warnings),bounds=Util.deepcopy(exp.bounds),populate=populate}
 end
 
 local function slug(s) return (tostring(s or 'x'):lower():gsub('[^%w]+','_'):gsub('^_+',''):gsub('_+$','')) end
