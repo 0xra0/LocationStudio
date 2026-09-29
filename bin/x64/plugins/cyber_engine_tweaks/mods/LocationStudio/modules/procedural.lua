@@ -432,6 +432,7 @@ function Procedural:_rebuild_colliders(object,info)
         r.object.metadata.procedural_owner=object.id
         r.object.metadata.collision_gen={owner=object.id,role=b.role or 'geometry'}
         cfg.collider_ids[#cfg.collider_ids+1]=r.object.id
+        if self.app.bounds_gen then self.app.bounds_gen:store(r.object) end
     end
     return true
 end
@@ -475,6 +476,7 @@ function Procedural:create(args)
     object.metadata.procedural.mesh_path=args.mesh_path or self:_mesh_path(object)
     local ok;ok,err=self:_rebuild_colliders(object,info)
     if not ok then self:_abort(before,mark,object.metadata.procedural.collider_ids);return nil,err end
+    if self.app.bounds_gen then self.app.bounds_gen:store(object) end
     collapse(model,mark)
     model:touch();self.app:mark_dirty()
     if self.app.selection then self.app.selection:set('object',object.id) end
@@ -524,6 +526,7 @@ function Procedural:update(object_id,patch)
         self:show(model:get_object(object_id))
         return nil,err
     end
+    if self.app.bounds_gen then self.app.bounds_gen:store(object) end
     collapse(model,mark)
     model:touch();self.app:mark_dirty()
     local shown=self:show(model:get_object(object_id))

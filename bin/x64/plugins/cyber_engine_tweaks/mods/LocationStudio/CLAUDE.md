@@ -410,3 +410,12 @@ change with `collision_rules_preview` and report its warnings, such as
 unaligned cuts left whole. Actor-specific presets are estimates: confirm
 blocking in game or with walkability tools. Run `collision_rules_regenerate`
 after door openings change. Ask before disabling a room's collision.
+
+## Generated bounds
+
+Bounds of generated geometry and colliders are computed, never supplied: use
+`bounds_get` for an object or room, `bounds_refresh` after bulk edits, and
+`bounds_report` before a build. Leave `stream_range` unset so the automatic
+range applies; if the user wants a manual one, tell them when preflight
+reports it as shorter than the visibility distance. Call visibility distances
+estimates and check pop-in in game.

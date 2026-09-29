@@ -364,16 +364,18 @@ def object_mesh(obj: dict[str, Any]) -> Mesh:
     return mesh_from_parts(cfg.get("parts") or [], uv_scale=uv_scale, slot_uv=material.get("slot_uv"))
 
 
-def _node(obj: dict[str, Any]) -> dict[str, Any]:
+def _node(obj: dict[str, Any], rec: dict[str, Any] | None = None) -> dict[str, Any]:
     cfg = obj["metadata"]["procedural"]
     t = obj.get("transform") or {}
     p, r = t.get("position") or {}, t.get("rotation") or {}
     q = euler_to_quat(float(r.get("roll") or 0), float(r.get("pitch") or 0), float(r.get("yaw") or 0))
-    rng = float(cfg.get("stream_range") or 150)
+    # Streaming ranges from the automatic bounds (lsbuild/bounds.py); a manual stream_range wins inside `record`.
+    rng = float(rec["streaming"]["range"]) if rec else float(cfg.get("stream_range") or 150)
+    secondary = float(rec["streaming"]["secondary_range"]) if rec else rng * 1.2
     appearance = (cfg.get("material") or {}).get("appearance") or "default"
     return {"name": f"[Procedural] {obj.get('name')}", "type": "worldMeshNode",
             "position": {"x": float(p.get("x", 0)), "y": float(p.get("y", 0)), "z": float(p.get("z", 0)), "w": 0},
-            "rotation": q, "scale": {"x": 1, "y": 1, "z": 1}, "primaryRange": rng, "secondaryRange": rng * 1.2,
+            "rotation": q, "scale": {"x": 1, "y": 1, "z": 1}, "primaryRange": rng, "secondaryRange": secondary,
             "data": {"mesh": {"DepotPath": {"$type": "ResourcePath", "$storage": "string", "$value": cfg["mesh_path"]}, "Flags": "Default"},
                      "meshAppearance": {"$type": "CName", "$storage": "string", "$value": appearance}},
             "locationstudio": {"object_id": obj.get("id"), "procedural": True}}
@@ -400,15 +402,27 @@ def _sector_for(export: dict[str, Any], pos: dict[str, float]) -> dict[str, Any]
     return min(sectors, key=dist)
 
 
-def inject_nodes(export: dict[str, Any], objects: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Add one worldMeshNode per object to the nearest sector, before any variant range, and grow its bounds."""
+def inject_nodes(export: dict[str, Any], objects: list[dict[str, Any]], bounds_by_id: dict[str, Any] | None = None,
+                 project: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    """Add one worldMeshNode per object to the sector holding its world-bounds centre (before any variant range) and
+    grow the sector by its rotated world AABB."""
+    from . import bounds as _bounds
+
     placed = []
+    bounds_by_id = dict(bounds_by_id or {})
+    bounds_settings = _bounds.settings(project)
     for s in export.get("sectors", []):
         if isinstance(s, dict):
             s["nodes"] = [n for n in s.get("nodes", []) if not (isinstance(n, dict) and (n.get("locationstudio") or {}).get("procedural"))]
     for obj in objects:
-        node = _node(obj)
-        sector = _sector_for(export, node["position"])
+        rec = bounds_by_id.get(obj.get("id"))
+        if rec is None:
+            try:
+                rec = _bounds.record(obj, bounds_settings)
+            except (ValueError, KeyError, TypeError):
+                rec = None
+        node = _node(obj, rec)
+        sector = _sector_for(export, rec["world"]["center"] if rec else node["position"])
         if sector is None:
             raise ValueError("the export has no sectors to receive procedural geometry")
         nodes = sector.setdefault("nodes", [])
@@ -417,15 +431,15 @@ def inject_nodes(export: dict[str, Any], objects: list[dict[str, Any]]) -> list[
         nodes.insert(at, node)
         if len(variants) > 1:
             sector["variantIndices"] = [v if i == 0 or v < at else v + 1 for i, v in enumerate(variants)]
-        bounds = (obj["metadata"]["procedural"].get("bounds") or {})
         lo, hi = sector.setdefault("min", {}), sector.setdefault("max", {})
         for k in "xyz":
             p = node["position"][k]
-            ext_lo = p + float((bounds.get("min") or {}).get(k, 0)) - 1 if bounds else p
-            ext_hi = p + float((bounds.get("max") or {}).get(k, 0)) + 1 if bounds else p
+            ext_lo = rec["world"]["min"][k] - 1 if rec else p
+            ext_hi = rec["world"]["max"][k] + 1 if rec else p
             lo[k] = min(float(lo.get(k, ext_lo)), ext_lo)
             hi[k] = max(float(hi.get(k, ext_hi)), ext_hi)
-        placed.append({"object_id": obj.get("id"), "sector": sector.get("name"), "node_index": at, "mesh_path": obj["metadata"]["procedural"]["mesh_path"]})
+        placed.append({"object_id": obj.get("id"), "sector": sector.get("name"), "node_index": at, "mesh_path": obj["metadata"]["procedural"]["mesh_path"],
+                       "primary_range": node["primaryRange"], "secondary_range": node["secondaryRange"]})
     return placed
 
 
@@ -481,9 +495,12 @@ def apply_to_workspace(project_file: str | Path, workspace: str | Path, *, premi
     report: dict[str, Any] = {"objects": len(objects), "generated": [], "issues": [], "nodes": [], "ready": True}
     if not objects:
         return report
+    from . import bounds as _bounds
     from .materials import definitions, resolve_object
 
     defs = definitions(project)
+    bounds_settings = _bounds.settings(project)
+    bounds_by_id: dict[str, Any] = {}
     root, manifest = load_manifest(workspace)
     raw_export = root / str(manifest["exportFile"])
     for obj in objects:
@@ -513,6 +530,15 @@ def apply_to_workspace(project_file: str | Path, workspace: str | Path, *, premi
         write_glb(mesh, glb, name=rel.stem)
         entry = {"object_id": obj.get("id"), "mesh_path": path, "glb": str(glb), "triangles": mesh.triangle_count, "converted": False,
                  "backend": backend_for(cfg)}
+        rec = _bounds.record(obj, bounds_settings, mesh)
+        bounds_by_id[obj.get("id")] = rec
+        entry["bounds"] = {"local": rec["local"], "world": rec["world"], "primary_range": rec["streaming"]["range"],
+                           "secondary_range": rec["streaming"]["secondary_range"], "visibility_distance": rec["visibility"]["distance"],
+                           "cells": rec["streaming"]["cells"]}
+        saved = ((obj.get("metadata") or {}).get("generated_bounds") or {}).get("local")
+        diff = _bounds.compare(saved, rec["local"])
+        if diff is not None and diff > 0.05:
+            report.setdefault("warnings", []).append(f"{label}: saved bounds differ from the built mesh by {diff:.3f} m (the mesh bounds are used)")
         report["generated"].append(entry)
         if entry["backend"] == "native":
             try:
@@ -567,7 +593,7 @@ def apply_to_workspace(project_file: str | Path, workspace: str | Path, *, premi
     report["ready"] = not report["issues"]
     if report["ready"]:
         export = json.loads(raw_export.read_text(encoding="utf-8"))
-        report["nodes"] = inject_nodes(export, objects)
+        report["nodes"] = inject_nodes(export, objects, bounds_by_id, project)
         raw_export.write_text(json.dumps(export, ensure_ascii=False), encoding="utf-8")
         manifest["sourceExportSha256"] = manifest.get("sourceExportSha256") or manifest.get("exportSha256")
         manifest["exportSha256"] = hashlib.sha256(raw_export.read_bytes()).hexdigest()

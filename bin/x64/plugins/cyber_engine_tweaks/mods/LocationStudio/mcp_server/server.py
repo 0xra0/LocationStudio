@@ -3756,7 +3756,7 @@ def status_resource() -> str:
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from mod_inventory import scan_mod_installation as _scan_mod_installation  # noqa: E402
-from lsbuild import build as _lsb, native as _lsn, worker as _lsw, wiring as _lswire, rng as _lsrng, interactables as _lsip, population as _lsp, vfx as _lsvfx, sectors as _lssec, performance as _lsperf, vanilla as _lsvan, dependencies as _lsdep, preflight as _lspf, edl as _lsedl, procedural as _lsproc, meshres as _lsmesh, materials as _lsmat, csg as _lscsg  # noqa: E402
+from lsbuild import build as _lsb, native as _lsn, worker as _lsw, wiring as _lswire, rng as _lsrng, interactables as _lsip, population as _lsp, vfx as _lsvfx, sectors as _lssec, performance as _lsperf, vanilla as _lsvan, dependencies as _lsdep, preflight as _lspf, edl as _lsedl, procedural as _lsproc, meshres as _lsmesh, materials as _lsmat, csg as _lscsg, bounds as _lsbounds  # noqa: E402
 
 WORLD_BUILDER_ROOT = MOD_DIR.parent / "entSpawner"
 BUILD_ROOT = MOD_DIR / "exports" / "build"
@@ -5147,6 +5147,45 @@ def collision_rules_room_enabled(room_id: str, enabled: bool = True) -> str:
     """Enable or disable all generated colliders of one room (they stay authored; disabled ones are despawned and
     not exported). One undo step."""
     return _json(_send("collision_rules_room_enabled", {"room_id": room_id, "enabled": enabled}))
+
+
+@mcp.tool()
+def bounds_get(object_id: str = "", room_id: str = "") -> str:
+    """Automatic bounds of a generated resource (procedural geometry or a generated collider): local (object frame),
+    world AABB, oriented box, bounding sphere, collision (union of its colliders), visibility (render AABB and
+    visibility distance), and streaming (primary/secondary range, streaming AABB and cells). A stale record is recomputed
+    for the current transform. With room_id only: the bounds of a room's generated pieces."""
+    args = {"object_id": object_id or None, "room_id": room_id or None}
+    return _json(_send("bounds_get", {k: v for k, v in args.items() if v is not None}))
+
+
+@mcp.tool()
+def bounds_refresh(object_id: str = "", room_id: str = "", premise_id: str = "") -> str:
+    """Recompute and store the bounds of every generated resource in scope (derived data, no undo step)."""
+    args = {"object_id": object_id or None, "room_id": room_id or None, "premise_id": premise_id or None}
+    return _json(_send("bounds_refresh", {k: v for k, v in args.items() if v is not None}))
+
+
+@mcp.tool()
+def bounds_settings(min_screen_angle: float | None = None, stream_margin: float | None = None, min_range: float | None = None,
+                    max_range: float | None = None, secondary_factor: float | None = None, cell_size: float | None = None,
+                    padding: float | None = None) -> str:
+    """Get or set the automatic bounds rules. Visibility distance = sphere radius / tan(min_screen_angle / 2), clamped to
+    [min_range, max_range]; primary streaming range = visibility + stream_margin (clamped); secondary = primary x
+    secondary_factor. cell_size is the streaming grid the cell report uses (match the export's streaming_x/y/z);
+    padding grows local bounds. With no arguments it returns the current values."""
+    args = {"min_screen_angle": min_screen_angle, "stream_margin": stream_margin, "min_range": min_range, "max_range": max_range,
+            "secondary_factor": secondary_factor, "cell_size": cell_size, "padding": padding}
+    return _json(_send("bounds_settings", {k: v for k, v in args.items() if v is not None}))
+
+
+@mcp.tool()
+def bounds_report(premise_id: str = "", tolerance: float = 0.05) -> str:
+    """Offline: exact bounds of every generated object from its built mesh (exact for CSG too), with the streaming
+    ranges and cells Build Mod will write, plus warnings where the saved in-game bounds differ from the mesh by more
+    than tolerance (m). Also lists generated colliders with their saved world bounds."""
+    project = json.loads(PROJECT.read_text(encoding="utf-8")) if PROJECT.is_file() else {"objects": []}
+    return _json(_lsbounds.report(project, premise_id or None, tolerance))
 
 
 CSG_EXAMPLES = MOD_DIR / "csg" / "examples.json"

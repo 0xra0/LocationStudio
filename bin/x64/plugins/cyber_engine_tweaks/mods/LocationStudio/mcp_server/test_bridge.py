@@ -28,7 +28,7 @@ def test_mcp_operations_are_handled() -> None:
     handled.update(re.findall(r"or op == '([a-z_]+)'", bridge))
     handled.update(re.findall(r"'((?:wb_)?(?:clipcheck|fixturecheck|fitcheck))'", bridge))
     assert sent <= handled, f'MCP operations missing in CET bridge: {sorted(sent - handled)}'
-    assert len(re.findall(r'@mcp\.tool\(\)', server)) == 506
+    assert len(re.findall(r'@mcp\.tool\(\)', server)) == 510
     for operation in ('register_asset', 'update_asset', 'delete_asset', 'place_asset', 'clear_debug_log', 'run_diagnostics',
                       'capture_camera', 'copy_transform', 'paste_transform', 'move_item_to_aim',
                       'drop_item_to_ground', 'aim_item_at_target', 'scatter_at_aim',
@@ -95,7 +95,8 @@ def test_mcp_operations_are_handled() -> None:
                       'room_generator_update', 'room_generator_delete', 'room_generator_list', 'room_generator_get', 'room_generator_snap',
                       'material_presets', 'material_create', 'material_update', 'material_delete', 'material_list', 'material_get',
                       'material_assign', 'material_settings', 'collision_rules_get', 'collision_rules_set', 'collision_rules_preview',
-                      'collision_rules_regenerate', 'collision_rules_report', 'collision_rules_room_enabled'):
+                      'collision_rules_regenerate', 'collision_rules_report', 'collision_rules_room_enabled', 'bounds_get', 'bounds_refresh',
+                      'bounds_settings'):
         assert operation in handled, operation
     for tool in ('performance_export', 'sector_inspect', 'sector_node', 'wb_favorite_add', 'wb_favorites_list', 'wb_device_connect', 'wb_elevator_wire',
                  'wb_polygon_scatter', 'wb_volume_scatter', 'wb_live_surface_scatter', 'wb_rng_create'):
@@ -184,6 +185,11 @@ def test_v6_modules_are_packaged() -> None:
     assert (mod / 'mcp_server' / 'test_collision_rules.py').is_file()
     assert (mod.parents[5] / 'tests' / 'collision_gen_runtime_test.lua').is_file()
     assert (mod.parents[5] / 'COLLISION-RULES.md').is_file()
+    assert (mod / 'modules' / 'bounds_gen.lua').is_file()
+    assert (mod / 'mcp_server' / 'lsbuild' / 'bounds.py').is_file()
+    assert (mod / 'mcp_server' / 'test_bounds.py').is_file()
+    assert (mod.parents[5] / 'tests' / 'bounds_gen_runtime_test.lua').is_file()
+    assert (mod.parents[5] / 'GENERATED-BOUNDS.md').is_file()
     for tool in ('csg_examples', 'csg_create', 'csg_mesh'):
         assert re.search(rf'def {tool}\(', (mod / 'mcp_server' / 'server.py').read_text(encoding='utf-8')), tool
     for tool in ('material_build', 'material_inspect'):

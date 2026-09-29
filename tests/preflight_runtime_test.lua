@@ -9,7 +9,7 @@ local function has(c,text) for _,i in ipairs(c.issues) do if i.message:find(text
 -- A clean project passes.
 local clean=P:run({})
 assert(clean.schema=='locationstudio-preflight/1' and clean.ready,'empty project is ready: '..json.encode(clean.summary))
-assert(#clean.checks==11)
+assert(#clean.checks==12)
 
 local premise=model:add_premise({name='Clinic',kind='interior',transform={position={x=0,y=0,z=0,w=1},rotation={roll=0,pitch=0,yaw=0}}})
 local T={position={x=1,y=2,z=3,w=1},rotation={roll=0,pitch=0,yaw=0}}

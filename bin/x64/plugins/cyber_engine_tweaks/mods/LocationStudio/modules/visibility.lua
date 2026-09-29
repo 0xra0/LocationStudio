@@ -369,6 +369,7 @@ function Visibility:hidden_meshes(args)
     for _,o in ipairs(self.app.model.data.objects or {}) do
         local wb=o.metadata and not o.metadata.reference_area_id and o.metadata.world_builder
         local is_mesh=wb and (tostring(wb.definition_key):find('^mesh_') or wb.definition_key=='entity_template')
+        if o.metadata and o.metadata.procedural and not o.metadata.reference_area_id then is_mesh=true end
         if is_mesh and o.enabled~=false and (not premise_id or o.premise_id==premise_id) then
             local bounds=self.app.asset_bounds and self.app.asset_bounds:world_aabb(o.id)
             if not bounds then unknown=unknown+1 else

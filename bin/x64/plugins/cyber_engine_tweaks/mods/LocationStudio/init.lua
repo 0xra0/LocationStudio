@@ -58,7 +58,7 @@ local Dependencies=safe_require('modules/dependencies')
 local Preflight=safe_require('modules/preflight')
 local Procedural=safe_require('modules/procedural')
 -- Later feature modules share one table: initialize() is at Lua's 60-upvalue limit.
-local Features={room_generator=safe_require('modules/room_generator'),materials=safe_require('modules/materials'),collision_gen=safe_require('modules/collision_gen')}
+local Features={room_generator=safe_require('modules/room_generator'),materials=safe_require('modules/materials'),collision_gen=safe_require('modules/collision_gen'),bounds_gen=safe_require('modules/bounds_gen')}
 local BuildExport=safe_require('modules/build_export')
 local WbImport=safe_require('modules/wb_import')
 local AssetBounds=safe_require('modules/asset_bounds')
@@ -70,7 +70,7 @@ local Checkpoints=safe_require('modules/checkpoints')
 local Editor=safe_require('ui/editor')
 
 local LocationStudio={
-    version='0.77.0',ready=false,diagnostic_ready=true,init_failed=nil,ui_failed=nil,
+    version='0.78.0',ready=false,diagnostic_ready=true,init_failed=nil,ui_failed=nil,
     overlay_open=false,editor_visible=true,dirty=false,dirty_since=0,last_autosave=0,last_bridge_poll=0,
     selected_location_id=nil,selected_route_id=nil,selected_premise_id=nil,selected_room_id=nil,
     selected_object_id=nil,selected_volume_id=nil,selected_camera_id=nil,selected_scene_id=nil,editing_scene_id=nil,live_scene_id=nil,selected_asset_id=nil,last_asset_id=nil,selected_item_kind=nil,
@@ -223,6 +223,7 @@ function LocationStudio:initialize()
     self.preflight=Preflight and construct('preflight',function() return Preflight.new(self) end) or nil
     self.material_library=Features.materials and construct('material_library',function() return Features.materials.new(self) end) or nil
     self.collision_gen=Features.collision_gen and construct('collision_gen',function() return Features.collision_gen.new(self) end) or nil
+    self.bounds_gen=Features.bounds_gen and construct('bounds_gen',function() return Features.bounds_gen.new(self) end) or nil
     self.procedural=Procedural and construct('procedural',function() return Procedural.new(self) end) or nil
     self.room_generator=Features.room_generator and construct('room_generator',function() return Features.room_generator.new(self) end) or nil
     self.build_export=BuildExport and construct('build_export',function() return BuildExport.new(self) end) or nil

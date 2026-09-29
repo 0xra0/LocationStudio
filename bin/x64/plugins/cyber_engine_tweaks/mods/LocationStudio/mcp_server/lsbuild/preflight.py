@@ -17,7 +17,7 @@ SCHEMA = "locationstudio-preflight/1"
 MAX_ISSUES = 200
 
 LIVE_CHECKS = (
-    ("project", "Project data"), ("resource_paths", "Resource paths"), ("bounds", "Asset bounds"), ("spawns", "Spawns"),
+    ("project", "Project data"), ("resource_paths", "Resource paths"), ("bounds", "Asset bounds"), ("generated_bounds", "Generated bounds"), ("spawns", "Spawns"),
     ("noderefs", "NodeRefs"), ("quest_facts", "Quest facts"), ("interactables", "Native interactable setup"),
     ("ambient_areas", "Ambient areas"), ("workspots", "Workspots and routes"), ("device_links", "Device links"),
     ("cet_entities", "Exportable objects"),
