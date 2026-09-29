@@ -1,0 +1,398 @@
+{
+  "format": "locationstudio-environment-grammars",
+  "version": 1,
+  "schema": {
+    "document": {
+      "id": "letters, digits, _ or -",
+      "name": "display name",
+      "description": "text",
+      "include": "grammar id or list: their params and rules are inherited, this document's override them",
+      "start": "rule to run first",
+      "size": "[x, y, z] m of the start scope (centred on the origin, floor at z = 0)",
+      "params": "{name: default value}; override per generation",
+      "rules": "{Name: [operations] | {params, if, do: [operations]} | {params, variants: [{weight, if, do}]}}"
+    },
+    "scope": "Every rule runs in an oriented box: x along it, y across it, z up, origin at its min corner. sx, sy, sz are its size.",
+    "values": "In numeric fields (sizes, at, every, step, count, width, yaw, ...) a string is an expression. Elsewhere (room specs, generator params, materials, config) a string is literal unless it starts with = (expression) or is $name (a variable, any type). Names may contain {expression}.",
+    "expressions": "numbers, 'strings', variables ($ optional), + - * / % ^, < <= > >= == !=, and or not (&& || !), c ? a : b, min max floor ceil round abs sqrt sin cos clamp if rand randint opposite",
+    "variables": "grammar params, set variables, rule params, sx sy sz, i n (index/count from split, repeat and walls), side (walls), t (wall thickness after room), depth, pi",
+    "structural": {
+      "split": "{axis x|y|z, parts: [{size: expression | '~weight', symbol | do, params}]}: absolute parts first, the rest shared by weight",
+      "repeat": "{axis, every (about N m, fitted) | step (exactly N m, centred or from offset) | count, size?, offset?, margin?, symbol | do, params}",
+      "place": "{at [x,y,z] (min corner) | center [x,y,z], size?, yaw?, symbol | do, params}",
+      "walls": "{sides [north, south, east, west] (default all), depth, inset, symbol | do, params}: strips along the inside of each side, x along the wall, y inward",
+      "call": "'Rule' or {symbol, params}: run a rule in this scope (a bare string operation is a call)",
+      "choose": "[{weight, if, symbol | do, params}]: one, seeded",
+      "chance": "{p, symbol | do, params, else}",
+      "set": "{name: expression}: variables for the rest of the rule and its children"
+    },
+    "terminals": {
+      "room": "parametric room spec (wall_thickness, floor, ceiling, trim, materials, lighting, collision, collision_rules, doors, windows, name, height); the scope is its outer footprint; later operations run in its interior",
+      "door": "{wall auto|north|south|east|west, width, height, frame, frame_width, shift, connect (default true), asset_id | asset_query, asset_yaw, name}: an opening in the enclosing room's wall nearest the scope centre; connect cuts the room behind it too",
+      "window": "{wall, width, height, sill, frame, frame_width, glass, mullions_x, mullions_y, shift, connect}",
+      "geometry": "{generator, params, material, collision (default true), collision_rules, layer (default decoration), at (default bottom centre), yaw, pitch, roll, stream_range, name}",
+      "asset": "{asset_id | asset_query, at, yaw, spawn, name}: a Project Asset",
+      "light": "{intensity, radius, color | config, preset_id, at (default top centre - 0.15 m), name}",
+      "volume": "{shape, purpose, size (default the scope), at, name}: centred on the scope",
+      "marker": "{type, category, at, yaw, name}: a location"
+    },
+    "common_op_keys": "if (condition), name, comment",
+    "limits": "32 levels, 5000 rule calls, 1900 items, 200 rooms"
+  },
+  "grammars": {
+    "common": {
+      "name": "Common building rules",
+      "description": "Reusable rules the other grammars include: corridor, doors, windows, ceiling lights, cable trays, pipes, ducts and furniture blocks. Override CorridorExtras to add to every corridor.",
+      "params": {
+        "wall": 0.15, "wall_material": "", "floor_material": "", "ceiling_material": "", "trim_material": "",
+        "lights": true, "light_every": 4, "light_intensity": 60, "light_radius": 7,
+        "door_every": 6, "door_sides": ["north", "south"], "door_width": 1.0, "door_height": 2.1,
+        "window_width": 1.6, "window_height": 1.2, "window_sill": 1.0,
+        "tray": true, "tray_width": 0.3, "tray_height": 0.08, "tray_drop": 0.35, "pipe_radius": 0.06
+      },
+      "rules": {
+        "Corridor": [
+          {"room": {"name": "Corridor", "wall_thickness": "$wall", "ceiling": {"type": "flat"},
+                    "materials": {"walls": "$wall_material", "floor": "$floor_material", "ceiling": "$ceiling_material", "trim": "$trim_material"}}},
+          {"if": "door_every > 0", "walls": {"sides": "$door_sides", "depth": 0.4,
+             "do": [{"repeat": {"axis": "x", "every": "door_every", "symbol": "Door"}}]}},
+          {"repeat": {"axis": "x", "every": "light_every", "symbol": "CeilingLight"}},
+          {"if": "tray", "walls": {"sides": ["north"], "depth": 0.5, "symbol": "CableTray"}},
+          "CorridorExtras"
+        ],
+        "CorridorExtras": [],
+        "Door": [{"door": {"width": "door_width", "height": "door_height"}}],
+        "Window": [{"if": "sx >= 1", "window": {"width": "min(sx - 0.6, window_width)", "height": "window_height", "sill": "window_sill"}}],
+        "CeilingLight": [
+          {"if": "lights", "light": {"intensity": "$light_intensity", "radius": "$light_radius"}},
+          {"geometry": {"generator": "box", "name": "Light panel", "params": {"size": [0.6, 0.6, 0.04]}, "at": ["sx/2", "sy/2", "sz - 0.04"], "collision": false}}
+        ],
+        "CableTray": [
+          {"geometry": {"generator": "compound", "name": "Cable tray", "at": ["sx/2", "sy/2", "sz - tray_drop"], "collision": false,
+            "params": {"parts": [
+              {"shape": "box", "center": [0, 0, 0.005], "size": ["=sx", "=tray_width", 0.01]},
+              {"shape": "box", "center": [0, "=tray_width/2", "=tray_height/2"], "size": ["=sx", 0.01, "=tray_height"]},
+              {"shape": "box", "center": [0, "=-tray_width/2", "=tray_height/2"], "size": ["=sx", 0.01, "=tray_height"]}
+            ]}}}
+        ],
+        "PipeRun": [
+          {"geometry": {"generator": "pipe", "name": "Pipe", "at": ["sx/2", "sy/2", "sz - 0.5"], "collision": false,
+            "params": {"points": [["=-sx/2", 0, 0], ["=sx/2", 0, 0]], "radius": "$pipe_radius", "sides": 12}}}
+        ],
+        "Duct": [
+          {"geometry": {"generator": "duct", "name": "Duct", "at": ["sx/2", "sy/2", "sz - 0.3"], "collision": false,
+            "params": {"points": [["=-sx/2", 0, 0], ["=sx/2", 0, 0]], "width": 0.5, "height": 0.3}}}
+        ],
+        "Shelf": [
+          {"geometry": {"generator": "compound", "name": "Shelf",
+            "params": {"parts": [
+              {"shape": "box", "center": ["=-(sx-0.1)/2 + 0.02", 0, 0.9], "size": [0.04, 0.45, 1.8]},
+              {"shape": "box", "center": ["=(sx-0.1)/2 - 0.02", 0, 0.9], "size": [0.04, 0.45, 1.8]},
+              {"shape": "box", "center": [0, 0, 0.1], "size": ["=sx-0.1", 0.45, 0.03]},
+              {"shape": "box", "center": [0, 0, 0.6], "size": ["=sx-0.1", 0.45, 0.03]},
+              {"shape": "box", "center": [0, 0, 1.1], "size": ["=sx-0.1", 0.45, 0.03]},
+              {"shape": "box", "center": [0, 0, 1.6], "size": ["=sx-0.1", 0.45, 0.03]}
+            ]}}}
+        ],
+        "ShelfRow": [{"repeat": {"axis": "x", "every": 2, "margin": 0.3, "symbol": "Shelf"}}],
+        "Workbench": [
+          {"geometry": {"generator": "compound", "name": "Workbench",
+            "params": {"parts": [
+              {"shape": "box", "center": [0, 0, 0.875], "size": ["=sx", "=sy", 0.05]},
+              {"shape": "box", "center": ["=sx/2-0.05", "=sy/2-0.05", 0.425], "size": [0.06, 0.06, 0.85]},
+              {"shape": "box", "center": ["=-sx/2+0.05", "=sy/2-0.05", 0.425], "size": [0.06, 0.06, 0.85]},
+              {"shape": "box", "center": ["=sx/2-0.05", "=-sy/2+0.05", 0.425], "size": [0.06, 0.06, 0.85]},
+              {"shape": "box", "center": ["=-sx/2+0.05", "=-sy/2+0.05", 0.425], "size": [0.06, 0.06, 0.85]}
+            ]}}}
+        ],
+        "Counter": [{"geometry": {"generator": "box", "name": "Counter", "params": {"size": ["=sx", "=sy", 0.9]}}}],
+        "Cabinet": [{"geometry": {"generator": "box", "name": "Cabinet", "params": {"size": ["=sx", "=sy", 1.9]}}}],
+        "Desk": [
+          {"geometry": {"generator": "compound", "name": "Desk",
+            "params": {"parts": [
+              {"shape": "box", "center": [0, 0, 0.74], "size": ["=sx", "=sy", 0.04]},
+              {"shape": "box", "center": ["=-sx/2+0.02", 0, 0.36], "size": [0.04, "=sy", 0.72]},
+              {"shape": "box", "center": ["=sx/2-0.02", 0, 0.36], "size": [0.04, "=sy", 0.72]}
+            ]}}}
+        ],
+        "Bed": [
+          {"geometry": {"generator": "compound", "name": "Bed",
+            "params": {"parts": [
+              {"shape": "box", "center": [0, 0, 0.175], "size": ["=sx", "=sy", 0.35]},
+              {"shape": "box", "center": [0, 0, 0.425], "size": ["=sx-0.05", "=sy-0.05", 0.15]},
+              {"shape": "box", "center": ["=-sx/2+0.025", 0, 0.45], "size": [0.05, "=sy", 0.9]}
+            ]}}}
+        ],
+        "Bunk": [
+          {"geometry": {"generator": "compound", "name": "Bunk",
+            "params": {"parts": [
+              {"shape": "box", "center": [0, 0, 0.35], "size": ["=sx", "=sy", 0.12]},
+              {"shape": "box", "center": [0, 0, 1.35], "size": ["=sx", "=sy", 0.12]},
+              {"shape": "box", "center": ["=-sx/2+0.03", "=-sy/2+0.03", 0.9], "size": [0.06, 0.06, 1.8]},
+              {"shape": "box", "center": ["=sx/2-0.03", "=-sy/2+0.03", 0.9], "size": [0.06, 0.06, 1.8]},
+              {"shape": "box", "center": ["=-sx/2+0.03", "=sy/2-0.03", 0.9], "size": [0.06, 0.06, 1.8]},
+              {"shape": "box", "center": ["=sx/2-0.03", "=sy/2-0.03", 0.9], "size": [0.06, 0.06, 1.8]}
+            ]}}}
+        ],
+        "Crate": [{"geometry": {"generator": "box", "name": "Crate", "yaw": "rand(-20, 20)",
+                   "params": {"size": ["=rand(0.6, 1.2)", "=rand(0.6, 1.0)", "=rand(0.5, 1.0)"]}}}]
+      }
+    },
+    "corridor": {
+      "name": "Service corridor",
+      "description": "Corridor -> walls + door every N m on both sides + ceiling lights + cable tray.",
+      "include": "common",
+      "start": "Corridor",
+      "size": [24, 3.2, 3.2],
+      "params": {"door_every": 6, "light_every": 4, "tray": true}
+    },
+    "industrial": {
+      "name": "Industrial block",
+      "description": "Service corridor with workshops and storage rooms on both sides; pipes and a cable tray in the corridor.",
+      "include": "common",
+      "start": "Site",
+      "size": [36, 24, 4.5],
+      "params": {"unit": 9, "corridor_width": 3, "door_every": 0, "light_every": 4.5, "door_width": 1.6, "door_height": 2.4, "storage_share": 2},
+      "rules": {
+        "Site": [{"split": {"axis": "y", "parts": [
+          {"size": "~1", "symbol": "UnitRow", "params": {"door_side": "north"}},
+          {"size": "corridor_width", "symbol": "Corridor"},
+          {"size": "~1", "symbol": "UnitRow", "params": {"door_side": "south"}}
+        ]}}],
+        "UnitRow": [{"repeat": {"axis": "x", "every": "unit", "symbol": "Unit"}}],
+        "Unit": {"variants": [{"weight": 3, "do": ["Workshop"]}, {"weight": "storage_share", "do": ["Storage"]}]},
+        "Workshop": [
+          {"room": {"name": "Workshop", "wall_thickness": "$wall", "ceiling": {"type": "beams", "beam_spacing": 1.8},
+                    "materials": {"walls": "$wall_material", "floor": "$floor_material", "ceiling": "$ceiling_material"}}},
+          {"walls": {"sides": ["$door_side"], "depth": 0.5, "symbol": "Door"}},
+          {"walls": {"sides": ["=opposite(door_side)"], "depth": 0.6, "symbol": "ShelfRow"}},
+          {"place": {"at": ["sx/2 - 1.2", "sy/2 - 0.5", 0], "size": [2.4, 1.0, 1], "symbol": "Workbench"}},
+          {"repeat": {"axis": "x", "count": 2, "symbol": "CeilingLight"}}
+        ],
+        "Storage": [
+          {"room": {"name": "Storage", "wall_thickness": "$wall", "ceiling": {"type": "flat"},
+                    "materials": {"walls": "$wall_material", "floor": "$floor_material", "ceiling": "$ceiling_material"}}},
+          {"walls": {"sides": ["$door_side"], "depth": 0.5, "symbol": "Door"}},
+          {"walls": {"sides": ["=opposite(door_side)"], "depth": 0.6, "symbol": "ShelfRow"}},
+          {"repeat": {"axis": "x", "count": 3, "margin": 1, "do": [{"chance": {"p": 0.6, "symbol": "Crate"}}]}},
+          "CeilingLight"
+        ],
+        "CorridorExtras": [
+          {"walls": {"sides": ["south"], "depth": 0.3, "symbol": "PipeRun"}}
+        ]
+      }
+    },
+    "clinic": {
+      "name": "Clinic",
+      "description": "Reception at the west end and a corridor wing of examination rooms, offices and toilets with outside windows.",
+      "include": "common",
+      "start": "Site",
+      "size": [30, 17, 3.2],
+      "params": {"corridor_width": 2.4, "room_width": 5, "wall": 0.12, "door_every": 0, "light_every": 3, "tray": false, "light_intensity": 50},
+      "rules": {
+        "Site": [{"split": {"axis": "x", "parts": [{"size": 8, "symbol": "Reception"}, {"size": "~1", "symbol": "Wing"}]}}],
+        "Reception": [
+          {"room": {"name": "Reception", "wall_thickness": "$wall", "trim": {"crown": true},
+                    "materials": {"walls": "$wall_material", "floor": "$floor_material", "ceiling": "$ceiling_material"}}},
+          {"walls": {"sides": ["west", "east"], "depth": 0.5, "symbol": "Door"}},
+          {"walls": {"sides": ["north", "south"], "depth": 0.5, "do": [{"repeat": {"axis": "x", "every": 3.5, "symbol": "Window"}}]}},
+          {"place": {"at": ["sx/2 - 1.5", "sy/2 + 1", 0], "size": [3, 0.7, 1], "symbol": "Counter"}},
+          {"marker": {"name": "Reception desk", "type": "npc_spot", "at": ["sx/2", "sy/2 + 2", 0], "yaw": 180}},
+          {"repeat": {"axis": "y", "every": 4, "symbol": "CeilingLight"}}
+        ],
+        "Wing": [{"split": {"axis": "y", "parts": [
+          {"size": "~1", "symbol": "RoomRow", "params": {"door_side": "north"}},
+          {"size": "corridor_width", "symbol": "Corridor"},
+          {"size": "~1", "symbol": "RoomRow", "params": {"door_side": "south"}}
+        ]}}],
+        "RoomRow": [{"repeat": {"axis": "x", "every": "room_width", "symbol": "ClinicRoom"}}],
+        "ClinicRoom": {"variants": [
+          {"weight": 3, "do": ["ExamRoom"]},
+          {"weight": 1, "do": ["Office"]},
+          {"weight": 1, "if": "sx < 6", "do": ["Toilet"]}
+        ]},
+        "ClinicShell": [
+          {"room": {"name": "{room_name}", "wall_thickness": "$wall",
+                    "materials": {"walls": "$wall_material", "floor": "$floor_material", "ceiling": "$ceiling_material"}}},
+          {"walls": {"sides": ["$door_side"], "depth": 0.5, "do": [{"door": {"width": 1.1, "height": "door_height", "shift": "-sx/4"}}]}}
+        ],
+        "ExamRoom": [
+          {"set": {"room_name": "'Exam room'"}}, "ClinicShell",
+          {"walls": {"sides": ["=opposite(door_side)"], "depth": 0.5, "symbol": "Window"}},
+          {"walls": {"sides": ["east"], "depth": 1.0, "do": [{"place": {"at": ["sx/2 - 1", 0.05, 0], "size": [2.0, 0.9, 1], "symbol": "Bed"}}]}},
+          {"walls": {"sides": ["west"], "depth": 0.6, "do": [{"place": {"at": ["sx/2 - 0.8", 0, 0], "size": [1.6, 0.6, 1], "symbol": "Counter"}}]}},
+          {"volume": {"name": "Exam room zone", "purpose": "trigger"}},
+          "CeilingLight"
+        ],
+        "Office": [
+          {"set": {"room_name": "'Office'"}}, "ClinicShell",
+          {"walls": {"sides": ["=opposite(door_side)"], "depth": 0.5, "symbol": "Window"}},
+          {"place": {"at": ["sx/2 - 0.8", "sy/2 - 0.4", 0], "size": [1.6, 0.8, 1], "symbol": "Desk"}},
+          {"walls": {"sides": ["west"], "depth": 0.5, "symbol": "ShelfRow"}},
+          "CeilingLight"
+        ],
+        "Toilet": [
+          {"set": {"room_name": "'Toilet'"}}, "ClinicShell",
+          {"walls": {"sides": ["east"], "depth": 0.6, "do": [{"place": {"at": ["sx/2 - 0.6", 0, 0], "size": [1.2, 0.5, 1], "symbol": "Counter"}}]}},
+          "CeilingLight"
+        ]
+      }
+    },
+    "apartment": {
+      "name": "Apartment floor",
+      "description": "A hallway with apartments on both sides; each has a living room with a kitchen counter, a bedroom with an outside window and a bathroom.",
+      "include": "common",
+      "start": "Site",
+      "size": [28, 22, 2.9],
+      "params": {"corridor_width": 2, "apt_width": 7, "wall": 0.12, "door_every": 0, "light_every": 3.5, "tray": false, "light_intensity": 40},
+      "rules": {
+        "Site": [{"split": {"axis": "y", "parts": [
+          {"size": "~1", "symbol": "AptRow", "params": {"door_side": "north"}},
+          {"size": "corridor_width", "symbol": "Corridor"},
+          {"size": "~1", "symbol": "AptRow", "params": {"door_side": "south"}}
+        ]}}],
+        "AptRow": [{"repeat": {"axis": "x", "every": "apt_width", "symbol": "Apartment"}}],
+        "Apartment": [
+          {"if": "door_side == 'south'", "split": {"axis": "y", "parts": [{"size": "~1.3", "symbol": "Living"}, {"size": "~1", "symbol": "Private"}]}},
+          {"if": "door_side == 'north'", "split": {"axis": "y", "parts": [{"size": "~1", "symbol": "Private"}, {"size": "~1.3", "symbol": "Living"}]}}
+        ],
+        "Living": [
+          {"room": {"name": "Living room", "wall_thickness": "$wall", "trim": {"crown": true},
+                    "materials": {"walls": "$wall_material", "floor": "$floor_material", "ceiling": "$ceiling_material"}}},
+          {"walls": {"sides": ["$door_side"], "depth": 0.5, "do": [{"door": {"shift": "sx/4"}}]}},
+          {"walls": {"sides": ["=opposite(door_side)"], "depth": 0.5, "do": [{"door": {"width": 0.9, "shift": "-sx/6"}}]}},
+          {"walls": {"sides": ["east"], "depth": 0.6, "do": [{"place": {"at": ["sx/2 - 1.2", 0, 0], "size": [2.4, 0.6, 1], "symbol": "Counter"}}]}},
+          {"choose": [
+            {"weight": 2, "do": [{"place": {"at": ["sx/2 - 1", "sy/2 - 0.45", 0], "size": [2.0, 0.9, 1], "symbol": "Bed"}}]},
+            {"weight": 1, "do": [{"place": {"at": ["sx/2 - 0.7", "sy/2 - 0.4", 0], "size": [1.4, 0.8, 1], "symbol": "Desk"}}]}
+          ]},
+          "CeilingLight"
+        ],
+        "Private": [{"split": {"axis": "x", "parts": [{"size": "~2", "symbol": "Bedroom"}, {"size": "~1", "symbol": "Bath"}]}}],
+        "Bedroom": [
+          {"room": {"name": "Bedroom", "wall_thickness": "$wall",
+                    "materials": {"walls": "$wall_material", "floor": "$floor_material", "ceiling": "$ceiling_material"}}},
+          {"walls": {"sides": ["=opposite(door_side)"], "depth": 0.5, "symbol": "Window"}},
+          {"walls": {"sides": ["east"], "depth": 0.5, "do": [{"door": {"width": 0.8}}]}},
+          {"walls": {"sides": ["west"], "depth": 2.1, "do": [{"choose": [
+            {"weight": 1, "do": [{"place": {"center": ["sx/2", 1.05, 0.5], "size": [2.0, 1.6, 1], "yaw": 90, "symbol": "Bed"}}]},
+            {"weight": 1, "do": [{"place": {"center": ["sx/2", 1.05, 0.5], "size": [2.0, 0.9, 1], "yaw": 90, "symbol": "Bed"}}]}
+          ]}]}},
+          {"walls": {"sides": ["$door_side"], "depth": 0.6, "do": [{"place": {"at": [0.2, 0, 0], "size": [1.2, 0.6, 1], "symbol": "Cabinet"}}]}},
+          "CeilingLight"
+        ],
+        "Bath": [
+          {"room": {"name": "Bathroom", "wall_thickness": "$wall",
+                    "materials": {"walls": "$wall_material", "floor": "$floor_material", "ceiling": "$ceiling_material"}}},
+          {"walls": {"sides": ["east"], "depth": 0.5, "do": [{"place": {"at": ["sx/2 - 0.5", 0, 0], "size": [1.0, 0.5, 1], "symbol": "Counter"}}]}},
+          {"set": {"light_intensity": 25}}, "CeilingLight"
+        ]
+      }
+    },
+    "bunker": {
+      "name": "Bunker",
+      "description": "Thick concrete walls, a central corridor with ducts and pipes, bunk rooms, armouries and a generator room behind blast doors, and a command room at the east end.",
+      "include": "common",
+      "start": "Site",
+      "size": [40, 20, 3],
+      "params": {"corridor_width": 3.2, "cell": 5, "wall": 0.4, "door_every": 0, "light_every": 6, "door_width": 1.4, "door_height": 2.1,
+                 "light_intensity": 35, "light_radius": 6, "tray": true},
+      "rules": {
+        "Site": [{"split": {"axis": "x", "parts": [{"size": "~1", "symbol": "Wing"}, {"size": 9, "symbol": "Command"}]}}],
+        "Wing": [{"split": {"axis": "y", "parts": [
+          {"size": "~1", "symbol": "CellRow", "params": {"door_side": "north"}},
+          {"size": "corridor_width", "symbol": "Corridor"},
+          {"size": "~1", "symbol": "CellRow", "params": {"door_side": "south"}}
+        ]}}],
+        "CellRow": [{"repeat": {"axis": "x", "every": "cell", "symbol": "Cell"}}],
+        "Cell": {"variants": [
+          {"weight": 3, "do": ["Bunkroom"]},
+          {"weight": 2, "do": ["Armory"]},
+          {"weight": 1, "if": "i == 0", "do": ["Generator"]}
+        ]},
+        "CellShell": [
+          {"room": {"name": "{room_name}", "wall_thickness": "$wall", "ceiling": {"type": "beams", "beam_spacing": 1.2},
+                    "trim": {"skirting": false}, "collision_rules": {"mode": "simplified"},
+                    "materials": {"walls": "$wall_material", "floor": "$floor_material", "ceiling": "$ceiling_material"}}},
+          {"walls": {"sides": ["$door_side"], "depth": 0.5, "do": [{"door": {"frame_width": 0.2}}]}},
+          "CeilingLight"
+        ],
+        "Bunkroom": [
+          {"set": {"room_name": "'Bunk room'"}}, "CellShell",
+          {"walls": {"sides": ["east", "west"], "depth": 0.95, "do": [{"repeat": {"axis": "x", "step": 2.2, "size": 2.0, "margin": 0.6, "symbol": "Bunk"}}]}}
+        ],
+        "Armory": [
+          {"set": {"room_name": "'Armory'"}}, "CellShell",
+          {"walls": {"sides": ["=opposite(door_side)", "east"], "depth": 0.5, "do": [{"repeat": {"axis": "x", "step": 0.7, "size": 0.6, "margin": 0.6, "symbol": "Cabinet"}}]}}
+        ],
+        "Generator": [
+          {"set": {"room_name": "'Generator room'"}}, "CellShell",
+          {"place": {"at": ["sx/2 - 1.2", "sy/2 - 0.8", 0], "size": [2.4, 1.6, 1], "do": [{"geometry": {"generator": "box", "name": "Generator", "params": {"size": [2.4, 1.6, 1.8]}}}]}},
+          {"walls": {"sides": ["east", "west"], "depth": 0.3, "symbol": "PipeRun"}}
+        ],
+        "CorridorExtras": [
+          {"walls": {"sides": ["south"], "depth": 0.6, "symbol": "Duct"}},
+          {"walls": {"sides": ["south"], "depth": 0.3, "do": [{"place": {"at": [0, 0, -0.3], "size": ["sx", "sy", "sz"], "symbol": "PipeRun"}}]}}
+        ],
+        "Command": [
+          {"room": {"name": "Command room", "wall_thickness": "$wall", "ceiling": {"type": "coffered", "beam_spacing": 1.5},
+                    "materials": {"walls": "$wall_material", "floor": "$floor_material", "ceiling": "$ceiling_material"}}},
+          {"walls": {"sides": ["west"], "depth": 0.5, "do": [{"door": {"frame_width": 0.2, "width": 1.4}}]}},
+          {"walls": {"sides": ["north", "east", "south"], "depth": 0.7, "do": [{"repeat": {"axis": "x", "every": 2.2, "margin": 0.8,
+            "do": [{"place": {"at": ["sx/2 - 0.8", 0, 0], "size": [1.6, 0.7, 1], "symbol": "Desk"}}]}}]}},
+          {"place": {"at": ["sx/2 - 1.5", "sy/2 - 1", 0], "size": [3, 2, 1], "do": [{"geometry": {"generator": "box", "name": "Map table", "params": {"size": [3, 2, 0.95]}}}]}},
+          {"marker": {"name": "Commander", "type": "npc_spot", "at": ["sx/2", "sy/2 - 1.6", 0]}},
+          {"repeat": {"axis": "x", "count": 2, "do": [{"repeat": {"axis": "y", "count": 2, "symbol": "CeilingLight"}}]}}
+        ]
+      }
+    },
+    "laboratory": {
+      "name": "Laboratory",
+      "description": "A corridor of wet labs, clean rooms with observation windows onto the corridor, and a server room.",
+      "include": "common",
+      "start": "Site",
+      "size": [32, 20, 3.5],
+      "params": {"corridor_width": 2.6, "lab_width": 8, "wall": 0.15, "door_every": 0, "light_every": 3, "tray": true},
+      "rules": {
+        "Site": [{"split": {"axis": "y", "parts": [
+          {"size": "~1", "symbol": "LabRow", "params": {"door_side": "north"}},
+          {"size": "corridor_width", "symbol": "Corridor"},
+          {"size": "~1", "symbol": "LabRow", "params": {"door_side": "south"}}
+        ]}}],
+        "LabRow": [{"repeat": {"axis": "x", "every": "lab_width", "symbol": "Lab"}}],
+        "Lab": {"variants": [
+          {"weight": 3, "do": ["WetLab"]},
+          {"weight": 2, "do": ["CleanRoom"]},
+          {"weight": 1, "if": "i == n - 1", "do": ["ServerRoom"]}
+        ]},
+        "LabShell": [
+          {"room": {"name": "{room_name}", "wall_thickness": "$wall", "ceiling": {"type": "flat"},
+                    "materials": {"walls": "$wall_material", "floor": "$floor_material", "ceiling": "$ceiling_material"}}},
+          {"walls": {"sides": ["$door_side"], "depth": 0.5, "do": [{"split": {"axis": "x", "parts": [
+            {"size": "~1", "symbol": "Door"},
+            {"size": "~1", "do": [{"if": "glass_wall", "window": {"width": "sx - 1", "height": 1.4, "sill": 0.9}}]}
+          ]}}]}},
+          {"repeat": {"axis": "x", "count": 2, "symbol": "CeilingLight"}}
+        ],
+        "WetLab": [
+          {"set": {"room_name": "'Wet lab'", "glass_wall": false}}, "LabShell",
+          {"walls": {"sides": ["east", "west"], "depth": 0.75, "do": [{"repeat": {"axis": "x", "every": 2.5, "margin": 0.8, "do": [
+            {"place": {"at": ["sx/2 - 1", 0, 0], "size": [2.0, 0.75, 1], "symbol": "Counter"}}]}}]}},
+          {"place": {"at": ["sx/2 - 1.5", "sy/2 - 0.6", 0], "size": [3, 1.2, 1], "symbol": "Workbench"}},
+          {"walls": {"sides": ["=opposite(door_side)"], "depth": 0.8, "do": [{"place": {"at": ["sx/2 - 0.75", 0, 0], "size": [1.5, 0.8, 1], "do": [
+            {"geometry": {"generator": "box", "name": "Fume hood", "params": {"size": [1.5, 0.8, 2.3]}}}]}}]}}
+        ],
+        "CleanRoom": [
+          {"set": {"room_name": "'Clean room'", "glass_wall": true}}, "LabShell",
+          {"place": {"at": ["sx/2 - 1.5", "sy/2 - 0.6", 0], "size": [3, 1.2, 1], "symbol": "Workbench"}},
+          {"volume": {"name": "Clean room zone", "purpose": "trigger"}}
+        ],
+        "ServerRoom": [
+          {"set": {"room_name": "'Server room'", "glass_wall": false}}, "LabShell",
+          {"repeat": {"axis": "x", "step": 1.6, "margin": 1, "do": [{"place": {"at": ["sx/2 - 0.3", "sy/2 - 1.5", 0], "size": [0.6, 3, 1], "do": [
+            {"geometry": {"generator": "box", "name": "Rack", "params": {"size": [0.6, 3, 2.1]}}}]}}]}}
+        ]
+      }
+    }
+  }
+}

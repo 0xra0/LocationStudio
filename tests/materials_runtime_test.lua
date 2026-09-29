@@ -3,7 +3,7 @@ local app=env.app
 local M=assert(app.material_library,'material library must be constructed')
 local Lib=getmetatable(M).__index
 local model=app.model
-assert(model.data.schema_version==24 and type(model.data.material_defs)=='table')
+assert(model.data.schema_version==25 and type(model.data.material_defs)=='table')
 
 -- Validation (pure).
 assert(not Lib.normalize({}),'key required')

@@ -10,7 +10,7 @@ def test_project_shape() -> None:
     # of requiring mutable runtime data in the source tree.
     mod = Path(__file__).resolve().parents[1]
     model = (mod / 'modules' / 'model.lua').read_text(encoding='utf-8')
-    assert 'schema_version=24' in model
+    assert 'schema_version=25' in model
     for collection in ('locations', 'routes', 'premises', 'rooms', 'objects', 'object_groups', 'object_prefabs', 'volumes', 'cameras', 'assets', 'room_frames', 'environments', 'splines', 'timelines', 'reference_areas', 'edl_builds', 'generated_rooms', 'material_defs', 'collision_rules'):
         assert re.search(rf'\b{collection}\s*=\s*\{{\}}', model), collection
     for layer in ('shell', 'gameplay', 'decoration', 'lighting', 'quest', 'npc', 'audio', 'debug'):
@@ -28,7 +28,7 @@ def test_mcp_operations_are_handled() -> None:
     handled.update(re.findall(r"or op == '([a-z_]+)'", bridge))
     handled.update(re.findall(r"'((?:wb_)?(?:clipcheck|fixturecheck|fitcheck))'", bridge))
     assert sent <= handled, f'MCP operations missing in CET bridge: {sorted(sent - handled)}'
-    assert len(re.findall(r'@mcp\.tool\(\)', server)) == 510
+    assert len(re.findall(r'@mcp\.tool\(\)', server)) == 520
     for operation in ('register_asset', 'update_asset', 'delete_asset', 'place_asset', 'clear_debug_log', 'run_diagnostics',
                       'capture_camera', 'copy_transform', 'paste_transform', 'move_item_to_aim',
                       'drop_item_to_ground', 'aim_item_at_target', 'scatter_at_aim',

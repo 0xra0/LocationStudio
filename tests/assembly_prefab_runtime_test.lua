@@ -1,7 +1,7 @@
 local env=dofile(arg[2]..'/support/cet_mock.lua')
 local app=env.app
-assert(app.version=='0.78.0')
-assert(app.model.data.schema_version==24)
+assert(app.version=='0.79.0')
+assert(app.model.data.schema_version==25)
 
 local created,err=app.quickstart:create_first_room({location_name='Assembly Test',width=7,depth=6,height=3})
 assert(created,err)

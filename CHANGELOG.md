@@ -1,3 +1,16 @@
+## 0.79.0 - 2026-09-29
+
+- Added the environment grammar system (`modules/env_grammar.lua`, `grammars/library.json`, Spatial → Grammar). Named rules run in oriented boxes of space:
+  - **Structural operations:** `split` (absolute and weighted parts), `repeat` (`every` fitted, `step` exact, `count`; along any axis, including stacked floors), `place`, `walls` (inward-facing strips per side), `call`, `choose`, `chance` and `set`, with `if` conditions and weighted rule variants.
+  - **Terminals:** `room` (a parametric room; later operations run in its interior), `door`/`window` (on the nearest wall, cut into the room behind it too), `geometry`, `asset`, `light`, `volume` and `marker`.
+  - **Values:** a small safe expression language with scope sizes, tile indices, params and seeded `rand`. The same seed always gives the same layout.
+  - **Reuse:** grammars `include` others and override their rules.
+- Built-in grammars: `common` (corridor, door, window, ceiling light, cable tray, pipe, duct and furniture rules), `corridor`, `industrial`, `clinic`, `apartment`, `bunker` and `laboratory`. Project grammars are saved in the project.
+- A generation compiles to one version 2 authoring plan: validated first, one undo step, full rollback. It is recorded as a grammar build (and an EDL build `grammar_<id>`), which can be regenerated in place with new params, seed or size, or removed.
+- EDL build removal now also removes rooms and volumes a build made in an existing premise, and hides procedural previews of what it removes.
+- Added bridge ops and MCP tools `grammar_schema` (offline), `grammar_library`, `grammar_get`, `grammar_save`, `grammar_delete`, `grammar_preview`, `grammar_generate`, `grammar_regenerate`, `grammar_remove` and `grammar_builds`. Project schema 25 adds `grammars` and `grammar_builds`.
+- Added `ENVIRONMENT-GRAMMAR.md` and Lua/Python tests. Bumped to v0.79.0.
+
 ## 0.78.0 - 2026-09-29
 
 - Added automatic bounds for generated resources (`modules/bounds_gen.lua`, `mcp_server/lsbuild/bounds.py`, Spatial → Bounds). Procedural objects, their generated colliders and parametric rooms get records with:

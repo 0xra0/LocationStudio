@@ -5327,6 +5327,121 @@ def room_generator_snap(object_id: str, room_id: str, socket_id: str, offset: li
     return _json(_send("room_generator_snap", args))
 
 
+GRAMMAR_LIBRARY = MOD_DIR / "grammars" / "library.json"
+
+
+def _grammar_args(grammar: str, doc: dict[str, Any] | None, start: str, params: dict[str, Any] | None, seed: int,
+                  size: list[float] | None, premise_id: str, position: list[float] | None, yaw: float, source: str) -> dict[str, Any]:
+    if not grammar and doc is None:
+        raise ValueError("give grammar (a library id) or doc (an inline grammar)")
+    args: dict[str, Any] = {"grammar": grammar or None, "doc": doc, "start": start or None, "params": params or {}, "seed": seed,
+                            "premise_id": premise_id or None}
+    if size is not None:
+        s = _xyz(size, "size")
+        args["size"] = [s["x"], s["y"], s["z"]]
+    if position is not None:
+        p = _xyz(position, "position")
+        args["transform"] = {"position": {**p, "w": 1}, "rotation": {"roll": 0, "pitch": 0, "yaw": yaw}}
+    else:
+        if source not in {"player", "camera"}:
+            raise ValueError("source must be player or camera (or give position)")
+        args["origin"] = source
+    return {k: v for k, v in args.items() if v is not None}
+
+
+@mcp.tool()
+def grammar_schema() -> str:
+    """Offline: the environment grammar language (document shape, scopes, values and expressions, structural
+    operations split/repeat/place/walls/call/choose/chance/set, terminals room/door/window/geometry/asset/light/volume/marker,
+    limits) and the built-in grammars with their start rule, size and params. Read this before writing a grammar."""
+    doc = json.loads(GRAMMAR_LIBRARY.read_text(encoding="utf-8"))
+    builtin = {gid: {"name": g.get("name", gid), "description": g.get("description", ""), "start": g.get("start"),
+                     "size": g.get("size"), "include": g.get("include"), "params": g.get("params", {}), "rules": sorted((g.get("rules") or {}).keys())}
+               for gid, g in (doc.get("grammars") or {}).items()}
+    return _json({"schema": doc.get("schema"), "builtin": builtin})
+
+
+@mcp.tool()
+def grammar_library() -> str:
+    """Environment grammars available to generate from: the project's saved grammars and the built-in ones (common
+    rules, corridor, industrial, clinic, apartment, bunker, laboratory), with start rule, size and params."""
+    return _json(_send("grammar_library", {}))
+
+
+@mcp.tool()
+def grammar_get(grammar_id: str) -> str:
+    """The full document of one grammar (rules, params, include) so it can be copied and adapted."""
+    return _json(_send("grammar_get", {"id": grammar_id}))
+
+
+@mcp.tool()
+def grammar_save(doc: dict[str, Any]) -> str:
+    """Save a grammar to the project library (validated; one undo step). doc: {id, name, description, include
+    (e.g. "common" for its Corridor, Door, Window, CeilingLight, CableTray, PipeRun, Duct, Shelf, Workbench, Counter,
+    Cabinet, Desk, Bed, Bunk, Crate rules), start, size [x,y,z], params, rules}. A project grammar with a built-in id
+    overrides it. The result's check reports whether it expands with its defaults."""
+    return _json(_send("grammar_save", {"doc": doc}))
+
+
+@mcp.tool()
+def grammar_delete(grammar_id: str) -> str:
+    """Delete a project grammar (built-in grammars cannot be deleted). One undo step."""
+    return _json(_send("grammar_delete", {"id": grammar_id}))
+
+
+@mcp.tool()
+def grammar_preview(grammar: str = "", doc: dict[str, Any] | None = None, start: str = "", params: dict[str, Any] | None = None,
+                    seed: int = 1, size: list[float] | None = None, premise_id: str = "", position: list[float] | None = None,
+                    yaw: float = 0.0, source: str = "player", include_plan: bool = False) -> str:
+    """Expand a grammar without changing the project: rooms (size, doors, windows), items (geometry, lights, assets,
+    volumes, markers) with positions, rule call counts, openings connected between neighbouring rooms, overlap
+    warnings, and whether the compiled authoring plan validates (valid/errors). Same seed = same layout.
+    grammar: a library id, or doc: an inline grammar. params override the grammar's params. size [x,y,z] overrides the
+    start scope. position [x,y,z] + yaw place the layout centre; otherwise source=player|camera."""
+    args = _grammar_args(grammar, doc, start, params, seed, size, premise_id, position, yaw, source)
+    args["include_plan"] = include_plan
+    return _json(_send("grammar_preview", args))
+
+
+@mcp.tool()
+def grammar_generate(grammar: str = "", doc: dict[str, Any] | None = None, start: str = "", params: dict[str, Any] | None = None,
+                     seed: int = 1, size: list[float] | None = None, premise_id: str = "", premise_name: str = "",
+                     premise_kind: str = "interior", position: list[float] | None = None, yaw: float = 0.0,
+                     source: str = "player", build_id: str = "") -> str:
+    """Generate a layout from a grammar as ONE authoring plan: parametric rooms with doors/windows (cut through both
+    rooms at shared walls), procedural geometry, lights, assets, volumes and markers. Validated first; one undo step;
+    rolled back completely on failure. Without premise_id a new premise is created (premise_name/premise_kind).
+    Reusing build_id replaces that earlier generation. Run grammar_preview first."""
+    args = _grammar_args(grammar, doc, start, params, seed, size, premise_id, position, yaw, source)
+    args.update(premise_name=premise_name or None, premise_kind=premise_kind, build_id=build_id or None)
+    return _json(_send("grammar_generate", {k: v for k, v in args.items() if v is not None}))
+
+
+@mcp.tool()
+def grammar_regenerate(build_id: str, params: dict[str, Any] | None = None, seed: int | None = None, size: list[float] | None = None,
+                       start: str = "") -> str:
+    """Regenerate a grammar build in place (same origin and premise) with changed params (merged), seed, size or start
+    rule. The previous generation, including hand edits to its items, is replaced. One undo step."""
+    args: dict[str, Any] = {"build_id": build_id, "params": params or {}, "start": start or None, "seed": seed}
+    if size is not None:
+        s = _xyz(size, "size")
+        args["size"] = [s["x"], s["y"], s["z"]]
+    return _json(_send("grammar_regenerate", {k: v for k, v in args.items() if v is not None}))
+
+
+@mcp.tool()
+def grammar_remove(build_id: str) -> str:
+    """Remove everything a grammar build generated (its premise, or its rooms and items in an existing premise). One undo step."""
+    return _json(_send("grammar_remove", {"build_id": build_id}))
+
+
+@mcp.tool()
+def grammar_builds() -> str:
+    """Grammar builds in this project: grammar, start rule, seed, size, params, premise, room/item counts, and whether
+    the build is still present."""
+    return _json(_send("grammar_builds", {}))
+
+
 EDL_EXPORTS = MOD_DIR / "exports" / "edl"
 EDL_EXAMPLE = MOD_DIR / "edl" / "examples" / "ripperdoc_clinic.edl.yaml"
 
