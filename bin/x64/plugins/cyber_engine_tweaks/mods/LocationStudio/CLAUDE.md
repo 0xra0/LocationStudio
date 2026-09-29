@@ -419,3 +419,14 @@ Bounds of generated geometry and colliders are computed, never supplied: use
 range applies; if the user wants a manual one, tell them when preflight
 reports it as shorter than the visibility distance. Call visibility distances
 estimates and check pop-in in game.
+
+## Environment grammar
+
+To generate a whole layout from reusable rules (corridors with doors every N m,
+lights, cable trays; industrial blocks, clinics, apartments, bunkers, labs),
+read `grammar_schema`, start from a built-in grammar (`grammar_library`,
+`grammar_get`) and `include: common` in new ones. Always run `grammar_preview`
+and fix its errors and overlap warnings before `grammar_generate`. Keep the
+`build_id` to regenerate in place with `grammar_regenerate`, and tell the user
+that regenerating replaces hand edits to generated items. Grammars only
+reference Project Assets and materials that exist; never invent paths.

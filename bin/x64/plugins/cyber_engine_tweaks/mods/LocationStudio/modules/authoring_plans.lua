@@ -290,13 +290,33 @@ function Plans:_edl_clear(record)
     local app,model=self.app,self.app.model
     if record.premise_id and model:get_premise(record.premise_id) then
         app.placement:despawn_premise(record.premise_id)
+        if app.procedural then for _,o in ipairs(model.data.objects) do if o.premise_id==record.premise_id and o.metadata and o.metadata.procedural then app.procedural:hide(o) end end end
         local ok,err=model:delete_premise(record.premise_id);if not ok then return nil,err end
     end
     local items=record.items or {}
+    local function release(o)
+        if app.procedural and o.metadata and o.metadata.procedural then app.procedural:hide(o) end
+        if app.placement:is_tracked(o) then return app.placement:despawn(o) end
+        return true
+    end
+    -- Rooms built into an existing premise (grammar builds): their pieces go with them.
+    for _,id in ipairs(items.room or {}) do
+        if model:get_room(id) then
+            for _,o in ipairs(model.data.objects) do if o.room_id==id then local ok,err=release(o);if not ok then return nil,err end end end
+            model:delete_room(id)
+        end
+    end
     for _,id in ipairs(items.object or {}) do
         local o=model:get_object(id)
-        if o then if app.placement:is_tracked(o) then local ok,err=app.placement:despawn(o);if not ok then return nil,err end end;model:delete_object(id) end
+        if o then
+            local ok,err=release(o);if not ok then return nil,err end
+            for _,cid in ipairs(o.metadata and o.metadata.procedural and o.metadata.procedural.collider_ids or {}) do
+                local c=model:get_object(cid);if c then local cok,cerr=release(c);if not cok then return nil,cerr end;model:delete_object(cid) end
+            end
+            model:delete_object(id)
+        end
     end
+    for _,id in ipairs(items.volume or {}) do if model:get_volume(id) then model:delete_volume(id) end end
     for _,id in ipairs(items.location or {}) do if model:get_location(id) then model:delete_location(id) end end
     for _,id in ipairs(items.route or {}) do if model:get_route(id) then model:delete_route(id) end end
     local function drop(collection,ids)

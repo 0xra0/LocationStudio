@@ -972,6 +972,72 @@ function SpatialUI:draw_procedural()
     end
 end
 
+function SpatialUI:draw_grammar()
+    local app=self.app;local Gr=app.env_grammar
+    ImGui.Text('ENVIRONMENT GRAMMAR')
+    if not Gr then ImGui.TextDisabled('Environment grammar failed to load.');return end
+    ImGui.TextWrapped('Reusable rules generate whole layouts (Corridor -> walls + door every N m + ceiling lights + cable tray). Rooms, doors, windows, lights and furniture are built through one authoring plan: one undo step, rolled back on failure. Regenerating a build replaces it.')
+    local lib=Gr:library().items
+    if not self.gr_id then for _,row in ipairs(lib) do if row.start then self.gr_id=row.id;break end end end
+    for _,row in ipairs(lib) do
+        if row.start then
+            if ImGui.SmallButton((row.id==self.gr_id and '> ' or '')..row.name..'##grlib_'..row.id) then self.gr_id=row.id;self.gr_params=nil;self.gr_preview=nil end
+            ImGui.SameLine();ImGui.TextDisabled(string.format('%s, %d rule(s)',row.source,row.rules))
+        end
+    end
+    local g=self.gr_id and Gr:get(self.gr_id)
+    if not g then return end
+    ImGui.Separator()
+    ImGui.TextWrapped(g.description or '')
+    if not self.gr_params then self.gr_params='{}';self.gr_seed='1' end
+    ImGui.TextDisabled('Params override the grammar defaults, for example {"door_every": 4, "lights": false}.')
+    self.gr_params=select(1,ImGui.InputTextMultiline('Params (JSON)##gr',self.gr_params,2048))
+    self.gr_seed=select(1,ImGui.InputText('Seed##gr',self.gr_seed,32))
+    local function args(extra)
+        local ok,params=pcall(json.decode,self.gr_params or '{}')
+        if not ok or type(params)~='table' then return nil,'Params must be a JSON object' end
+        local a={grammar=self.gr_id,params=params,seed=tonumber(self.gr_seed) or 1}
+        for k,v in pairs(extra or {}) do a[k]=v end
+        return a
+    end
+    if ImGui.Button('PREVIEW##gr',120,28) then
+        local a,err=args();if not a then self:toast(err) else local p;p,err=Gr:preview(a);self.gr_preview=p;if err then self:toast(err) end end
+    end
+    ImGui.SameLine()
+    if ImGui.Button('GENERATE AT PLAYER##gr',190,28) then
+        local a,err=args({origin='player'})
+        if not a then self:toast(err) else local r;r,err=Gr:generate(a);self:toast(err or string.format('Generated %d room(s), %d item(s) into a new premise',r.stats.rooms,r.stats.items)) end
+    end
+    local premise=app.model:get_premise(app.selected_premise_id)
+    if premise then
+        ImGui.SameLine()
+        if ImGui.Button('INTO SELECTED PREMISE##gr',210,28) then
+            local a,err=args({origin='player',premise_id=premise.id})
+            if not a then self:toast(err) else local r;r,err=Gr:generate(a);self:toast(err or string.format('Generated %d room(s), %d item(s) in %s',r.stats.rooms,r.stats.items,tostring(premise.name))) end
+        end
+    end
+    local p=self.gr_preview
+    if p then
+        local kinds={};for k,v in pairs(p.stats.kinds or {}) do kinds[#kinds+1]=k..' '..v end;table.sort(kinds)
+        ImGui.TextDisabled(string.format('Preview: %d room(s), %d item(s), %d plan step(s), %d rule call(s); %s',p.stats.rooms,p.stats.items,p.steps,p.stats.calls,table.concat(kinds,', ')))
+        if p.valid==false then for _,e in ipairs(p.errors or {}) do ImGui.TextDisabled('  x '..tostring(e)) end end
+        for _,w in ipairs(p.warnings or {}) do ImGui.TextDisabled('  ! '..w) end
+        for i,r in ipairs(p.rooms) do if i<=12 then ImGui.TextDisabled(string.format('  %s  %.1f x %.1f m, %d door(s), %d window(s)',r.name,r.width,r.length,r.doors,r.windows)) end end
+        if #p.rooms>12 then ImGui.TextDisabled('  ... '..(#p.rooms-12)..' more') end
+    end
+    ImGui.Separator();ImGui.Text('Builds')
+    local list=Gr:builds().items
+    if #list==0 then ImGui.TextDisabled('Nothing generated yet.') end
+    for i,b in ipairs(list) do
+        ImGui.TextDisabled(string.format('%s (%s, seed %s): %s room(s), %s item(s)%s',b.id,tostring(b.start),tostring(b.seed),tostring(b.rooms),tostring(b.items),b.present and '' or ' [removed]'))
+        if b.present then
+            if ImGui.SmallButton('NEW SEED##grb_'..i) then local r,err=Gr:regenerate(b.id,{seed=(tonumber(b.seed) or 1)+1});self:toast(err or 'Regenerated '..b.id) end
+            ImGui.SameLine()
+            if ImGui.SmallButton('REMOVE##grb_'..i) then local r,err=Gr:remove(b.id);self:toast(err or 'Removed '..b.id) end
+        end
+    end
+end
+
 function SpatialUI:draw_bounds()
     local app=self.app;local Bd=app.bounds_gen
     ImGui.Text('GENERATED BOUNDS')
@@ -1856,6 +1922,7 @@ function SpatialUI:draw()
         if ImGui.BeginTabItem('Preflight') then self:draw_preflight();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Geometry') then self:draw_procedural();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Room gen') then self:draw_room_generator();ImGui.EndTabItem() end
+        if ImGui.BeginTabItem('Grammar') then self:draw_grammar();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Materials') then self:draw_materials();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Collision rules') then self:draw_collision_rules();ImGui.EndTabItem() end
         if ImGui.BeginTabItem('Bounds') then self:draw_bounds();ImGui.EndTabItem() end

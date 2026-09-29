@@ -10,6 +10,15 @@
 The upgrade archive does not contain project/config JSON, logs, exports,
 thumbnails, or bridge state.
 
+## v0.79 Environment grammar smoke check
+
+1. In Spatial → Grammar pick **Service corridor** and press **PREVIEW**: 1 room, 8 doors, 6 lights. Press **GENERATE AT PLAYER**. Walk the corridor: doors every 6 m on both walls, a light panel and a light every 4 m, a cable tray along the north wall under the ceiling.
+2. Undo once: the whole corridor and its premise disappear. Redo brings it back.
+3. Generate **Industrial block**. Walk from the corridor into each workshop and storage room: every door opens through both walls, and the corridor has pipes along the south wall.
+4. Generate **Apartment floor** with yaw 90 (`grammar_generate` with position and yaw). Check the living room → bedroom → bathroom doors and the bedroom window to the outside.
+5. In the Builds list press **NEW SEED** on a clinic build: the room mix changes in the same place, and the previous rooms are gone.
+6. Remove a build and confirm no pieces, lights or colliders are left behind.
+
 ## v0.78 Generated bounds smoke check
 
 1. Create a long procedural wall, rotate it by 90° and pitch it. In Spatial → Bounds, the world bounds follow the rotated shape. Run `bounds_get` after moving it; the world bounds move with it.
