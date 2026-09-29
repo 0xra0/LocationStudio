@@ -515,15 +515,71 @@ function SpatialUI:draw_walkability()
     end
 end
 
+-- Generate navigation from the selected premise's geometry and validate it with a real NPC.
+function SpatialUI:draw_nav_generator()
+    local app=self.app;local gen=app.nav_gen
+    ImGui.Text('GENERATE FROM GEOMETRY')
+    if not gen then ImGui.TextDisabled('Navigation generator unavailable.');return end
+    ImGui.TextWrapped('Builds a graph from the walkable surfaces of generated rooms, stairs, ramps and platforms: area polygons, door transitions, stairs and ramp links, drops and jumps. It is LocationStudio data; REDengine navmesh is not changed. Validate with an NPC to see what the game does.')
+    self.nav_gen_params=self.nav_gen_params or {cell=gen.DEFAULTS.cell,agent_radius=gen.DEFAULTS.agent_radius,agent_height=gen.DEFAULTS.agent_height,max_drop=gen.DEFAULTS.max_drop,max_jump=gen.DEFAULTS.max_jump}
+    local P=self.nav_gen_params
+    P.cell=select(1,ImGui.InputFloat('Cell (m)##navgen',P.cell,0.05,0.25,'%.2f'))
+    P.agent_radius=select(1,ImGui.InputFloat('Agent radius (m)##navgen',P.agent_radius,0.05,0.25,'%.2f'))
+    P.agent_height=select(1,ImGui.InputFloat('Agent height (m)##navgen',P.agent_height,0.1,0.5,'%.2f'))
+    P.max_drop=select(1,ImGui.InputFloat('Max drop (m, 0 = none)##navgen',P.max_drop,0.25,1,'%.2f'))
+    P.max_jump=select(1,ImGui.InputFloat('Max jump gap (m, 0 = none)##navgen',P.max_jump,0.25,1,'%.2f'))
+    local premise_id=app.selected_premise_id
+    local function run(dry)
+        if not premise_id then self:toast('Select a premise first');return end
+        local r,err=gen:generate({premise_id=premise_id,params=P,dry_run=dry})
+        self.nav_gen_result=r
+        if r and r.graph_id then self.nav_graph_id=r.graph_id end
+        self:toast(err or (dry and 'Navigation preview ready' or 'Navigation graph generated'))
+    end
+    if ImGui.Button('PREVIEW##navgen',110,28) then run(true) end
+    ImGui.SameLine()
+    if ImGui.Button('GENERATE NAVIGATION##navgen',190,28) then run(false) end
+    local graph=self.nav_graph_id and gen:get(self.nav_graph_id)
+    if graph and graph.generated then
+        ImGui.SameLine()
+        if ImGui.Button('REGENERATE##navgen',120,28) then local r,err=gen:regenerate(graph.id,{params=P});self.nav_gen_result=r;self:toast(err or 'Navigation graph regenerated') end
+    end
+    local r=self.nav_gen_result
+    if r and r.stats then
+        local s=r.stats
+        ImGui.Text(string.format('%s%.1f m2 walkable | %d areas | %d doors | %d stairs | %d ramps | %d off-mesh | %d islands',r.dry_run and 'Preview: ' or '',s.walkable_area,s.areas,s.doors,s.flights,s.ramps,s.off_mesh,s.islands))
+        for _,d in ipairs(r.doors or {}) do if d.status~='connected' then ImGui.TextDisabled(string.format('%s: %s',d.id,d.status)) end end
+        for _,w in ipairs(r.report and r.report.warnings or {}) do ImGui.TextWrapped('! '..w) end
+    end
+    ImGui.Separator();ImGui.Text('VALIDATE WITH AN NPC')
+    ImGui.TextWrapped('Aim at an NPC, then start: the NPC is teleported to each door, stairs flight, ramp and off-mesh link of the selected graph and sent across with an AI move command. Results are saved on the graph.')
+    local status=gen:validate_status()
+    if status.state=='idle' or status.done then
+        if ImGui.Button('VALIDATE WITH NPC##navgen',190,28) then
+            if not graph then self:toast('Select a graph first') else local v,err=gen:validate_start({graph_id=graph.id,target='crosshair'});self:toast(err or ('Validating '..v.legs..' legs')) end
+        end
+    else
+        ImGui.Text(string.format('Running: leg %d / %d (%s)',status.leg_index,status.legs,status.state))
+        if ImGui.Button('CANCEL VALIDATION##navgen',190,28) then local _,err=gen:validate_cancel();self:toast(err or 'Validation cancelled') end
+    end
+    local v=graph and graph.validation
+    if v then
+        ImGui.Text(string.format('Last run: %s, %d / %d legs traversed, %d where the engine disagrees with the graph',v.state,v.summary.traversed,v.summary.legs,v.summary.engine_disagrees))
+        for _,leg in ipairs(v.legs or {}) do ImGui.TextDisabled(string.format('%s %s: %s (%s)',leg.kind,tostring(leg.ref),leg.status,leg.verdict)) end
+    end
+end
+
 function SpatialUI:draw_navigation()
     local app=self.app;local nav=app.navigation
-    ImGui.Text('IMPORTED NAVIGATION GRAPH')
-    ImGui.TextWrapped('Import a portable graph with the LocationStudio MCP tool. Nodes and door/stair/off-mesh links are displayed here. Reachability is evaluated only against that imported graph; live REDengine AI navigation is not exposed by this mod.')
+    self:draw_nav_generator()
+    ImGui.Separator()
+    ImGui.Text('NAVIGATION GRAPH')
+    ImGui.TextWrapped('Generated graphs and graphs imported with the LocationStudio MCP tool. Nodes and door/stair/ramp/off-mesh links are displayed here. Reachability is evaluated only against the graph; live REDengine AI navigation is not exposed by this mod.')
     if not nav then ImGui.TextDisabled('Navigation module unavailable.');return end
     local graphs=nav:list();local label='Select graph';for _,g in ipairs(graphs) do if g.id==self.nav_graph_id then label=g.name end end
     if ImGui.BeginCombo('Graph',label) then for _,g in ipairs(graphs) do if ImGui.Selectable(g.name..'##nav_'..g.id,self.nav_graph_id==g.id) then self.nav_graph_id=g.id;self.nav_result=nil;self.nav_workspots=nil end end;ImGui.EndCombo() end
     local graph;for _,g in ipairs(graphs) do if g.id==self.nav_graph_id then graph=g end end
-    if not graph then ImGui.TextDisabled('No graph selected. Import one with navigation_graph_import through MCP.');return end
+    if not graph then ImGui.TextDisabled('No graph selected. Generate one above or import one with navigation_graph_import through MCP.');return end
     ImGui.Text(string.format('%s  |  %d nodes  |  %d links  |  %d surface polygons  |  %s',graph.name,#graph.nodes,#graph.edges,#(graph.polygons or {}),tostring(graph.source_format)))
     ImGui.TextDisabled('Source: '..tostring(graph.source)..'   Imported '..tostring(graph.imported_at)..'   REDengine query: unavailable')
     if ImGui.Button('CHECK WORKSPOTS FROM PLAYER',230,30) then

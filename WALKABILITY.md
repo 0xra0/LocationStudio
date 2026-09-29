@@ -33,4 +33,6 @@ Reported blockers are collision-hit positions and groups. A `Dynamic` hit may be
 
 ## Navmesh limitation
 
+For generated geometry, [NAVIGATION-GENERATOR.md](NAVIGATION-GENERATOR.md) builds a graph for the whole layout and can test it by sending a real NPC along its doors, stairs and ledges.
+
 This result is a **collision-based geometric route estimate**, not a REDengine navmesh/pathfinding answer. The current LocationStudio CET runtime interface has no verified navigation query to ask whether the game AI considers a route walkable. Doors, navigation links, stairs behavior, NPC locomotion, schedules, and collision filters can differ from this grid. Verify important routes by walking V through them and by observing the target NPC in game. A `candidate` is not proof the actor will walk it.

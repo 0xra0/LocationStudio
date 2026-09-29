@@ -2,7 +2,7 @@
 local Util=require('modules/util')
 local Navigation={}
 Navigation.__index=Navigation
-local kinds={walk=true,door=true,stairs=true,elevator=true,jump=true,off_mesh=true,custom=true}
+local kinds={walk=true,door=true,stairs=true,elevator=true,jump=true,off_mesh=true,ramp=true,custom=true}
 local function pos(p) return type(p)=='table' and tonumber(p.x) and tonumber(p.y) and tonumber(p.z) end
 local function distance(a,b) local x,y,z=a.x-b.x,a.y-b.y,a.z-b.z;return math.sqrt(x*x+y*y+z*z) end
 local function heap_push(heap,item)

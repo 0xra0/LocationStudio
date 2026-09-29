@@ -10,6 +10,14 @@
 The upgrade archive does not contain project/config JSON, logs, exports,
 thumbnails, or bridge state.
 
+## v0.82 Navigation generator smoke check
+
+1. Generate the **Mixed facility** grammar with navigation (`grammar_generate(..., navigation=True)`, or select its premise and press **GENERATE NAVIGATION** in Spatial → Navigation). The report shows one island, every door `connected`, and no unreachable rooms. Undo removes the build and its graph together.
+2. Push a crate in front of a door and press **REGENERATE**: that door is `blocked`, and the crate is named.
+3. Build procedural stairs up to a platform and generate navigation for them. There is one `connected` stairs flight, and drops from the platform edges.
+4. Stand near a civilian NPC in an open vanilla area, generate a graph there, aim at the NPC and press **VALIDATE WITH NPC**. Watch the NPC teleport to each leg and walk it. Report the status of each leg. If every leg is `command_failed`, report the detail: it names the AI command step that failed.
+5. Repeat step 4 inside a generated room. **Report whether the NPC walks through generated doors and up generated stairs, or stalls.** Stalls (`engine_disagrees`) are expected where there is no navmesh under the new geometry, and are the finding this check is for.
+
 ## v0.81 Room types smoke check
 
 1. Generate the **Mixed facility** grammar. Every room has furniture that matches its type: offices have desks and cabinets, storage rooms have shelves and crates, maintenance rooms have a workbench, a cabinet and a pipe, and the server room (when present) has rack rows on a raised floor. **Check that no furniture blocks a door** and nothing clips through walls.
