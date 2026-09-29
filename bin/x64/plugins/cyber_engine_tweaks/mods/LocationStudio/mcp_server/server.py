@@ -3486,6 +3486,143 @@ def nav_validate_cancel() -> str:
     return _json(_send("nav_validate_cancel", {}))
 
 
+SECTOR_PARTITION_LUA = MOD_DIR / "modules" / "sector_partition.lua"
+SECTOR_NAME = re.compile(r"^[a-z0-9_]+$")
+PIN_LABEL = re.compile(r"^[\w-]+$")
+
+
+def sector_partition_parameters_offline() -> list[dict[str, Any]]:
+    """Partition parameters with defaults and ranges, read from modules/sector_partition.lua (no game needed)."""
+    text = SECTOR_PARTITION_LUA.read_text(encoding="utf-8")
+    defaults = dict(re.findall(r"(\w+)=([\d.]+)", re.search(r"local DEFAULTS=\{(.*?)\}\n", text, re.S).group(1)))
+    ranges = {k: (float(a), float(b)) for k, a, b in re.findall(r"(\w+)=\{([\d.]+),([\d.]+)\}", re.search(r"local RANGES=\{(.*?)\}\n", text, re.S).group(1))}
+    return [{"name": k, "default": float(v), "min": ranges[k][0], "max": ranges[k][1]} for k, v in sorted(defaults.items())]
+
+
+def _sector_args(premise_id: str, room_ids: list[str] | None, build_id: str, all_rooms: bool, params: dict[str, Any] | None,
+                 pins: dict[str, str] | None, entry: list[float] | None, base_name: str, navigation_graph_id: str) -> dict[str, Any]:
+    args = _nav_scope(premise_id, room_ids, build_id, all_rooms)
+    if params:
+        args["params"] = params
+    if pins:
+        bad = [k for k, v in pins.items() if not isinstance(v, str) or not PIN_LABEL.match(v)]
+        if bad:
+            raise ValueError(f"pin labels must use letters, digits, _ or - (bad: {bad[:5]})")
+        args["pins"] = dict(pins)
+    if entry is not None:
+        args["entry"] = _xyz(entry, "entry")
+    if base_name:
+        if not SECTOR_NAME.match(base_name):
+            raise ValueError("base_name must match [a-z0-9_]+")
+        args["base_name"] = base_name
+    if navigation_graph_id:
+        args["navigation_graph_id"] = navigation_graph_id
+    return args
+
+
+@mcp.tool()
+def sector_partition_parameters() -> str:
+    """Streaming-sector partition parameters (max_nodes, min_nodes, max_extent, loose_cell, view_distance, preload,
+    proximity_gap and the link weights w_connectivity, w_traversal, w_visibility, w_proximity) with defaults and
+    ranges. Works offline."""
+    return _json({"parameters": sector_partition_parameters_offline()})
+
+
+@mcp.tool()
+def sector_partition_preview(premise_id: str = "", room_ids: list[str] | None = None, build_id: str = "", all_rooms: bool = False,
+                             params: dict[str, Any] | None = None, pins: dict[str, str] | None = None, entry: list[float] | None = None,
+                             base_name: str = "", navigation_graph_id: str = "") -> str:
+    """Dry run of sector_partition_generate: the sectors a generated environment would be divided into (members, node
+    counts, bounds, interior/exterior, streaming extents, neighbours, which sectors see each other), the transitions a
+    player crosses between sectors, the traversal order from the entry, and warnings. Changes nothing."""
+    args = _sector_args(premise_id, room_ids, build_id, all_rooms, params, pins, entry, base_name, navigation_graph_id)
+    return _json(_send("sector_partition_preview", args, timeout=120.0))
+
+
+@mcp.tool()
+def sector_partition_generate(premise_id: str = "", room_ids: list[str] | None = None, build_id: str = "", all_rooms: bool = False,
+                              params: dict[str, Any] | None = None, pins: dict[str, str] | None = None, entry: list[float] | None = None,
+                              base_name: str = "", navigation_graph_id: str = "", name: str = "", partition_id: str = "") -> str:
+    """Divide a generated environment into streaming sectors automatically, so its generated nodes need no manual
+    sector assignment. Rooms are kept whole; objects outside rooms go into spatial cells. Rooms/cells are linked by
+    doors and walkable links (the scope's generated navigation graph, or navigation_graph_id), lines of sight through
+    doors/windows, the expected player path from the entry (entry=[x,y,z], else the navigation entry or an exit door)
+    and proximity, then clustered within max_nodes / max_extent. pins = {room_or_object_id: label} forces those into
+    one sector. Scope: premise_id, room_ids, build_id (then regenerating the build keeps it up to date) or all_rooms.
+    Sector names are base_name_01, _02... in traversal order. One undo step. Export with sector_partition_export."""
+    args = _sector_args(premise_id, room_ids, build_id, all_rooms, params, pins, entry, base_name, navigation_graph_id)
+    if name:
+        args["name"] = name
+    if partition_id:
+        args["partition_id"] = partition_id
+    return _json(_send("sector_partition_generate", args, timeout=120.0))
+
+
+@mcp.tool()
+def sector_partition_regenerate(partition_id: str, params: dict[str, Any] | None = None, pins: dict[str, Any] | None = None,
+                                entry: list[float] | None = None, base_name: str = "") -> str:
+    """Regenerate a sector partition from its saved scope after rooms or objects changed (sector_partition_report says
+    stale). params and pins are merged into the saved ones; a pin set to "" or false is removed. One undo step."""
+    args: dict[str, Any] = {"partition_id": partition_id}
+    if params:
+        args["params"] = params
+    if pins:
+        args["pins"] = dict(pins)
+    if entry is not None:
+        args["entry"] = _xyz(entry, "entry")
+    if base_name:
+        if not SECTOR_NAME.match(base_name):
+            raise ValueError("base_name must match [a-z0-9_]+")
+        args["base_name"] = base_name
+    return _json(_send("sector_partition_regenerate", args, timeout=120.0))
+
+
+@mcp.tool()
+def sector_partition_list() -> str:
+    """Sector partitions in this project: scope, sector and node counts, when generated, last export."""
+    return _json(_send("sector_partition_list", {}))
+
+
+@mcp.tool()
+def sector_partition_report(partition_id: str) -> str:
+    """A sector partition's full report: parameters, pins, every sector with its members and streaming extents,
+    transitions, traversal order, warnings, whether rooms/objects changed since (stale), objects in scope that no
+    sector holds (unassigned), and the last export."""
+    return _json(_send("sector_partition_report", {"partition_id": partition_id}))
+
+
+@mcp.tool()
+def sector_partition_sector_of(partition_id: str, object_id: str) -> str:
+    """Which sector of a partition an object is in."""
+    return _json(_send("sector_partition_sector_of", {"partition_id": partition_id, "object_id": object_id}))
+
+
+@mcp.tool()
+def sector_partition_delete(partition_id: str) -> str:
+    """Delete a sector partition. Objects are not changed. One undo step."""
+    return _json(_send("sector_partition_delete", {"partition_id": partition_id}))
+
+
+@mcp.tool()
+def sector_partition_export(partition_id: str, name: str = "", sectors: list[str] | None = None, level: int | None = None,
+                            xl_format: int = 0, allow_skipped: bool = False, allow_stale: bool = False) -> str:
+    """Export a sector partition through World Builder: one WB group per sector (category interior/exterior when WB's
+    category list is readable, streaming extents from the partition), exported together as one project, so WB writes
+    one streaming sector per group. name (default the partition's base name) becomes the .archive/.xl name. sectors
+    limits it to some sector names. Needs live World Builder handles, like build_export; build the result with the
+    build_* tools. Refused when rooms/objects changed since partitioning unless allow_stale=True."""
+    if name and not SECTOR_NAME.match(name):
+        raise ValueError("name must match [a-z0-9_]+")
+    args: dict[str, Any] = {"partition_id": partition_id, "xl_format": 1 if xl_format == 1 else 0, "allow_skipped": allow_skipped, "allow_stale": allow_stale}
+    if name:
+        args["name"] = name
+    if sectors:
+        args["sectors"] = list(sectors)
+    if level is not None:
+        args["level"] = int(level)
+    return _json(_send("sector_partition_export", args, timeout=120.0))
+
+
 @mcp.tool()
 def cover_node_create(premise_id: str, name: str = "Cover Node", cover_type: str = "crouch",
                       exposure: str = "medium", spacing: float = 1.5, source: str = "player",
@@ -5566,15 +5703,17 @@ def grammar_preview(grammar: str = "", doc: dict[str, Any] | None = None, start:
 def grammar_generate(grammar: str = "", doc: dict[str, Any] | None = None, start: str = "", params: dict[str, Any] | None = None,
                      seed: int = 1, size: list[float] | None = None, premise_id: str = "", premise_name: str = "",
                      premise_kind: str = "interior", position: list[float] | None = None, yaw: float = 0.0,
-                     source: str = "player", build_id: str = "", navigation: bool | dict[str, Any] | None = None) -> str:
+                     source: str = "player", build_id: str = "", navigation: bool | dict[str, Any] | None = None,
+                     sectors: bool | dict[str, Any] | None = None) -> str:
     """Generate a layout from a grammar as ONE authoring plan: parametric rooms with doors/windows (cut through both
     rooms at shared walls), procedural geometry, lights, assets, volumes and markers. Validated first; one undo step;
     rolled back completely on failure. Without premise_id a new premise is created (premise_name/premise_kind).
     Reusing build_id replaces that earlier generation. Run grammar_preview first.
     navigation=True (or a nav_generate params object) also generates the build's navigation graph in the same undo
-    step; once a build has one, regenerating the build regenerates it. navigation=False skips it."""
+    step; once a build has one, regenerating the build regenerates it. navigation=False skips it.
+    sectors=True (or a sector_partition params object) likewise partitions the build into streaming sectors."""
     args = _grammar_args(grammar, doc, start, params, seed, size, premise_id, position, yaw, source)
-    args.update(premise_name=premise_name or None, premise_kind=premise_kind, build_id=build_id or None, navigation=navigation)
+    args.update(premise_name=premise_name or None, premise_kind=premise_kind, build_id=build_id or None, navigation=navigation, sectors=sectors)
     return _json(_send("grammar_generate", {k: v for k, v in args.items() if v is not None}))
 
 

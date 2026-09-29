@@ -1738,8 +1738,56 @@ function SpatialUI:draw_performance()
     else ImGui.TextDisabled('Load a sector report (Sectors tab) to include exported-sector costs.') end
 end
 
+function SpatialUI:draw_sector_partitioner()
+    local app=self.app;local sp=app.sector_partition
+    ImGui.Text('AUTOMATIC SECTOR PARTITION')
+    if not sp then ImGui.TextDisabled('The sector partitioner is unavailable.');return end
+    ImGui.TextWrapped('Divides the selected premise into streaming sectors from room bounds, door and walkable links, lines of sight and the expected player path, within a node budget. Export writes one World Builder group per sector.')
+    self.sp_params=self.sp_params or {max_nodes=sp.DEFAULTS.max_nodes,max_extent=sp.DEFAULTS.max_extent,min_nodes=sp.DEFAULTS.min_nodes,preload=sp.DEFAULTS.preload}
+    local P=self.sp_params
+    P.max_nodes=select(1,ImGui.InputInt('Max nodes per sector##secpart',P.max_nodes,50,200))
+    P.min_nodes=select(1,ImGui.InputInt('Min nodes per sector##secpart',P.min_nodes,10,50))
+    P.max_extent=select(1,ImGui.InputFloat('Max sector size (m)##secpart',P.max_extent,8,32,'%.0f'))
+    P.preload=select(1,ImGui.InputFloat('Preload distance (m)##secpart',P.preload,5,20,'%.0f'))
+    local premise_id=app.selected_premise_id
+    local function run(dry)
+        if not premise_id then self:toast('Select a premise first');return end
+        local r,err=sp:generate({premise_id=premise_id,params=P,dry_run=dry})
+        self.sp_result=r
+        if r and r.partition_id then self.sp_id=r.partition_id end
+        self:toast(err or (dry and 'Sector preview ready' or ('Partitioned into '..r.stats.sectors..' sectors')))
+    end
+    if ImGui.Button('PREVIEW##secpart',110,28) then run(true) end
+    ImGui.SameLine()
+    if ImGui.Button('PARTITION INTO SECTORS##secpart',210,28) then run(false) end
+    local rec=self.sp_id and sp:get(self.sp_id)
+    if rec then
+        ImGui.SameLine()
+        if ImGui.Button('REGENERATE##secpart',120,28) then local r,err=sp:regenerate(rec.id,{params=P});self.sp_result=r;self:toast(err or 'Sectors regenerated') end
+        self.sp_export_name=self.sp_export_name or rec.base_name or 'sector'
+        self.sp_export_name=select(1,ImGui.InputText('Export name##secpart',self.sp_export_name,64))
+        if ImGui.Button('EXPORT SECTORS TO WORLD BUILDER##secpart',280,28) then
+            local r,err=sp:export({partition_id=rec.id,name=self.sp_export_name})
+            self:toast(err or ('Exported '..r.exported..' nodes in '..#(r.groups or {})..' groups'))
+        end
+    end
+    local r=self.sp_result
+    if r and r.stats then
+        local s=r.stats
+        ImGui.Text(string.format('%s%d sectors | %d nodes | %d rooms | %d cells | largest %d | %d transitions',r.dry_run and 'Preview: ' or '',s.sectors,s.nodes,s.rooms,s.cells,s.largest_sector,s.transitions))
+        ImGui.BeginChild('##secpart_list',0,120,true)
+        for _,sec in ipairs(r.sectors or {}) do
+            ImGui.TextDisabled(string.format('%s  %s  %d nodes  %d rooms  %.0f m  stream %.0f/%.0f/%.0f m',sec.name,sec.category,sec.node_count,#sec.rooms,sec.size.horizontal,sec.streaming.x,sec.streaming.y,sec.streaming.z))
+        end
+        ImGui.EndChild()
+        for _,w in ipairs(r.report and r.report.warnings or {}) do ImGui.TextWrapped('! '..w) end
+    end
+end
+
 function SpatialUI:draw_sectors()
     local app=self.app;local si=app.sector_inspector
+    self:draw_sector_partitioner()
+    ImGui.Separator()
     ImGui.Text('STREAMING-SECTOR INSPECTOR')
     if not si then ImGui.TextDisabled('The sector inspector module failed to load.');return end
     ImGui.TextWrapped('Shows the last report from the MCP tool sector_inspect or the Build Mod sectors stage: sector bounds, node/NodeRef/device/PSID counts, cross-sector references, and nodes likely in the wrong sector.')

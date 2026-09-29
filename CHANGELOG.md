@@ -1,3 +1,16 @@
+## 0.83.0 - 2026-09-29
+
+- Added a streaming-sector partitioner (`modules/sector_partition.lua`, Spatial → Sectors → Automatic sector partition). It divides a generated environment into sectors so its nodes need no manual assignment:
+  - **Atoms:** each room with its objects (rooms are never split); objects outside rooms go into spatial cells, quartered while over budget. Persistent groups and ambient reverb zones stay together.
+  - **Links:** shared doors of parametric rooms and the room links of the scope's generated navigation graph; lines of sight through doors, windows and open space, blocked by room walls and occluders; the breadth-first path from the entry; proximity.
+  - **Clustering:** greedy merging, strongest link per node first, within `max_nodes` and `max_extent`. Only doors, walkable links or proximity merge; a line of sight only adds weight. Small sectors join a neighbour. Pins force rooms or objects into a named sector.
+  - **Sectors:** named in traversal order. Each has members, node count, bounds, an interior/exterior category, streaming extents that cover where it is visible from plus a preload distance, neighbours and visibility. Transitions list the doors that sector borders cut.
+  - The result is deterministic for a layout and records a digest, so the report says when it is stale and which objects were added since.
+- `build_export` can export several World Builder groups at once (`groups`), each with its own category (by WB category name), level and streaming extents. `sector_partition_export` uses it to write one group per sector.
+- `grammar_generate` takes `sectors`. The build's partition joins its undo step, is regenerated with the build and removed with it.
+- Added bridge ops and MCP tools `sector_partition_parameters` (offline), `sector_partition_preview`, `sector_partition_generate`, `sector_partition_regenerate`, `sector_partition_list`, `sector_partition_report`, `sector_partition_sector_of`, `sector_partition_delete` and `sector_partition_export`.
+- Added `SECTOR-PARTITIONER.md` and Lua/Python tests. Bumped to v0.83.0.
+
 ## 0.82.0 - 2026-09-29
 
 - Added a navigation generator (`modules/nav_gen.lua`, Spatial → Navigation → Generate from geometry). It builds a navigation graph from generated geometry:

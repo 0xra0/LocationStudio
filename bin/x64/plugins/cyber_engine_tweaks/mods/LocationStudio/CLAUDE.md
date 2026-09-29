@@ -473,3 +473,17 @@ NPC, and never invent a character record for `record`. Poll
 `nav_validate_status` and report `engine_disagrees` legs as the game not
 navigating there. If every leg is `command_failed`, report its detail rather
 than retrying with `run_lua`.
+
+## Sector partitioner
+
+To split a generated environment into streaming sectors, run
+`sector_partition_preview`, then `sector_partition_generate`, on a premise,
+rooms or grammar build (or pass `sectors=True` to `grammar_generate`); do
+not assign generated nodes to sectors by hand. Generate the navigation graph
+first when doors or stairs matter. Report warnings, oversized rooms and the
+transitions. Use `pins` only for what the user asks to keep together. Check
+`sector_partition_report` for `stale` or `unassigned` before
+`sector_partition_export`, and pass `allow_stale` only with the user's
+approval. After exporting, run `sector_inspect` and compare its sector count
+with the partition. That WB writes one sector per group and applies the
+per-group streaming extents is unverified in game: say so.

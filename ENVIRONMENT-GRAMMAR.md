@@ -171,7 +171,7 @@ Interior rules come from the grammar itself or from the `room_interiors` grammar
 
 Each of these is one undo step. A generation is also recorded as an EDL build (`grammar_<build id>`), so `edl_list` shows it.
 
-`grammar_generate` with `navigation: true` (or a parameter object) also generates the build's [navigation graph](NAVIGATION-GENERATOR.md) in the same undo step. Once a build has a graph, regenerating the build regenerates it, and removing the build removes it.
+`grammar_generate` with `navigation: true` (or a parameter object) also generates the build's [navigation graph](NAVIGATION-GENERATOR.md) in the same undo step. Once a build has a graph, regenerating the build regenerates it, and removing the build removes it. `sectors: true` (or a parameter object) likewise partitions the build into [streaming sectors](SECTOR-PARTITIONER.md), after its navigation graph.
 
 Checks happen before anything is built:
 

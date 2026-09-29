@@ -28,7 +28,7 @@ def test_mcp_operations_are_handled() -> None:
     handled.update(re.findall(r"or op == '([a-z_]+)'", bridge))
     handled.update(re.findall(r"'((?:wb_)?(?:clipcheck|fixturecheck|fitcheck))'", bridge))
     assert sent <= handled, f'MCP operations missing in CET bridge: {sorted(sent - handled)}'
-    assert len(re.findall(r'@mcp\.tool\(\)', server)) == 550
+    assert len(re.findall(r'@mcp\.tool\(\)', server)) == 559
     for operation in ('register_asset', 'update_asset', 'delete_asset', 'place_asset', 'clear_debug_log', 'run_diagnostics',
                       'capture_camera', 'copy_transform', 'paste_transform', 'move_item_to_aim',
                       'drop_item_to_ground', 'aim_item_at_target', 'scatter_at_aim',
